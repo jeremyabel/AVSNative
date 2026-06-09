@@ -1,0 +1,12 @@
+{
+    "effects": [
+        {
+            "type": "FadeOut",
+            "enabled": true,
+            "config": {
+                "speed": 0.05,
+                "color": [255, 0, 0]
+            }
+        }
+    ]
+}

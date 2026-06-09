@@ -1,0 +1,24 @@
+{
+  "effects": [
+    {
+      "type": "Clear",
+      "enabled": true,
+      "config": { "color": [255, 0, 0] }
+    },
+    {
+      "type": "Buffer Save",
+      "enabled": true,
+      "config": { "mode": 0, "slot": 0, "blendMode": 0, "blendAmt": 0.5 }
+    },
+    {
+      "type": "Clear",
+      "enabled": true,
+      "config": { "color": [0, 0, 255] }
+    },
+    {
+      "type": "Buffer Save",
+      "enabled": true,
+      "config": { "mode": 1, "slot": 0, "blendMode": 3, "blendAmt": 0.5 }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+[submodule "lib/bgfx.cmake"]
+	path = lib/bgfx.cmake
+	url = https://github.com/bkaradzic/bgfx.cmake.git
+[submodule "lib/SDL3"]
+	path = lib/SDL3
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "lib/dr_libs"]
+	path = lib/dr_libs
+	url = https://github.com/mackron/dr_libs.git
+[submodule "lib/luajit"]
+	path = lib/luajit
+	url = https://github.com/WohlSoft/LuaJIT.git
+[submodule "lib/ImGuiColorTextEdit"]
+	path = lib/ImGuiColorTextEdit
+	url = https://github.com/goossens/ImGuiColorTextEdit.git
+	branch = future
+[submodule "lib/nlohmann_json"]
+	path = lib/nlohmann_json
+	url = https://github.com/nlohmann/json.git
+[submodule "lib/kissfft"]
+	path = lib/kissfft
+	url = https://github.com/mborgerding/kissfft.git
+[submodule "ref/AVSWeb"]
+	path = ref/AVSWeb
+	url = https://github.com/jeremyabel/AVSWeb.git

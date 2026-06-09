@@ -1,0 +1,93 @@
+{
+  "effects": [
+    {
+      "config": {
+        "blendMode": 1,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "distance": 13,
+        "onBeatSize": 12,
+        "onBeatSizeChange": false,
+        "size": 33
+      },
+      "enabled": true,
+      "type": "MovingParticle"
+    },
+    {
+      "config": {
+        "bilinear": true,
+        "blend": false,
+        "code": "r = r + (0.1 - 0.2 * d);\nd = d * 0.96;",
+        "coordinates": "polar",
+        "onBeatToggle": false,
+        "sourceMap": false,
+        "wrap": false
+      },
+      "enabled": true,
+      "type": "Movement"
+    },
+    {
+      "config": {
+        "color": [
+          255,
+          0,
+          0
+        ],
+        "speed": 0.019999999552965164
+      },
+      "enabled": true,
+      "type": "FadeOut"
+    },
+    {
+      "config": {
+        "blendAmt": 0.5,
+        "clearFrame": true,
+        "effects": [
+          {
+            "config": {
+              "blendMode": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "onBeat": false,
+              "onBeatDuration": 15,
+              "onBeatSpeed": 4.0,
+              "speed": 6.0,
+              "starCount": 350
+            },
+            "enabled": true,
+            "type": "Starfield"
+          }
+        ],
+        "inBlend": 4,
+        "inBlendBuf": 0,
+        "inBlendBufInvert": false,
+        "onBeat": false,
+        "onBeatFrames": 1,
+        "outBlend": 1,
+        "outBlendBuf": 0,
+        "outBlendBufInvert": false
+      },
+      "enabled": true,
+      "type": "Effect List"
+    },
+    {
+      "config": {
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "invert": false,
+        "outBlend": 0
+      },
+      "enabled": true,
+      "type": "Unique Tone"
+    }
+  ]
+}
