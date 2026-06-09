@@ -382,6 +382,111 @@ void LuaRuntime::RunPointLoop(int ref, int n, bool isBeat, int width, int height
     }
 }
 
+// ── Triangle-loop wrapper ─────────────────────────────────────────────────────
+
+bool LuaRuntime::CompileTriangleLoop(const std::string& triangleCode, int& refOut)
+{
+    if (refOut != -1)
+    {
+        luaL_unref(m_L, LUA_REGISTRYINDEX, refOut);
+        refOut = -1;
+    }
+    if (triangleCode.empty()) { m_errors.erase("triangleCode"); return true; }
+
+    // Unlike the point loop, per-triangle built-ins (x1..y3, red1..blue3, z1, skip)
+    // and user vars are read/written straight through the env table: the inner
+    // function inherits env as its environment (Lua 5.1 fenv), so a bare `x1` resolves
+    // to env.x1. That keeps user vars persistent for free and avoids a copy list. The
+    // for-loop bound uses the `_n` parameter (not the global `n`) so user code can read
+    // the script's n without changing the iteration count. tonumber(...) guards against
+    // a script leaving an output var nil/non-numeric (which would fault the FFI store).
+    std::string src =
+        "local ffi = require('ffi')\n"
+        "local cast = ffi.cast\n"
+        "local tonumber = tonumber\n"
+        "local _env = getfenv(1)\n"
+        "return function(_n, out_ptr)\n"
+        "  local out = cast('float*', out_ptr)\n"
+        "  local _n1 = _n > 1 and (_n - 1) or 1\n"
+        "  local _ii = 0.0\n"
+        "  for _k = 0, _n - 1 do\n"
+        "    skip = 0\n"
+        "    i = _ii\n"
+        + triangleCode + "\n"
+        "    local base = _k * 11\n"
+        "    out[base]      = tonumber(x1)     or 0\n"
+        "    out[base + 1]  = tonumber(y1)     or 0\n"
+        "    out[base + 2]  = tonumber(x2)     or 0\n"
+        "    out[base + 3]  = tonumber(y2)     or 0\n"
+        "    out[base + 4]  = tonumber(x3)     or 0\n"
+        "    out[base + 5]  = tonumber(y3)     or 0\n"
+        "    out[base + 6]  = tonumber(red1)   or 0\n"
+        "    out[base + 7]  = tonumber(green1) or 0\n"
+        "    out[base + 8]  = tonumber(blue1)  or 0\n"
+        "    out[base + 9]  = tonumber(z1)     or 0\n"
+        "    out[base + 10] = tonumber(skip)   or 0\n"
+        "    _ii = _ii + 1.0 / _n1\n"
+        "  end\n"
+        "  i = _ii\n"
+        "end\n";
+
+    printf("[Lua] Compiling triangleLoop\n");
+
+    if (luaL_loadbuffer(m_L, src.c_str(), src.size(), "triangleLoop") != 0)
+    {
+        m_errors["triangleCode"] = lua_tostring(m_L, -1);
+        printf("[Lua] triangleLoop compile error: %s\n--- source ---\n%s\n---\n",
+               m_errors["triangleCode"].c_str(), src.c_str());
+        lua_pop(m_L, 1);
+        return false;
+    }
+    lua_rawgeti(m_L, LUA_REGISTRYINDEX, m_envRef);
+    lua_setfenv(m_L, -2);
+
+    if (lua_pcall(m_L, 0, 1, 0) != 0)
+    {
+        m_errors["triangleCode"] = lua_tostring(m_L, -1);
+        printf("[Lua] triangleLoop init error: %s\n", m_errors["triangleCode"].c_str());
+        lua_pop(m_L, 1);
+        return false;
+    }
+
+    refOut = luaL_ref(m_L, LUA_REGISTRYINDEX);
+    m_errors.erase("triangleCode");
+    printf("[Lua] triangleLoop compiled OK\n");
+    return true;
+}
+
+void LuaRuntime::RunTriangleLoop(int ref, int n, float* outBuf, const std::string& blockName)
+{
+    if (ref == -1) return;
+    lua_rawgeti(m_L, LUA_REGISTRYINDEX, ref);
+    const int tp = lua_type(m_L, -1);
+    if (tp != LUA_TFUNCTION)
+    {
+        printf("[Lua] RunTriangleLoop: ref=%d holds %s, not a function — skipping\n",
+               ref, lua_typename(m_L, tp));
+        lua_pop(m_L, 1);
+        return;
+    }
+    lua_pushinteger(m_L, n);
+    lua_pushlightuserdata(m_L, outBuf);
+    if (lua_pcall(m_L, 2, 0, 0) != 0)
+    {
+        const std::string err = lua_tostring(m_L, -1);
+        if (m_errors[blockName] != err)
+        {
+            m_errors[blockName] = err;
+            printf("[Lua] Runtime error in %s: %s\n", blockName.c_str(), err.c_str());
+        }
+        lua_pop(m_L, 1);
+    }
+    else
+    {
+        m_errors.erase(blockName);
+    }
+}
+
 // ── Var scanning ──────────────────────────────────────────────────────────────
 
 std::vector<std::string> LuaRuntime::ScanVarDecls(

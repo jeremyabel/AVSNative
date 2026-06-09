@@ -1,16 +1,17 @@
-#include "ColorModifier.h"
+#include "DynamicDistanceModifier.h"
 
 #include "engine/FBOManager.h"
+#include "engine/AudioGlsl.h"
 
-#include <algorithm>
+#include <cmath>
 
-// Built-in names that ScanVarDecls must not treat as user-declared.
+// Built-ins excluded from user-var scanning: `b` (beat) is supplied as a uniform,
+// getspec/getosc are audio functions, and d/r are GLSL-side locals.
 static const std::vector<std::string> k_builtins = {
-    "beat", "red", "green", "blue",
-    "getspec", "getosc",
+    "b", "getspec", "getosc", "d", "r",
 };
 
-// Fullscreen triangle VS — same as Movement's pull VS; no vertex buffer needed.
+// Fullscreen triangle VS — y-flipped so v_texcoord0 (0,0) = top-left (Vulkan).
 static const char* k_vertGlsl = R"(
 #version 450
 layout(location = 0) out vec4 v_texcoord0;
@@ -23,40 +24,20 @@ void main() {
 }
 )";
 
-static std::string ConcatCode(const ColorModifierConfig& c)
+static std::string ConcatCode(const DynamicDistanceModifierConfig& c)
 {
     return c.InitCode + "\n" + c.FrameCode + "\n" + c.BeatCode;
 }
 
 // ── GLSL builder ─────────────────────────────────────────────────────────────
 
-std::string ColorModifier::BuildFragGlsl() const
+std::string DynamicDistanceModifier::BuildFragGlsl() const
 {
-    // UBO: fixed beat vec4 at offset 0, then the bridge's user-var array.
     std::string uboDecl = "layout(std140, binding = 1) uniform _FragParams {\n"
-                          "    vec4 u_cmod_beat;\n"
+                          "    vec4 u_ddm_params0;   // x=w y=h z=maxD w=beat\n"
+                          "    vec4 u_ddm_params1;   // x=blend\n"
                         + m_bridge.EmitUboMembers()
                         + "};\n";
-
-    // Preamble injected at the top of each channel block: unpacks beat + user vars
-    // as locals so each channel evaluation starts from the same frame state.
-    std::string preamble = "        float beat = u_cmod_beat.x;\n" + m_bridge.EmitLocals();
-
-    // The pixel code block is pasted three times, once per output channel.
-    // Each paste gets a fresh set of locals so modifications in the red block
-    // don't carry over to the green block (matching the original per-channel LUT).
-    // `ch` is the input swizzle (r/g/b); `var` is the channel variable read back as
-    // the new output (red/green/blue) — matching the reference's per-channel LUT.
-    auto channelBlock = [&](const char* ch, const char* var, const char* out) -> std::string {
-        return std::string("    { // ") + ch + " channel\n"
-             + "        float red = c." + ch + ", green = c." + ch + ", blue = c." + ch + ";\n"
-             + preamble
-             + "        // ---- pixel code ----\n"
-             + Cfg.PixelCode + "\n"
-             + "        // ---- end pixel code ----\n"
-             + "        " + out + " = clamp(" + var + ", 0.0, 1.0);\n"
-             + "    }\n";
-    };
 
     return std::string(R"(
 #version 450
@@ -65,29 +46,54 @@ layout(location = 0) out vec4 bgfx_FragData0;
 
 )") + uboDecl + R"(
 layout(binding = 2) uniform sampler2D s_input;
-
+layout(binding = 3) uniform sampler2D s_audio;
+)" + kAudioGlslFns + R"(
 void main()
 {
-    vec2 uv = v_texcoord0.xy;
-    vec3 c  = texture(s_input, uv).rgb;
-    float out_r, out_g, out_b;
+    vec2 uv     = v_texcoord0.xy;
+    vec2 center = uv - 0.5;
+    float w    = u_ddm_params0.x;
+    float h    = u_ddm_params0.y;
+    float maxD = u_ddm_params0.z;
+    float b    = u_ddm_params0.w;
 
-)" + channelBlock("r", "red",   "out_r")
-   + channelBlock("g", "green", "out_g")
-   + channelBlock("b", "blue",  "out_b")
-   + R"(
-    bgfx_FragData0 = vec4(out_r, out_g, out_b, 1.0);
+    float d_px = length(vec2(center.x * w, center.y * h));
+    float d = d_px / maxD;
+    float r = atan(center.y, center.x);
+
+)" + m_bridge.EmitLocals() + R"(
+    // ---- pixel code ----
+)" + Cfg.PixelCode + R"(
+    // ---- end pixel code ----
+
+    vec2 src_uv;
+    if (d_px < 0.5) {
+        src_uv = vec2(0.5);
+    } else {
+        float scale = (d * maxD) / d_px;
+        src_uv = clamp(vec2(0.5) + center * scale, 0.0, 1.0);
+    }
+
+    vec4 mapped = texture(s_input, src_uv);
+    if (u_ddm_params1.x > 0.5) {
+        vec4 orig = texture(s_input, uv);
+        bgfx_FragData0 = vec4((mapped.rgb + orig.rgb) * 0.5, 1.0);
+    } else {
+        bgfx_FragData0 = vec4(mapped.rgb, 1.0);
+    }
 }
 )";
 }
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void ColorModifier::Init(bgfx::RendererType::Enum /*Renderer*/)
+void DynamicDistanceModifier::Init(bgfx::RendererType::Enum /*Renderer*/)
 {
-    InputUnif = bgfx::createUniform("s_input",     bgfx::UniformType::Sampler);
-    BeatUnif  = bgfx::createUniform("u_cmod_beat", bgfx::UniformType::Vec4);
-    m_bridge.Configure("u_cmod_v");
+    Params0Unif = bgfx::createUniform("u_ddm_params0", bgfx::UniformType::Vec4);
+    Params1Unif = bgfx::createUniform("u_ddm_params1", bgfx::UniformType::Vec4);
+    InputUnif   = bgfx::createUniform("s_input",       bgfx::UniformType::Sampler);
+    AudioUnif   = bgfx::createUniform("s_audio",       bgfx::UniformType::Sampler);
+    m_bridge.Configure("u_ddm_v");
 
     for (const auto& v : k_builtins) m_lua.SeedVar(v);
 
@@ -96,29 +102,33 @@ void ColorModifier::Init(bgfx::RendererType::Enum /*Renderer*/)
     m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
 
     m_bridge.Rescan(m_lua, ConcatCode(Cfg), k_builtins);
-    Recompile();   // builds the program and creates the bridge uniform
+    Recompile();
 
-    m_lua.SetEnvNumber("beat", 0.0);
+    m_lua.SetEnvNumber("b", 0.0);
     m_lua.RunBlock(m_initRef, "initCode");
     m_inited = true;
 }
 
-void ColorModifier::Destroy()
+void DynamicDistanceModifier::Destroy()
 {
     if (bgfx::isValid(Program)) bgfx::destroy(Program);
     m_bridge.DestroyUniforms();
-    if (bgfx::isValid(BeatUnif))  bgfx::destroy(BeatUnif);
-    if (bgfx::isValid(InputUnif)) bgfx::destroy(InputUnif);
+    if (bgfx::isValid(AudioUnif))   bgfx::destroy(AudioUnif);
+    if (bgfx::isValid(InputUnif))   bgfx::destroy(InputUnif);
+    if (bgfx::isValid(Params1Unif)) bgfx::destroy(Params1Unif);
+    if (bgfx::isValid(Params0Unif)) bgfx::destroy(Params0Unif);
 
-    Program    = BGFX_INVALID_HANDLE;
-    BeatUnif   = BGFX_INVALID_HANDLE;
-    InputUnif  = BGFX_INVALID_HANDLE;
-    m_inited   = false;
+    Program     = BGFX_INVALID_HANDLE;
+    AudioUnif   = BGFX_INVALID_HANDLE;
+    InputUnif   = BGFX_INVALID_HANDLE;
+    Params1Unif = BGFX_INVALID_HANDLE;
+    Params0Unif = BGFX_INVALID_HANDLE;
+    m_inited    = false;
 }
 
 // ── Recompile ─────────────────────────────────────────────────────────────────
 
-void ColorModifier::Recompile()
+void DynamicDistanceModifier::Recompile()
 {
     if (bgfx::isValid(Program)) { bgfx::destroy(Program); Program = BGFX_INVALID_HANDLE; }
     m_bridge.DestroyUniforms();
@@ -128,12 +138,14 @@ void ColorModifier::Recompile()
     if (!ShaderCompiler::GlslToSpirv(fragGlsl, true, fragSpirv, m_shaderError))
         return;
 
-    const uint16_t uboSize = (uint16_t)(16 + m_bridge.UboBytes());
+    const uint16_t uboSize = (uint16_t)(32 + m_bridge.UboBytes());
 
     std::vector<BgfxUniformDesc> uniforms;
-    uniforms.push_back({ "u_cmod_beat", 0x12, 1, 0, 1, 0, 0, 0 });
-    m_bridge.AppendDescs(uniforms, 16);
+    uniforms.push_back({ "u_ddm_params0", 0x12, 1, 0,  1, 0, 0, 0 });
+    uniforms.push_back({ "u_ddm_params1", 0x12, 1, 16, 1, 0, 0, 0 });
+    m_bridge.AppendDescs(uniforms, 32);
     uniforms.push_back({ "s_input", 0x30, 0, 2, 0, 0, 0, 2 });
+    uniforms.push_back({ "s_audio", 0x30, 0, 3, 0, 0, 0, 2 });
 
     bgfx::ShaderHandle FS = ShaderCompiler::WrapFragmentSpirv(
         fragSpirv, uniforms.data(), (int)uniforms.size(), uboSize);
@@ -160,7 +172,7 @@ void ColorModifier::Recompile()
     }
 }
 
-void ColorModifier::OnConfigChanged(const std::vector<std::string>& Changed)
+void DynamicDistanceModifier::OnConfigChanged(const std::vector<std::string>& Changed)
 {
     if (!m_inited) return;
 
@@ -180,7 +192,7 @@ void ColorModifier::OnConfigChanged(const std::vector<std::string>& Changed)
         m_lua.CompileBlock(Cfg.InitCode, "initCode", m_initRef);
         m_bridge.Rescan(m_lua, ConcatCode(Cfg), k_builtins);
         Recompile();
-        m_lua.SetEnvNumber("beat", 0.0);
+        m_lua.SetEnvNumber("b", 0.0);
         m_lua.RunBlock(m_initRef, "initCode");
     }
     if (frameChanged) m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
@@ -189,23 +201,37 @@ void ColorModifier::OnConfigChanged(const std::vector<std::string>& Changed)
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
-void ColorModifier::Render(const RenderContext& Context)
+void DynamicDistanceModifier::Render(const RenderContext& Context)
 {
     if (!bgfx::isValid(Program)) return;
 
-    m_lua.SetEnvNumber("beat", Context.IsBeat() ? 1.0 : 0.0);
+    const bool isBeat = Context.IsBeat();
+
+    m_lua.SetAudioData(Context.AudioData);
+    m_lua.SetEnvNumber("b", isBeat ? 1.0 : 0.0);
     m_lua.RunBlock(m_frameRef, "frameCode");
-    if (Context.IsBeat())
+    if (isBeat)
         m_lua.RunBlock(m_beatRef, "beatCode");
 
-    const float beatData[4] = { Context.IsBeat() ? 1.0f : 0.0f, 0, 0, 0 };
-    bgfx::setUniform(BeatUnif, beatData);
+    const float w    = (float)Context.Width;
+    const float h    = (float)Context.Height;
+    const float maxD = 0.5f * std::sqrt(w * w + h * h);
+
+    const float params0[4] = { w, h, maxD, isBeat ? 1.0f : 0.0f };
+    const float params1[4] = { Cfg.Blend ? 1.0f : 0.0f, 0, 0, 0 };
+    bgfx::setUniform(Params0Unif, params0);
+    bgfx::setUniform(Params1Unif, params1);
 
     m_bridge.Upload(m_lua);
 
-    bgfx::setTexture(0, InputUnif, Context.InputTexture);
+    const uint32_t inputFlags = Cfg.Bilinear
+        ? UINT32_MAX
+        : (BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
+    bgfx::setTexture(0, InputUnif, Context.InputTexture, inputFlags);
+    bgfx::setTexture(1, AudioUnif, Context.AudioTex);
+
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexCount(3);  // fullscreen triangle; no VB — gl_VertexIndex in VS
+    bgfx::setVertexCount(3);
     bgfx::submit(Context.ViewId, Program);
 
     Context.FboManager->Swap();

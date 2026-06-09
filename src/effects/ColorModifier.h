@@ -3,6 +3,7 @@
 #include "engine/Reflect.h"
 #include "engine/ShaderCompiler.h"
 #include "engine/LuaRuntime.h"
+#include "engine/LuaUniformBridge.h"
 
 #include <string>
 #include <vector>
@@ -51,7 +52,6 @@ protected:
     void OnConfigChanged(const std::vector<std::string>& Changed) override;
 
 private:
-    void SeedUserVars();   // scans code blocks → updates m_userVars, seeds Lua env
     void Recompile();      // builds GLSL → SPIRV → bgfx program
 
     std::string BuildFragGlsl() const;
@@ -59,20 +59,13 @@ private:
     bgfx::ProgramHandle Program   = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle InputUnif = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle BeatUnif  = BGFX_INVALID_HANDLE;
-    // Up to 4 packed user-var vec4 uniforms (16 user vars max)
-    bgfx::UniformHandle VarsUnif[4] = {
-        BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE,
-        BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE,
-    };
 
     std::string m_shaderError;
 
-    LuaRuntime m_lua;
+    LuaRuntime       m_lua;
+    LuaUniformBridge m_bridge;   // packs user Lua vars into u_cmod_v[N]
     int  m_initRef  = -1;
     int  m_frameRef = -1;
     int  m_beatRef  = -1;
     bool m_inited   = false;
-
-    // Ordered list of user-declared Lua var names bridged to GLSL uniforms.
-    std::vector<std::string> m_userVars;
 };

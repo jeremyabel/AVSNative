@@ -1,0 +1,38 @@
+{
+    "effects": [
+        {
+            "type": "MovingParticle",
+            "enabled": true,
+            "config": {
+                "color": [255, 128, 0],
+                "distance": 13,
+                "size": 33,
+                "onBeatSizeChange": false,
+                "onBeatSize": 12,
+                "blendMode": 1
+            }
+        },
+        {
+            "type": "Multi Delay",
+            "enabled": true,
+            "config": {
+                "mode": 1,
+                "activebuffer": 0,
+                "usebeats0": 0, "delay0": 20,
+                "usebeats1": 0, "delay1": 0,
+                "usebeats2": 0, "delay2": 0,
+                "usebeats3": 0, "delay3": 0,
+                "usebeats4": 0, "delay4": 0,
+                "usebeats5": 0, "delay5": 0
+            }
+        },
+        {
+            "type": "Multi Delay",
+            "enabled": true,
+            "config": {
+                "mode": 2,
+                "activebuffer": 0
+            }
+        }
+    ]
+}

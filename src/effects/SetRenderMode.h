@@ -21,6 +21,9 @@ public:
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
+    // Control-only: writes Context.LineBlendMode, produces no image. Uses no views.
+    uint8_t ExpectedViewCount() const override { return 0; }
+
 protected:
     const std::vector<Field>& Fields() const override
     {
@@ -34,9 +37,4 @@ protected:
         return f;
     }
     std::string EffectName() const override { return "Set Render Mode"; }
-
-private:
-    // Pass-through blit (preserves the image; SetRenderMode has no visual output itself)
-    bgfx::ProgramHandle Program    = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
 };

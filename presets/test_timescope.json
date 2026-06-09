@@ -1,0 +1,1 @@
+{ "effects": [ { "type": "Timescope", "enabled": true, "config": { "channel": 2, "color": [0,255,128], "blend": 3, "bands": 576 } } ] }

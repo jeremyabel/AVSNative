@@ -41,6 +41,10 @@
 #include "effects/BassSpin.h"
 #include "effects/Normalize.h"
 #include "effects/ColorModifier.h"
+#include "effects/DynamicDistanceModifier.h"
+#include "effects/DynamicShift.h"
+#include "effects/Texer.h"
+#include "effects/Texer2.h"
 #include "effects/RotatingStars.h"
 #include "effects/OscilloscopeStar.h"
 #include "effects/Ring.h"
@@ -49,6 +53,15 @@
 #include "effects/Convolution.h"
 #include "effects/ColorMap.h"
 #include "effects/CustomBpm.h"
+#include "effects/MultiDelay.h"
+#include "effects/Triangle.h"
+#include "effects/VideoDelay.h"
+#include "effects/DynamicMovement.h"
+#include "effects/DotFountain.h"
+#include "effects/DotPlane.h"
+#include "effects/Timescope.h"
+#include "effects/Brightness.h"
+#include "effects/Text.h"
 #include "ShaderCompiler.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -109,6 +122,7 @@ bool Engine::Init(const EngineConfig& Config, bgfx::RendererType::Enum Renderer)
     EffectRegistry.Register("Bass Spin",        []() { return std::make_unique<BassSpin>(); });
     EffectRegistry.Register("Normalize",        []() { return std::make_unique<Normalize>(); });
     EffectRegistry.Register("Color Modifier",   []() { return std::make_unique<ColorModifier>(); });
+    EffectRegistry.Register("Dynamic Distance Modifier", []() { return std::make_unique<DynamicDistanceModifier>(); });
     EffectRegistry.Register("Rotating Stars",     []() { return std::make_unique<RotatingStars>(); });
     EffectRegistry.Register("Oscilloscope Star", []() { return std::make_unique<OscilloscopeStar>(); });
     EffectRegistry.Register("Ring",              []() { return std::make_unique<Ring>(); });
@@ -117,6 +131,18 @@ bool Engine::Init(const EngineConfig& Config, bgfx::RendererType::Enum Renderer)
     EffectRegistry.Register("Convolution Filter", []() { return std::make_unique<Convolution>(); });
     EffectRegistry.Register("Color Map",          []() { return std::make_unique<ColorMap>(); });
     EffectRegistry.Register("Custom BPM",         []() { return std::make_unique<CustomBpm>(); });
+    EffectRegistry.Register("Dynamic Shift",      []() { return std::make_unique<DynamicShift>(); });
+    EffectRegistry.Register("Texer",              []() { return std::make_unique<Texer>(); });
+    EffectRegistry.Register("Texer II",           []() { return std::make_unique<Texer2>(); });
+    EffectRegistry.Register("Multi Delay",        []() { return std::make_unique<MultiDelay>(); });
+    EffectRegistry.Register("Triangle",           []() { return std::make_unique<Triangle>(); });
+    EffectRegistry.Register("Video Delay",        []() { return std::make_unique<VideoDelay>(); });
+    EffectRegistry.Register("Dynamic Movement",   []() { return std::make_unique<DynamicMovement>(); });
+    EffectRegistry.Register("Dot Fountain",       []() { return std::make_unique<DotFountain>(); });
+    EffectRegistry.Register("Dot Plane",          []() { return std::make_unique<DotPlane>(); });
+    EffectRegistry.Register("Timescope",          []() { return std::make_unique<Timescope>(); });
+    EffectRegistry.Register("Brightness",         []() { return std::make_unique<Brightness>(); });
+    EffectRegistry.Register("Text",               []() { return std::make_unique<Text>(); });
 
     // Clear the initial ping-pong FBO to black. Without this the first frame
     // reads uninitialized texture memory as the effect chain input.

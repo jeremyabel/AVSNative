@@ -1,0 +1,4 @@
+{ "effects": [
+  { "type": "MovingParticle", "enabled": true, "config": { "color": [120,120,120], "distance": 13, "size": 33, "blendMode": 1 } },
+  { "type": "Brightness", "enabled": true, "config": { "blend": 0, "red": 2048, "green": 0, "blue": -1024, "exclude": false, "excludeColor": [0,0,0], "distance": 16 } }
+] }

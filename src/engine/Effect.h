@@ -105,7 +105,9 @@ public:
     virtual std::string GetScriptError(const std::string& /*paramName*/) const { return {}; }
 
     // Total bgfx view IDs this effect consumes per frame. Used by EffectChain to
-    // advance the counter for disabled container effects, keeping view IDs stable.
-    // Leaf effects always use exactly 4. Container effects override this.
+    // advance the counter even for disabled effects, keeping view IDs stable.
+    // Default 4 covers ordinary leaf effects. Control-only effects (SetRenderMode,
+    // Custom BPM) return 0 — EffectChain runs them in place with no view or FBO.
+    // Multi-pass/container effects override with a larger count.
     virtual uint8_t ExpectedViewCount() const { return 4; }
 };

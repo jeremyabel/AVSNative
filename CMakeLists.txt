@@ -112,6 +112,11 @@ bgfx_compile_shaders(
         src/shaders/fs_picture2.sc
         src/shaders/fs_convolution.sc
         src/shaders/fs_colormap.sc
+        src/shaders/fs_dynamicshift.sc
+        src/shaders/fs_texer2_comp.sc
+        src/shaders/fs_dotplane.sc
+        src/shaders/fs_timescope.sc
+        src/shaders/fs_brightness.sc
     VARYING_DEF ${VARYING_DEF}
     OUTPUT_DIR ${SHADER_OUTPUT_DIR}
     OUT_FILES_VAR FS_SHADER_HEADERS
@@ -178,8 +183,22 @@ add_library(avs_engine STATIC
     src/effects/Convolution.cpp
     src/effects/ColorMap.cpp
     src/effects/CustomBpm.cpp
+    src/effects/DynamicDistanceModifier.cpp
+    src/effects/DynamicShift.cpp
+    src/effects/Texer.cpp
+    src/effects/Texer2.cpp
+    src/effects/MultiDelay.cpp
+    src/effects/Triangle.cpp
+    src/effects/VideoDelay.cpp
+    src/effects/DynamicMovement.cpp
+    src/effects/DotFountain.cpp
+    src/effects/DotPlane.cpp
+    src/effects/Timescope.cpp
+    src/effects/Brightness.cpp
+    src/effects/Text.cpp
     src/thirdparty/StbImageImpl.cpp
     src/engine/LuaRuntime.cpp
+    src/engine/LuaUniformBridge.cpp
     # NanoVG bgfx backend (used by Simple and future vector effects)
     ${BGFX_EXAMPLES_COMMON}/nanovg/nanovg.cpp
     ${BGFX_EXAMPLES_COMMON}/nanovg/nanovg_bgfx.cpp
@@ -275,6 +294,19 @@ add_library(avs_ui STATIC
     src/ui/effects/ConvolutionUI.cpp
     src/ui/effects/ColorMapUI.cpp
     src/ui/effects/CustomBpmUI.cpp
+    src/ui/effects/DynamicDistanceModifierUI.cpp
+    src/ui/effects/DynamicShiftUI.cpp
+    src/ui/effects/TexerUI.cpp
+    src/ui/effects/Texer2UI.cpp
+    src/ui/effects/MultiDelayUI.cpp
+    src/ui/effects/TriangleUI.cpp
+    src/ui/effects/VideoDelayUI.cpp
+    src/ui/effects/DynamicMovementUI.cpp
+    src/ui/effects/DotFountainUI.cpp
+    src/ui/effects/DotPlaneUI.cpp
+    src/ui/effects/TimescopeUI.cpp
+    src/ui/effects/BrightnessUI.cpp
+    src/ui/effects/TextUI.cpp
 )
 
 target_include_directories(avs_ui

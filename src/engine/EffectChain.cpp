@@ -26,9 +26,21 @@ void EffectChain::Render(RenderContext Context)
                 *Context.NextViewId += Entry.Effect->ExpectedViewCount();
             }
         }
+        else if (Entry.Effect->ExpectedViewCount() == 0)
+        {
+            // Control-only effects (SetRenderMode, Custom BPM): no views, no image
+            // output. They only mutate shared frame state, so run them in place —
+            // they read the current buffer as input and never swap. Nothing to
+            // advance, so view IDs stay stable whether enabled or not.
+            if (Entry.Enabled)
+            {
+                Context.InputTexture = Context.FboManager->GetCurrent().Texture;
+                Entry.Effect->Render(Context);
+            }
+        }
         else
         {
-            // Leaf effects: pre-allocate a 4-view block. Always advance — even when
+            // Leaf effects: pre-allocate a view block. Always advance — even when
             // disabled — so subsequent effects keep stable view IDs across toggles.
             const uint8_t viewId = *Context.NextViewId;
             *Context.NextViewId += Entry.Effect->ExpectedViewCount();

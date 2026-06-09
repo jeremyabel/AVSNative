@@ -2,7 +2,6 @@
 
 #include "engine/Reflect.h"
 
-#include <bgfx/bgfx.h>
 #include <chrono>
 
 // Custom BPM rewrites the frame beat (Context.IsBeat) for downstream effects.
@@ -31,6 +30,9 @@ public:
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 
+    // Control-only: rewrites the beat, produces no image. Uses no views.
+    uint8_t ExpectedViewCount() const override { return 0; }
+
     // Beat-meter positions (0-7), updated each rendered frame. Read by the UI.
     int InMeterSeg()  const { return m_inSeg;  }
     int OutMeterSeg() const { return m_outSeg; }
@@ -41,9 +43,6 @@ protected:
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
-    bgfx::ProgramHandle m_prog       = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_texUniform = BGFX_INVALID_HANDLE;
-
     // Beat-modification runtime state (not serialized).
     using Clock = std::chrono::steady_clock;
     Clock::time_point m_arbLast    = Clock::now();

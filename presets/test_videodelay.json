@@ -1,0 +1,25 @@
+{
+    "effects": [
+        {
+            "type": "MovingParticle",
+            "enabled": true,
+            "config": {
+                "color": [0, 200, 255],
+                "distance": 13,
+                "size": 33,
+                "onBeatSizeChange": false,
+                "onBeatSize": 12,
+                "blendMode": 1
+            }
+        },
+        {
+            "type": "Video Delay",
+            "enabled": true,
+            "config": {
+                "enabled": true,
+                "usebeats": false,
+                "delay": 30
+            }
+        }
+    ]
+}

@@ -56,6 +56,16 @@ public:
                       const float* audioSamples, float* outBuf,
                       const std::string& blockName);
 
+    // Build the Triangle triangle-loop wrapper around user code and compile it.
+    // The loop runs N times; per-iteration built-ins (x1..y3, red1..blue3, z1, skip,
+    // i) live in the env table, so no persistent-var copy list is needed. w/h/b and
+    // the per-frame vertex/colour defaults must be set in env (SetEnvNumber) first.
+    bool CompileTriangleLoop(const std::string& triangleCode, int& refOut);
+
+    // Call the compiled triangle-loop function once per frame.
+    // outBuf: float[n * 11] — stride: x1,y1,x2,y2,x3,y3,r,g,b,z,skip.
+    void RunTriangleLoop(int ref, int n, float* outBuf, const std::string& blockName);
+
     // Scan Lua init code for bare assignments not in builtins (e.g., "t = 0").
     // Returns unique names suitable for seeding into env and the point-loop wrapper.
     static std::vector<std::string> ScanVarDecls(

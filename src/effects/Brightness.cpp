@@ -1,0 +1,53 @@
+#include "Brightness.h"
+
+#include "engine/FBOManager.h"
+
+#include "generated/spirv/vs_fullscreen.sc.bin.h"
+#include "generated/spirv/fs_brightness.sc.bin.h"
+
+// cfg → per-channel multiplier (matches smp_begin's tab_red/green/blue formula).
+static float ChannelMult(int cfg)
+{
+    return 1.0f + (cfg < 0 ? 1.0f : 16.0f) * ((float)cfg / 4096.0f);
+}
+
+void Brightness::Init(bgfx::RendererType::Enum /*Renderer*/)
+{
+    const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_brightness_spv, sizeof(fs_brightness_spv)));
+    m_program  = bgfx::createProgram(VS, FS, true);
+    m_uInput   = bgfx::createUniform("s_input",   bgfx::UniformType::Sampler);
+    m_uMult    = bgfx::createUniform("u_mult",    bgfx::UniformType::Vec4);
+    m_uParams  = bgfx::createUniform("u_params",  bgfx::UniformType::Vec4);
+    m_uExclude = bgfx::createUniform("u_exclude", bgfx::UniformType::Vec4);
+}
+
+void Brightness::Destroy()
+{
+    if (bgfx::isValid(m_uExclude)) bgfx::destroy(m_uExclude);
+    if (bgfx::isValid(m_uParams))  bgfx::destroy(m_uParams);
+    if (bgfx::isValid(m_uMult))    bgfx::destroy(m_uMult);
+    if (bgfx::isValid(m_uInput))   bgfx::destroy(m_uInput);
+    if (bgfx::isValid(m_program))  bgfx::destroy(m_program);
+
+    m_uExclude = m_uParams = m_uMult = m_uInput = BGFX_INVALID_HANDLE;
+    m_program = BGFX_INVALID_HANDLE;
+}
+
+void Brightness::Render(const RenderContext& Context)
+{
+    const float mult[4] = { ChannelMult(Cfg.Red), ChannelMult(Cfg.Green), ChannelMult(Cfg.Blue), 0.0f };
+    const float params[4] = { (float)Cfg.Blend, Cfg.Exclude ? 1.0f : 0.0f, Cfg.Distance / 255.0f, 0.0f };
+    const float excl[4] = { Cfg.ExcludeColor[0] / 255.0f, Cfg.ExcludeColor[1] / 255.0f,
+                            Cfg.ExcludeColor[2] / 255.0f, 0.0f };
+
+    bgfx::setUniform(m_uMult, mult);
+    bgfx::setUniform(m_uParams, params);
+    bgfx::setUniform(m_uExclude, excl);
+    bgfx::setTexture(0, m_uInput, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, m_program);
+
+    Context.FboManager->Swap();
+}

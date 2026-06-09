@@ -1,8 +1,4 @@
 #include "effects/CustomBpm.h"
-#include "engine/FBOManager.h"
-
-#include "generated/spirv/vs_fullscreen.sc.bin.h"
-#include "generated/spirv/fs_blit.sc.bin.h"
 
 #include <algorithm>
 
@@ -32,10 +28,6 @@ void CustomBpm::OnConfigChanged(const std::vector<std::string>& changed)
 
 void CustomBpm::Init(bgfx::RendererType::Enum /*Renderer*/)
 {
-    const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_blit_spv,       sizeof(fs_blit_spv)));
-    m_prog       = bgfx::createProgram(vs, fs, true);
-    m_texUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 }
 
 void CustomBpm::Render(const RenderContext& Ctx)
@@ -84,21 +76,9 @@ void CustomBpm::Render(const RenderContext& Ctx)
         else if (m_outSeg <= 0) { m_outSeg = 0; m_outDir =  1; }
     }
 
-    // ── Pass-through blit ──
-    // Custom BPM has no visual output, but consumes its pre-allocated view and
-    // keeps the ping-pong FBO chain intact (matches SetRenderMode).
-    bgfx::setTexture(0, m_texUniform, Ctx.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Ctx.QuadVB);
-    bgfx::submit(Ctx.ViewId, m_prog);
-
-    Ctx.FboManager->Swap();
+    // No image output and no swap: EffectChain runs control-only effects in place.
 }
 
 void CustomBpm::Destroy()
 {
-    if (bgfx::isValid(m_texUniform)) bgfx::destroy(m_texUniform);
-    if (bgfx::isValid(m_prog))       bgfx::destroy(m_prog);
-    m_texUniform = BGFX_INVALID_HANDLE;
-    m_prog       = BGFX_INVALID_HANDLE;
 }

@@ -1,0 +1,1 @@
+{ "effects": [ { "type": "Text", "enabled": true, "config": { "text": "Hello;AVS;World", "fontFamily": "Arial", "fontSize": 64, "color": [0,255,128], "outline": true, "outlineColor": [0,0,0], "outlineSize": 2, "halign": 1, "valign": 1, "normSpeed": 30, "blendMode": 0 } } ] }
