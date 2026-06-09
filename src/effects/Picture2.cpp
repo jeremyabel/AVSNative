@@ -168,9 +168,9 @@ void Picture2::Render(const RenderContext& Ctx)
     if (!bgfx::isValid(m_imageTex))
         return;  // No image loaded: pass through
 
-    const int  blend  = Ctx.IsBeat ? Cfg.OnBeatBlendMode   : Cfg.BlendMode;
-    const bool linear = Ctx.IsBeat ? Cfg.OnBeatBilinear     : Cfg.Bilinear;
-    const int  adjust = Ctx.IsBeat ? Cfg.OnBeatAdjustBlend  : Cfg.AdjustBlend;
+    const int  blend  = Ctx.IsBeat() ? Cfg.OnBeatBlendMode   : Cfg.BlendMode;
+    const bool linear = Ctx.IsBeat() ? Cfg.OnBeatBilinear     : Cfg.Bilinear;
+    const int  adjust = Ctx.IsBeat() ? Cfg.OnBeatAdjustBlend  : Cfg.AdjustBlend;
 
     if (blend == 10)
         return;  // Ignore: pass through without swapping

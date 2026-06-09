@@ -71,7 +71,7 @@ void EffectList::SubmitBlend(uint8_t ViewId,
 void EffectList::Render(const RenderContext& Context)
 {
     // On-beat gating
-    if (Context.IsBeat && Cfg.OnBeat)
+    if (Context.IsBeat() && Cfg.OnBeat)
         OnBeatCooldown = Cfg.OnBeatFrames;
     const bool Active = !Cfg.OnBeat || OnBeatCooldown > 0;
     if (OnBeatCooldown > 0)

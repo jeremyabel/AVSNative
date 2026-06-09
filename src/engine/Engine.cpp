@@ -48,6 +48,7 @@
 #include "effects/Picture2.h"
 #include "effects/Convolution.h"
 #include "effects/ColorMap.h"
+#include "effects/CustomBpm.h"
 #include "ShaderCompiler.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -115,6 +116,7 @@ bool Engine::Init(const EngineConfig& Config, bgfx::RendererType::Enum Renderer)
     EffectRegistry.Register("Picture II",         []() { return std::make_unique<Picture2>(); });
     EffectRegistry.Register("Convolution Filter", []() { return std::make_unique<Convolution>(); });
     EffectRegistry.Register("Color Map",          []() { return std::make_unique<ColorMap>(); });
+    EffectRegistry.Register("Custom BPM",         []() { return std::make_unique<CustomBpm>(); });
 
     // Clear the initial ping-pong FBO to black. Without this the first frame
     // reads uninitialized texture memory as the effect chain input.
@@ -154,13 +156,15 @@ void Engine::Tick()
 
     uint8_t viewCounter = 0;
     uint32_t lineBlendMode = (1u << 16); // default: lineWidth=1, alpha=0, Replace
+    // Per-frame beat, shared by pointer so Custom BPM can rewrite it for downstream effects.
+    bool beat = Audio.IsBeat();
 
     RenderContext Context{};
     Context.FboManager = &FboManager;
     Context.QuadVB = BlitQuadVB;
     Context.NextViewId = &viewCounter;
     Context.LineBlendMode = &lineBlendMode;
-    Context.IsBeat = Audio.IsBeat();
+    Context.IsBeatPtr = &beat;
     Context.AudioTex = AudioTex;
     Context.AudioData = &Audio.GetVisData();
     Context.Width = Width;

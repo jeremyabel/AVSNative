@@ -21,7 +21,7 @@ void ChannelShift::Init(bgfx::RendererType::Enum /*Renderer*/)
 void ChannelShift::Render(const RenderContext& Context)
 {
     int32_t activeMode = Cfg.Mode;
-    if (Cfg.OnBeatRandom && Context.IsBeat)
+    if (Cfg.OnBeatRandom && Context.IsBeat())
         activeMode = std::rand() % 6;
 
     const float params[4] = { (float)activeMode, 0.0f, 0.0f, 0.0f };

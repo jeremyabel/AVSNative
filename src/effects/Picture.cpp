@@ -159,12 +159,12 @@ void Picture::Render(const RenderContext& Ctx)
     if (!bgfx::isValid(m_imageTex))
         return;  // No image loaded: pass through without swapping (EffectChain handles it)
 
-    if (Ctx.IsBeat && Cfg.OnBeatAdditive)
+    if (Ctx.IsBeat() && Cfg.OnBeatAdditive)
         m_cooldown = Cfg.OnBeatDuration;
     else if (m_cooldown > 0)
         --m_cooldown;
 
-    const bool beatActive    = Ctx.IsBeat || m_cooldown > 0;
+    const bool beatActive    = Ctx.IsBeat() || m_cooldown > 0;
     const int  effectiveBlend =
         (Cfg.BlendMode == 1 || (Cfg.OnBeatAdditive && beatActive)) ? 1 : Cfg.BlendMode;
 

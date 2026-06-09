@@ -29,7 +29,7 @@ void MovingParticle::Render(const RenderContext& Context)
     const int Height = Context.Height;
 
     // On beat: jump attractor to random position in [-16/48, 16/48]
-    if (Context.IsBeat)
+    if (Context.IsBeat())
     {
         AttractorX = (float)(rand() % 33 - 16) / 48.0f;
         AttractorY = (float)(rand() % 33 - 16) / 48.0f;
@@ -49,7 +49,7 @@ void MovingParticle::Render(const RenderContext& Context)
     float Yp = PosY * Ss * ((float)Cfg.Distance / 32.0f) + (float)Height * 0.5f;
 
     // On-beat size snap, then smooth toward target
-    if (Context.IsBeat && Cfg.OnBeatSizeChange)
+    if (Context.IsBeat() && Cfg.OnBeatSizeChange)
         CurSize = (float)Cfg.OnBeatSize;
     float DrawSize = (float)(int32_t)CurSize;
     CurSize = (float)((int32_t)((CurSize + (float)Cfg.Size) * 0.5f));

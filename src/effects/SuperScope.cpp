@@ -214,7 +214,7 @@ void SuperScope::Render(const RenderContext& ctx)
     m_lua.SetAudioData(ctx.AudioData);
 
     const Rgb color = AdvanceColor();
-    m_lua.SetEnvNumber("b",        ctx.IsBeat ? 1.0 : 0.0);
+    m_lua.SetEnvNumber("b",        ctx.IsBeat() ? 1.0 : 0.0);
     m_lua.SetEnvNumber("w",        (double)ctx.Width);
     m_lua.SetEnvNumber("h",        (double)ctx.Height);
     m_lua.SetEnvNumber("red",      color.r);
@@ -229,7 +229,7 @@ void SuperScope::Render(const RenderContext& ctx)
         m_inited = true;
     }
     m_lua.RunBlock(m_frameRef, "frameCode");
-    if (ctx.IsBeat) m_lua.RunBlock(m_beatRef, "beatCode");
+    if (ctx.IsBeat()) m_lua.RunBlock(m_beatRef, "beatCode");
 
     // Run the point loop.
     const int n = (int)std::clamp((int)m_lua.GetEnvNumber("n"), 1, kMaxPoints);
@@ -241,7 +241,7 @@ void SuperScope::Render(const RenderContext& ctx)
     if ((int)m_audioBuf.size() < n)
         m_audioBuf.resize(n, 128.0f);
     BuildAudioBuf(ctx);
-    m_lua.RunPointLoop(m_pointRef, n, ctx.IsBeat, ctx.Width, ctx.Height,
+    m_lua.RunPointLoop(m_pointRef, n, ctx.IsBeat(), ctx.Width, ctx.Height,
                        m_audioBuf.data(), m_outBuf.data(), "pointCode");
 
     // Draw into the overlay buffer.

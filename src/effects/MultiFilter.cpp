@@ -19,7 +19,7 @@ void MultiFilter::Init(bgfx::RendererType::Enum /*Renderer*/)
 
 void MultiFilter::Render(const RenderContext& Context)
 {
-    if (Cfg.ToggleOnBeat && Context.IsBeat)
+    if (Cfg.ToggleOnBeat && Context.IsBeat())
         ToggleState = !ToggleState;
 
     // Pass-through: return without swapping so the input propagates unchanged

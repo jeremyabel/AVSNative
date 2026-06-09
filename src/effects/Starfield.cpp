@@ -113,7 +113,7 @@ void Starfield::Render(const RenderContext& Context)
     const int YOff = H >> 1;
 
     // On-beat: snap to on-beat speed and begin linear ramp back.
-    if (Context.IsBeat && Cfg.OnBeat)
+    if (Context.IsBeat() && Cfg.OnBeat)
     {
         CurrentSpeed = Cfg.OnBeatSpeed;
         OnBeatDiff   = (Cfg.Speed - Cfg.OnBeatSpeed) / (float)Cfg.OnBeatDuration;

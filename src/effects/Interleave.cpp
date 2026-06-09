@@ -27,7 +27,7 @@ void Interleave::Render(const RenderContext& Context)
     CurY = CurY * sc1 + Cfg.Y * (1.0f - sc1);
 
     // Beat snap applied after interpolation (matches original order)
-    if (Context.IsBeat && Cfg.OnBeat)
+    if (Context.IsBeat() && Cfg.OnBeat)
     {
         CurX = Cfg.X2;
         CurY = Cfg.Y2;

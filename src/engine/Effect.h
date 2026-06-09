@@ -20,7 +20,12 @@ struct RenderContext
     bgfx::TextureHandle     InputTexture = BGFX_INVALID_HANDLE;
     bgfx::FrameBufferHandle OutputFBO    = BGFX_INVALID_HANDLE;
     FBOManager*             FboManager   = nullptr;
-    bool    IsBeat = false;
+    // Per-frame beat. Stored as a pointer (like LineBlendMode / NextViewId) so a
+    // Custom BPM effect can rewrite it mid-chain and downstream effects in the same
+    // frame see the change — and so it survives EffectList's context copy. Access it
+    // through IsBeat() / SetBeat() rather than touching the pointer directly; those
+    // are const, so a `const RenderContext&` can still rewrite the beat.
+    bool*   IsBeatPtr = nullptr;
     int32_t Width  = 0, Height = 0, Frame = 0;
     double  Time   = 0.0;
     uint8_t ViewId = 0;
@@ -42,6 +47,11 @@ struct RenderContext
     // bits 0-7 = blendMode (0-9). Pointer so downstream effects in the same frame share it.
     // Default (1u << 16) = lineWidth 1, alpha 0, Replace blend.
     uint32_t* LineBlendMode = nullptr;
+
+    // Beat accessors. Both are const: they read/write the pointee, not the context,
+    // so effects taking `const RenderContext&` can call SetBeat (Custom BPM does).
+    bool IsBeat() const { return IsBeatPtr && *IsBeatPtr; }
+    void SetBeat(bool b) const { if (IsBeatPtr) *IsBeatPtr = b; }
 };
 
 enum class ParamType

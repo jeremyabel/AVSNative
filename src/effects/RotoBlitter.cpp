@@ -23,7 +23,7 @@ void RotoBlitter::Init(bgfx::RendererType::Enum /*Renderer*/)
 void RotoBlitter::Render(const RenderContext& Context)
 {
     // ── Rotation reversal ────────────────────────────────────────────────────
-    if (Context.IsBeat && Cfg.Beatch)
+    if (Context.IsBeat() && Cfg.Beatch)
         m_rotRev = -m_rotRev;
     if (!Cfg.Beatch)
         m_rotRev = 1.0f;
@@ -34,7 +34,7 @@ void RotoBlitter::Render(const RenderContext& Context)
     if (m_rotRevPos < m_rotRev && m_rotRev < 0.0f) m_rotRevPos = m_rotRev;
 
     // ── Scale animation ──────────────────────────────────────────────────────
-    if (Context.IsBeat && Cfg.BeatchScale)
+    if (Context.IsBeat() && Cfg.BeatchScale)
         m_scaleFpos = (float)Cfg.ZoomScale2;
 
     float fVal;

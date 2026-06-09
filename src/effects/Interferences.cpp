@@ -27,7 +27,7 @@ void Interferences::Init(bgfx::RendererType::Enum /*Renderer*/)
 void Interferences::Render(const RenderContext& Context)
 {
     // Beat: kick the oscillator if it has completed its previous cycle
-    if (Context.IsBeat && Cfg.OnBeat && Status >= kPi)
+    if (Context.IsBeat() && Cfg.OnBeat && Status >= kPi)
         Status = 0.0f;
 
     const float s      = std::sin(Status);

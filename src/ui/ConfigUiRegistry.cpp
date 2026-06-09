@@ -231,6 +231,7 @@ EFFECT_UI(Picture)
 EFFECT_UI(Picture2)
 EFFECT_UI(Convolution)
 EFFECT_UI(ColorMap)
+EFFECT_UI(CustomBpm)
 #undef EFFECT_UI
 
 void RegisterAllEffectUis(ConfigUiRegistry& reg)
@@ -280,5 +281,6 @@ void RegisterAllEffectUis(ConfigUiRegistry& reg)
     EFFECT_UI(Picture2)
     EFFECT_UI(Convolution)
     EFFECT_UI(ColorMap)
+    EFFECT_UI(CustomBpm)
 #undef EFFECT_UI
 }

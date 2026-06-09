@@ -71,11 +71,11 @@ void Bump::Render(const RenderContext& Context)
     const int h = Context.Height;
 
     // Update beat flags (EEL convention: -1 = true, 1 = false).
-    m_lua.SetEnvNumber("isBeat",       Context.IsBeat ? -1.0 : 1.0);
+    m_lua.SetEnvNumber("isBeat",       Context.IsBeat() ? -1.0 : 1.0);
     m_lua.SetEnvNumber("is_long_beat", m_onBeatFadeout > 0 ? -1.0 : 1.0);
 
     m_lua.RunBlock(m_frameRef, "frameCode");
-    if (Context.IsBeat)
+    if (Context.IsBeat())
         m_lua.RunBlock(m_beatRef, "beatCode");
 
     // Clamp bi to [0,1].
@@ -83,7 +83,7 @@ void Bump::Render(const RenderContext& Context)
     m_lua.SetEnvNumber("bi", bi);
 
     // On-beat depth snap (before bi multiplication, matching original).
-    if (Context.IsBeat && Cfg.OnBeat)
+    if (Context.IsBeat() && Cfg.OnBeat)
     {
         m_curDepth      = Cfg.OnBeatDepth;
         m_onBeatFadeout = Cfg.OnBeatDuration;

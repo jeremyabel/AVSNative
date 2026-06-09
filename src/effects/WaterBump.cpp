@@ -105,7 +105,7 @@ void WaterBump::Render(const RenderContext& Context)
 
     EnsureBuffers(w, h);
 
-    if (Context.IsBeat)
+    if (Context.IsBeat())
     {
         if (Cfg.Random)
         {

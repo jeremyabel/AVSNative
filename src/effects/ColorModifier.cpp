@@ -212,12 +212,12 @@ void ColorModifier::Render(const RenderContext& Context)
 {
     if (!bgfx::isValid(Program)) return;
 
-    m_lua.SetEnvNumber("beat", Context.IsBeat ? 1.0 : 0.0);
+    m_lua.SetEnvNumber("beat", Context.IsBeat() ? 1.0 : 0.0);
     m_lua.RunBlock(m_frameRef, "frameCode");
-    if (Context.IsBeat)
+    if (Context.IsBeat())
         m_lua.RunBlock(m_beatRef, "beatCode");
 
-    const float beatData[4] = { Context.IsBeat ? 1.0f : 0.0f, 0, 0, 0 };
+    const float beatData[4] = { Context.IsBeat() ? 1.0f : 0.0f, 0, 0, 0 };
     bgfx::setUniform(BeatUnif, beatData);
 
     const int numVec4s = ((int)m_userVars.size() + 3) / 4;

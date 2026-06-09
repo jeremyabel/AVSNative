@@ -19,7 +19,7 @@ void OnBeatClear::Init(bgfx::RendererType::Enum /*Renderer*/)
 
 void OnBeatClear::Render(const RenderContext& Context)
 {
-    if (Context.IsBeat)
+    if (Context.IsBeat())
     {
         // nf=0 disables the effect entirely (matches `if (nf && ++cf >= nf)`)
         if (Cfg.Nf && ++Cf >= Cfg.Nf)

@@ -245,7 +245,7 @@ const uint8_t* ColorMap::SelectLUT(bool isBeat)
 
 void ColorMap::Render(const RenderContext& Ctx)
 {
-    const uint8_t* lut = SelectLUT(Ctx.IsBeat);
+    const uint8_t* lut = SelectLUT(Ctx.IsBeat());
     bgfx::updateTexture2D(m_lutTex, 0, 0, 0, 0, kLutSize, 1,
                           bgfx::copy(lut, kLutSize * 4));
 

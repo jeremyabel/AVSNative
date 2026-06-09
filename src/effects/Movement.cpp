@@ -280,7 +280,7 @@ void Movement::Compile()
 
 void Movement::Render(const RenderContext& Context)
 {
-    if (Cfg.OnBeatToggle && Context.IsBeat)
+    if (Cfg.OnBeatToggle && Context.IsBeat())
         Cfg.SourceMap = !Cfg.SourceMap;
 
     if (Cfg.SourceMap && bgfx::isValid(ScatterProgram))

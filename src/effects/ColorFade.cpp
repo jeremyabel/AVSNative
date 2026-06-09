@@ -62,7 +62,7 @@ void ColorFade::UpdateFaderPos(bool isBeat)
 
 void ColorFade::Render(const RenderContext& Context)
 {
-    UpdateFaderPos(Context.IsBeat);
+    UpdateFaderPos(Context.IsBeat());
 
     // Convert from [0,64] fader space (32=neutral) to integer deltas [-32,+32]
     const float params[4] = {

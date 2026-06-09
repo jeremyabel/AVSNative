@@ -16,7 +16,7 @@ void Mirror::Init(bgfx::RendererType::Enum /*Renderer*/)
 
 void Mirror::Render(const RenderContext& Context)
 {
-    if (Cfg.OnBeat && Context.IsBeat)
+    if (Cfg.OnBeat && Context.IsBeat())
         m_beatActive = !m_beatActive;
 
     bool fx = Cfg.FlipX, fy = Cfg.FlipY;

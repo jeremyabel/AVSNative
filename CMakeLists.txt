@@ -177,6 +177,7 @@ add_library(avs_engine STATIC
     src/effects/Picture2.cpp
     src/effects/Convolution.cpp
     src/effects/ColorMap.cpp
+    src/effects/CustomBpm.cpp
     src/thirdparty/StbImageImpl.cpp
     src/engine/LuaRuntime.cpp
     # NanoVG bgfx backend (used by Simple and future vector effects)
@@ -273,6 +274,7 @@ add_library(avs_ui STATIC
     src/ui/effects/Picture2UI.cpp
     src/ui/effects/ConvolutionUI.cpp
     src/ui/effects/ColorMapUI.cpp
+    src/ui/effects/CustomBpmUI.cpp
 )
 
 target_include_directories(avs_ui
