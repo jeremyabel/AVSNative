@@ -13,13 +13,13 @@ uniform vec4 u_dgSize;
 
 void main()
 {
-    vec2 uv   = v_texcoord0.xy;
+    vec2 uv = v_texcoord0.xy;
     vec3 base = texture2D(s_texColor, uv).rgb;
 
     int spacing = int(u_dgGrid.x);
-    int sx      = int(u_dgGrid.y);
-    int sy      = int(u_dgGrid.z);
-    int blend   = int(u_dgColor.w);
+    int sx = int(u_dgGrid.y);
+    int sy = int(u_dgGrid.z);
+    int blend = int(u_dgColor.w);
 
     int px = int(uv.x * u_dgSize.x);
     int py = int(uv.y * u_dgSize.y);

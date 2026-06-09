@@ -11,7 +11,7 @@ uniform vec4 u_utParams;
 
 void main()
 {
-    vec3 orig  = texture2D(s_texColor, v_texcoord0.xy).rgb;
+    vec3 orig = texture2D(s_texColor, v_texcoord0.xy).rgb;
 
     float depth = max(orig.r, max(orig.g, orig.b));
     if (u_utParams.x > 0.5)

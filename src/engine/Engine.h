@@ -31,9 +31,9 @@ public:
     // Pass BGFX_INVALID_HANDLE to blit to the bgfx backbuffer (primary window).
     void SetOutputFrameBuffer(bgfx::FrameBufferHandle Fbo);
 
-    EffectChain&   GetChain();
-    FBOManager&    GetFBOManager();
-    Registry&      GetRegistry();
+    EffectChain& GetChain();
+    FBOManager& GetFBOManager();
+    Registry& GetRegistry();
     AudioAnalyzer& GetAudio();
 
     bgfx::RendererType::Enum GetRendererType() const;
@@ -46,9 +46,9 @@ private:
     void DestroyBlit();
     void SubmitBlit(uint8_t ViewId);
 
-    EffectChain   Chain;
-    FBOManager    FboManager;
-    Registry      EffectRegistry;
+    EffectChain Chain;
+    FBOManager FboManager;
+    Registry EffectRegistry;
     AudioAnalyzer Audio;
     bgfx::RendererType::Enum RendererType = bgfx::RendererType::Count;
     int32_t Width = 0;
@@ -59,9 +59,9 @@ private:
 
     bgfx::FrameBufferHandle OutputFbo = BGFX_INVALID_HANDLE; // set by App for the output window
 
-    bgfx::ProgramHandle      BlitProgram    = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle      BlitTexUniform = BGFX_INVALID_HANDLE;
-    bgfx::VertexBufferHandle BlitQuadVB     = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle BlitProgram = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle BlitTexUniform = BGFX_INVALID_HANDLE;
+    bgfx::VertexBufferHandle BlitQuadVB = BGFX_INVALID_HANDLE;
 
     // 576×1 RGBA8 texture with full mip chain for shader audio access.
     // Layout: R=spec_L, G=spec_R, B=osc_L, A=osc_R (0–255 each).

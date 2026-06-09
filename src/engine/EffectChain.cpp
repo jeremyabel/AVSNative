@@ -31,7 +31,7 @@ void EffectChain::Render(RenderContext Context)
             // Leaf effects: pre-allocate a 4-view block. Always advance — even when
             // disabled — so subsequent effects keep stable view IDs across toggles.
             const uint8_t viewId = *Context.NextViewId;
-            *Context.NextViewId += 4;
+            *Context.NextViewId += Entry.Effect->ExpectedViewCount();
 
             FBOSlot& NextSlot = Context.FboManager->GetNext();
             bgfx::setViewFrameBuffer(viewId, NextSlot.Fbo);

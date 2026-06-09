@@ -9,9 +9,9 @@ uniform vec4 u_blitParams;
 
 void main()
 {
-    float zoom   = u_blitParams.x;
-    float angle  = u_blitParams.y;
-    vec2  center = u_blitParams.zw;
+    float zoom = u_blitParams.x;
+    float angle = u_blitParams.y;
+    vec2 center = u_blitParams.zw;
 
     vec2 uv = v_texcoord0.xy - center;
     float c = cos(angle), s = sin(angle);

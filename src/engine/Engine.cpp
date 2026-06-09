@@ -34,9 +34,20 @@
 #include "effects/MultiFilter.h"
 #include "effects/Multiplier.h"
 #include "effects/OnBeatClear.h"
+#include "effects/Bump.h"
 #include "effects/Water.h"
+#include "effects/WaterBump.h"
 #include "effects/DotGrid.h"
 #include "effects/BassSpin.h"
+#include "effects/Normalize.h"
+#include "effects/ColorModifier.h"
+#include "effects/RotatingStars.h"
+#include "effects/OscilloscopeStar.h"
+#include "effects/Ring.h"
+#include "effects/Picture.h"
+#include "effects/Picture2.h"
+#include "effects/Convolution.h"
+#include "effects/ColorMap.h"
 #include "ShaderCompiler.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -90,9 +101,20 @@ bool Engine::Init(const EngineConfig& Config, bgfx::RendererType::Enum Renderer)
     EffectRegistry.Register("Multi Filter",     []() { return std::make_unique<MultiFilter>(); });
     EffectRegistry.Register("Multiplier",       []() { return std::make_unique<Multiplier>(); });
     EffectRegistry.Register("OnBeat Clear",     []() { return std::make_unique<OnBeatClear>(); });
+    EffectRegistry.Register("Bump",             []() { return std::make_unique<Bump>(); });
     EffectRegistry.Register("Water",            []() { return std::make_unique<Water>(); });
+    EffectRegistry.Register("Water Bump",       []() { return std::make_unique<WaterBump>(); });
     EffectRegistry.Register("Dot Grid",         []() { return std::make_unique<DotGrid>(); });
     EffectRegistry.Register("Bass Spin",        []() { return std::make_unique<BassSpin>(); });
+    EffectRegistry.Register("Normalize",        []() { return std::make_unique<Normalize>(); });
+    EffectRegistry.Register("Color Modifier",   []() { return std::make_unique<ColorModifier>(); });
+    EffectRegistry.Register("Rotating Stars",     []() { return std::make_unique<RotatingStars>(); });
+    EffectRegistry.Register("Oscilloscope Star", []() { return std::make_unique<OscilloscopeStar>(); });
+    EffectRegistry.Register("Ring",              []() { return std::make_unique<Ring>(); });
+    EffectRegistry.Register("Picture",            []() { return std::make_unique<Picture>(); });
+    EffectRegistry.Register("Picture II",         []() { return std::make_unique<Picture2>(); });
+    EffectRegistry.Register("Convolution Filter", []() { return std::make_unique<Convolution>(); });
+    EffectRegistry.Register("Color Map",          []() { return std::make_unique<ColorMap>(); });
 
     // Clear the initial ping-pong FBO to black. Without this the first frame
     // reads uninitialized texture memory as the effect chain input.
@@ -130,21 +152,21 @@ void Engine::Tick()
     Audio.Update();
     UploadAudioTex();
 
-    uint8_t  viewCounter    = 0;
-    uint32_t lineBlendMode  = (1u << 16); // default: lineWidth=1, alpha=0, Replace
+    uint8_t viewCounter = 0;
+    uint32_t lineBlendMode = (1u << 16); // default: lineWidth=1, alpha=0, Replace
 
     RenderContext Context{};
-    Context.FboManager    = &FboManager;
-    Context.QuadVB        = BlitQuadVB;
-    Context.NextViewId    = &viewCounter;
+    Context.FboManager = &FboManager;
+    Context.QuadVB = BlitQuadVB;
+    Context.NextViewId = &viewCounter;
     Context.LineBlendMode = &lineBlendMode;
-    Context.IsBeat      = Audio.IsBeat();
-    Context.AudioTex    = AudioTex;
-    Context.AudioData   = &Audio.GetVisData();
-    Context.Width       = Width;
-    Context.Height      = Height;
-    Context.Frame       = Frame;
-    Context.Time        = Time;
+    Context.IsBeat = Audio.IsBeat();
+    Context.AudioTex = AudioTex;
+    Context.AudioData = &Audio.GetVisData();
+    Context.Width = Width;
+    Context.Height = Height;
+    Context.Frame = Frame;
+    Context.Time = Time;
 
     Chain.Render(Context);
 
@@ -247,16 +269,14 @@ void Engine::InitAudioTex()
     // 576×1 RGBA8, full mip chain (10 levels for width 576).
     // Sampler flags: point filtering, clamp — texelFetch ignores the sampler,
     // but conventional sampling from dynamic effects should use nearest.
-    const uint64_t flags = BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT
-                         | BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP;
+    const uint64_t flags = BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT | BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP;
     AudioTex = bgfx::createTexture2D(
         kAudioBins, 1, /*hasMips=*/true, /*numLayers=*/1,
         bgfx::TextureFormat::RGBA8, flags);
 
     // Upload zero-filled mip 0 immediately so the texture is valid before any audio arrives.
     static const uint8_t zeros[kAudioBins * 4] = {};
-    bgfx::updateTexture2D(AudioTex, 0, 0, 0, 0, kAudioBins, 1,
-        bgfx::copy(zeros, sizeof(zeros)));
+    bgfx::updateTexture2D(AudioTex, 0, 0, 0, 0, kAudioBins, 1, bgfx::copy(zeros, sizeof(zeros)));
 }
 
 void Engine::DestroyAudioTex()
@@ -270,7 +290,10 @@ void Engine::DestroyAudioTex()
 
 void Engine::UploadAudioTex()
 {
-    if (!bgfx::isValid(AudioTex)) return;
+    if (!bgfx::isValid(AudioTex)) 
+    {
+        return;
+    }
 
     const VisData& vd = Audio.GetVisData();
 
@@ -278,10 +301,10 @@ void Engine::UploadAudioTex()
     uint8_t mip0[kAudioBins * 4];
     for (int i = 0; i < kAudioBins; i++)
     {
-        mip0[i*4+0] = (uint8_t)std::clamp((int)vd.spec[0][i], 0, 255);
-        mip0[i*4+1] = (uint8_t)std::clamp((int)vd.spec[1][i], 0, 255);
-        mip0[i*4+2] = (uint8_t)std::clamp((int)vd.osc [0][i], 0, 255);
-        mip0[i*4+3] = (uint8_t)std::clamp((int)vd.osc [1][i], 0, 255);
+        mip0[i * 4 + 0] = (uint8_t)std::clamp((int)vd.spec[0][i], 0, 255);
+        mip0[i * 4 + 1] = (uint8_t)std::clamp((int)vd.spec[1][i], 0, 255);
+        mip0[i * 4 + 2] = (uint8_t)std::clamp((int)vd.osc [0][i], 0, 255);
+        mip0[i * 4 + 3] = (uint8_t)std::clamp((int)vd.osc [1][i], 0, 255);
     }
 
     // Upload all mip levels. Each level is a box-filtered (averaged pairs) downsample
@@ -294,24 +317,26 @@ void Engine::UploadAudioTex()
 
     for (int mip = 0; ; mip++)
     {
-        bgfx::updateTexture2D(AudioTex, 0, (uint8_t)mip, 0, 0, (uint16_t)w, 1,
-            bgfx::copy(src, (uint32_t)(w * 4)));
+        bgfx::updateTexture2D(AudioTex, 0, (uint8_t)mip, 0, 0, (uint16_t)w, 1, bgfx::copy(src, (uint32_t)(w * 4)));
 
-        if (w <= 1) break;
+        if (w <= 1) 
+        {
+            break;
+        }
 
         int dw = std::max(1, w / 2);
         for (int i = 0; i < dw; i++)
         {
             for (int c = 0; c < 4; c++)
             {
-                int a = src[i*2*4 + c];
-                int b = (i*2+1 < w) ? src[(i*2+1)*4 + c] : a;
-                buf[i*4 + c] = (uint8_t)((a + b) / 2);
+                int a = src[i * 2 * 4 + c];
+                int b = (i * 2 + 1 < w) ? src[(i * 2 + 1) * 4 + c] : a;
+                buf[i * 4 + c] = (uint8_t)((a + b) / 2);
             }
         }
 
         // After the first iteration src=mip0→dst=buf; subsequently buf→buf in-place.
         src = buf;
-        w   = dw;
+        w = dw;
     }
 }

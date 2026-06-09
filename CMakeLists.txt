@@ -39,6 +39,19 @@ set(LUAJIT_DISABLE_FFI  OFF CACHE BOOL "" FORCE)
 set(LUAJIT_ENABLE_LUA52 OFF CACHE BOOL "" FORCE)
 add_subdirectory(lib/luajit)
 
+# ── imgui_gradient (gradient editor widget, git submodule at lib/imgui_gradient) ─
+# Built as a static lib that needs imgui headers to compile; imgui symbols are
+# provided by avs_ui at final link. IMGUI_DEFINE_MATH_OPERATORS must be PUBLIC so
+# consumers including the gradient headers get the ImVec2/ImVec4 operators too.
+add_subdirectory(lib/imgui_gradient)
+target_include_directories(imgui_gradient SYSTEM PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/bgfx.cmake/bgfx/3rdparty/dear-imgui)  # imgui.h, imconfig.h
+# bgfx's imconfig.h routes IM_ASSERT through bx; link bx so imgui_gradient inherits
+# its include dirs, BX_CONFIG_* definitions and /Zc flags.
+target_link_libraries(imgui_gradient PRIVATE bx)
+target_compile_definitions(imgui_gradient PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+target_compile_options(imgui_gradient PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus /Zc:preprocessor>)
+
 # ── Shaders ───────────────────────────────────────────────────────────────────
 # bgfx_compile_shaders uses BGFX_SHADER_INCLUDE_PATH but add_subdirectory doesn't set it.
 set(BGFX_SHADER_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/bgfx.cmake/bgfx/src")
@@ -91,8 +104,14 @@ bgfx_compile_shaders(
         src/shaders/fs_multifilter.sc
         src/shaders/fs_multiplier.sc
         src/shaders/fs_onbeatclear.sc
+        src/shaders/fs_bump.sc
         src/shaders/fs_water.sc
+        src/shaders/fs_waterbump.sc
         src/shaders/fs_dotgrid.sc
+        src/shaders/fs_picture.sc
+        src/shaders/fs_picture2.sc
+        src/shaders/fs_convolution.sc
+        src/shaders/fs_colormap.sc
     VARYING_DEF ${VARYING_DEF}
     OUTPUT_DIR ${SHADER_OUTPUT_DIR}
     OUT_FILES_VAR FS_SHADER_HEADERS
@@ -144,9 +163,21 @@ add_library(avs_engine STATIC
     src/effects/MultiFilter.cpp
     src/effects/Multiplier.cpp
     src/effects/OnBeatClear.cpp
+    src/effects/Bump.cpp
     src/effects/Water.cpp
+    src/effects/WaterBump.cpp
     src/effects/DotGrid.cpp
     src/effects/BassSpin.cpp
+    src/effects/Normalize.cpp
+    src/effects/ColorModifier.cpp
+    src/effects/RotatingStars.cpp
+    src/effects/OscilloscopeStar.cpp
+    src/effects/Ring.cpp
+    src/effects/Picture.cpp
+    src/effects/Picture2.cpp
+    src/effects/Convolution.cpp
+    src/effects/ColorMap.cpp
+    src/thirdparty/StbImageImpl.cpp
     src/engine/LuaRuntime.cpp
     # NanoVG bgfx backend (used by Simple and future vector effects)
     ${BGFX_EXAMPLES_COMMON}/nanovg/nanovg.cpp
@@ -161,6 +192,7 @@ target_include_directories(avs_engine
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/bgfx.cmake/bx/include               # <bx/bx.h> etc. for nanovg sources
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/bgfx.cmake/bgfx/include             # <bgfx/embedded_shader.h>
     PRIVATE ${BGFX_3RDPARTY}                                                    # <stb/stb_truetype.h> for fontstash (nanovg text)
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/bgfx.cmake/bimg/3rdparty           # <stb/stb_image.h> for Picture
 )
 
 target_compile_options(avs_engine PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus /Zc:preprocessor>)
@@ -227,9 +259,20 @@ add_library(avs_ui STATIC
     src/ui/effects/MultiFilterUI.cpp
     src/ui/effects/MultiplierUI.cpp
     src/ui/effects/OnBeatClearUI.cpp
+    src/ui/effects/BumpUI.cpp
     src/ui/effects/WaterUI.cpp
+    src/ui/effects/WaterBumpUI.cpp
     src/ui/effects/DotGridUI.cpp
     src/ui/effects/BassSpinUI.cpp
+    src/ui/effects/NormalizeUI.cpp
+    src/ui/effects/ColorModifierUI.cpp
+    src/ui/effects/RotatingStarsUI.cpp
+    src/ui/effects/OscilloscopeStarUI.cpp
+    src/ui/effects/RingUI.cpp
+    src/ui/effects/PictureUI.cpp
+    src/ui/effects/Picture2UI.cpp
+    src/ui/effects/ConvolutionUI.cpp
+    src/ui/effects/ColorMapUI.cpp
 )
 
 target_include_directories(avs_ui
@@ -238,10 +281,12 @@ target_include_directories(avs_ui
     PRIVATE ${BGFX_3RDPARTY}/dear-imgui                                 # "imgui.h" for TextEditor.h
     PRIVATE ${BGFX_EXAMPLES_COMMON}                                     # <imgui/imgui.h> (bgfx imgui API)
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/ImGuiColorTextEdit          # "TextEditor.h"
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui_gradient/include      # <imgui_gradient/imgui_gradient.hpp>
 )
 
 target_link_libraries(avs_ui
     PUBLIC  avs_engine
+    PUBLIC  imgui_gradient
     PRIVATE bx
     PRIVATE bimg
     PRIVATE SDL3-static

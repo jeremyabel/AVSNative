@@ -9,7 +9,7 @@ uniform vec4 u_mosaicParams;
 
 void main()
 {
-    vec2 res       = u_mosaicParams.yz;
+    vec2 res = u_mosaicParams.yz;
     float blockSize = u_mosaicParams.x;
 
     vec2 px = floor(v_texcoord0.xy * res / blockSize) * blockSize + blockSize * 0.5;
