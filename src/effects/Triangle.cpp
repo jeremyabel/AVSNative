@@ -45,7 +45,7 @@ void Triangle::Init()
     m_overlaySampler = bgfx::createUniform("s_overlay",      bgfx::UniformType::Sampler);
     m_paramsUniform  = bgfx::createUniform("u_simpleParams", bgfx::UniformType::Vec4);
 
-    m_nvg = nvgCreate(1, 0);  // edge AA on
+    EnsureNvgContext();
 
     Cfg.InitCode     = k_defaultInit;
     Cfg.FrameCode    = k_defaultFrame;
@@ -89,6 +89,20 @@ void Triangle::Destroy()
     m_inputSampler   = BGFX_INVALID_HANDLE;
     m_program        = BGFX_INVALID_HANDLE;
     // Lua refs are freed when m_lua destructs.
+}
+
+void Triangle::EnsureNvgContext()
+{
+    if (m_nvg && m_nvgEdgeAa == Cfg.AntialiasingEnabled)
+        return;
+
+    // edgeaa is baked into the context at creation time, so recreate when it changes.
+    DestroyOverlay();
+    if (m_nvg)
+        nvgDelete(m_nvg);
+
+    m_nvgEdgeAa = Cfg.AntialiasingEnabled;
+    m_nvg = nvgCreate(Cfg.AntialiasingEnabled ? 1 : 0, 0);
 }
 
 void Triangle::EnsureOverlay(int w, int h)
@@ -160,6 +174,7 @@ void Triangle::Render(const RenderContext& Context)
     const int W = Context.Width;
     const int H = Context.Height;
 
+    EnsureNvgContext();
     EnsureOverlay(W, H);
     if (!m_overlayFbo) return;
 
@@ -212,8 +227,11 @@ void Triangle::Render(const RenderContext& Context)
                 return m_outBuf[a * kStride + 9] < m_outBuf[b * kStride + 9];
             });
 
-        // World coords [-1,+1] → screen. Matches the JS mapping:
-        //   px = (x+1) * 0.5 * W ;  py = (1 - y) * 0.5 * H   (y=+1 top, y=-1 bottom).
+        // World coords [-1,+1] → screen. The reference's net on-screen result is
+        // y=-1 = screen top, y=+1 = screen bottom (triangle.js compensates for an
+        // extra canvas-upload Y-flip that nanovg does NOT have). nanovg's y=0 is
+        // screen-top — same convention as Simple's raw overlay — so we map directly:
+        //   px = (x+1) * 0.5 * W ;  py = (1 + y) * 0.5 * H   (y=-1 top, y=+1 bottom).
         const float hw = W * 0.5f;
         const float hh = H * 0.5f;
 
@@ -229,9 +247,9 @@ void Triangle::Render(const RenderContext& Context)
                 !std::isfinite(x3) || !std::isfinite(y3))
                 continue;
 
-            const float cx1 = (x1 + 1.0f) * hw, cy1 = (1.0f - y1) * hh;
-            const float cx2 = (x2 + 1.0f) * hw, cy2 = (1.0f - y2) * hh;
-            const float cx3 = (x3 + 1.0f) * hw, cy3 = (1.0f - y3) * hh;
+            const float cx1 = (x1 + 1.0f) * hw, cy1 = (1.0f + y1) * hh;
+            const float cx2 = (x2 + 1.0f) * hw, cy2 = (1.0f + y2) * hh;
+            const float cx3 = (x3 + 1.0f) * hw, cy3 = (1.0f + y3) * hh;
 
             const float r = std::clamp(tri[6], 0.0f, 1.0f);
             const float g = std::clamp(tri[7], 0.0f, 1.0f);

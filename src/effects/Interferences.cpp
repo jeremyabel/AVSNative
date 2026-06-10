@@ -42,12 +42,18 @@ void Interferences::Render(const RenderContext& Context)
     const float fw = float(Context.Width);
     const float fh = float(Context.Height);
 
+    // The v component is negated to compensate for bgfx's vs_fullscreen putting
+    // v=0 at screen-top (screen-up = -v), vs WebGL's vUv.y up = screen-up. This
+    // makes the rotation direction match the win32 original. Unchecking
+    // ReverseRotation drops the negation to match the AVSWeb JS reference instead.
+    const float vSign = Cfg.ReverseRotation ? -1.0f : 1.0f;
+
     float offsets[16] = {};
     for (int i = 0; i < Cfg.NPoints && i < 8; ++i)
     {
         const float a = a0 + float(i) * angleStep;
         offsets[i * 2 + 0] = std::cos(a) * dist / fw;
-        offsets[i * 2 + 1] = std::sin(a) * dist / fh;
+        offsets[i * 2 + 1] = vSign * std::sin(a) * dist / fh;
     }
 
     // Advance rotation (matches JS single-step wrap)

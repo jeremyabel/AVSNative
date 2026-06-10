@@ -16,6 +16,10 @@ struct InterferencesConfig
     int   OutBlend     = 0;
     bool  OnBeat       = true;
     float Speed        = 0.2f;
+    // When true (default), the vertical sampling offset is negated so the
+    // rotation direction matches the win32 original. When false it matches the
+    // AVSWeb JS reference (whose rotation is mirrored from win32).
+    bool  ReverseRotation = true;
 };
 
 class Interferences : public ReflectedEffect<InterferencesConfig>
@@ -40,6 +44,7 @@ protected:
             Range(&InterferencesConfig::Speed, "speed", "Beat Speed", 0.01f, 1.28f, 0.01f),
             Bool(&InterferencesConfig::OnBeat, "onbeat", "On Beat"),
             Bool(&InterferencesConfig::RGB, "rgb", "RGB Separation"),
+            Bool(&InterferencesConfig::ReverseRotation, "reverseRotation", "Reverse Rotation"),
             SelectI(&InterferencesConfig::OutBlend, "outBlend", "Output Blend",
                     { "Replace", "Additive", "Average" }),
         };

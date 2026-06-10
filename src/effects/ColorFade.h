@@ -4,8 +4,8 @@
 
 struct ColorFadeConfig
 {
-    int  Faders[3]     = { 32, 32, 32 }; // 0-64, 32 = no change
-    int  BeatFaders[3] = { 32, 32, 32 };
+    int  Faders[3]     = { 8, -8, -8 }; // -32..32, 0 = no change
+    int  BeatFaders[3] = { 8, -8, -8 };
     bool Gradual       = false;
     bool RandomBeat    = false;
 };
@@ -21,12 +21,12 @@ protected:
     const std::vector<Field>& Fields() const override
     {
         static const std::vector<Field> f = {
-            RangeIArr(&ColorFadeConfig::Faders, 0, "fader0", "Fader 1", 0, 64),
-            RangeIArr(&ColorFadeConfig::Faders, 1, "fader1", "Fader 2", 0, 64),
-            RangeIArr(&ColorFadeConfig::Faders, 2, "fader2", "Fader 3", 0, 64),
-            RangeIArr(&ColorFadeConfig::BeatFaders, 0, "beat_fader0", "Beat Fader 1", 0, 64),
-            RangeIArr(&ColorFadeConfig::BeatFaders, 1, "beat_fader1", "Beat Fader 2", 0, 64),
-            RangeIArr(&ColorFadeConfig::BeatFaders, 2, "beat_fader2", "Beat Fader 3", 0, 64),
+            RangeIArr(&ColorFadeConfig::Faders, 0, "fader0", "Fader 1", -32, 32),
+            RangeIArr(&ColorFadeConfig::Faders, 1, "fader1", "Fader 2", -32, 32),
+            RangeIArr(&ColorFadeConfig::Faders, 2, "fader2", "Fader 3", -32, 32),
+            RangeIArr(&ColorFadeConfig::BeatFaders, 0, "beat_fader0", "Beat Fader 1", -32, 32),
+            RangeIArr(&ColorFadeConfig::BeatFaders, 1, "beat_fader1", "Beat Fader 2", -32, 32),
+            RangeIArr(&ColorFadeConfig::BeatFaders, 2, "beat_fader2", "Beat Fader 3", -32, 32),
             Bool(&ColorFadeConfig::Gradual, "gradual", "Gradual"),
             Bool(&ColorFadeConfig::RandomBeat, "random_beat", "Random on Beat"),
         };
@@ -46,7 +46,7 @@ private:
     void UpdateFaderPos(bool isBeat);
 
     // Runtime state (not serialized)
-    float m_fp[3] = { 32.0f, 32.0f, 32.0f }; // interpolated fader positions
+    float m_fp[3] = { 8.0f, -8.0f, -8.0f }; // interpolated fader positions
 
     bgfx::ProgramHandle Program       = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle TexUniform    = BGFX_INVALID_HANDLE;

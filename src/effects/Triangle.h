@@ -17,6 +17,7 @@ struct TriangleConfig
     std::string FrameCode;
     std::string BeatCode;
     std::string TriangleCode;
+    bool        AntialiasingEnabled = true;
 };
 
 // Triangle — scriptable effect that draws filled triangles via NanoVG.
@@ -42,6 +43,7 @@ protected:
             Lua(&TriangleConfig::FrameCode,    "frameCode",    "Frame"),
             Lua(&TriangleConfig::BeatCode,     "beatCode",     "Beat"),
             Lua(&TriangleConfig::TriangleCode, "triangleCode", "Triangle"),
+            Bool(&TriangleConfig::AntialiasingEnabled, "antialiasing", "Antialiasing"),
         };
         return f;
     }
@@ -68,9 +70,11 @@ private:
 
     // NanoVG overlay (drawn each frame, then composited over the input).
     NVGcontext*       m_nvg        = nullptr;
+    bool              m_nvgEdgeAa  = true; // tracks edgeaa used to create m_nvg
     NVGLUframebuffer* m_overlayFbo = nullptr;
     int               m_overlayW   = 0;
     int               m_overlayH   = 0;
+    void EnsureNvgContext();
     void EnsureOverlay(int w, int h);
     void DestroyOverlay();
 
