@@ -111,6 +111,7 @@ bgfx_compile_shaders(
         src/shaders/fs_colormap.sc
         src/shaders/fs_dynamicshift.sc
         src/shaders/fs_texer2_comp.sc
+        src/shaders/fs_imagegrid.sc
         src/shaders/fs_dotplane.sc
         src/shaders/fs_timescope.sc
         src/shaders/fs_brightness.sc
@@ -184,6 +185,7 @@ add_library(avs_engine STATIC
     src/effects/DynamicShift.cpp
     src/effects/Texer.cpp
     src/effects/Texer2.cpp
+    src/effects/ImageGrid.cpp
     src/effects/MultiDelay.cpp
     src/effects/Triangle.cpp
     src/effects/VideoDelay.cpp
@@ -297,6 +299,7 @@ add_library(avs_ui STATIC
     src/ui/effects/DynamicShiftUI.cpp
     src/ui/effects/TexerUI.cpp
     src/ui/effects/Texer2UI.cpp
+    src/ui/effects/ImageGridUI.cpp
     src/ui/effects/MultiDelayUI.cpp
     src/ui/effects/TriangleUI.cpp
     src/ui/effects/VideoDelayUI.cpp

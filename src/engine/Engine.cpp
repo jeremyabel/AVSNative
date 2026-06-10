@@ -50,6 +50,7 @@
 #include "effects/Ring.h"
 #include "effects/Picture.h"
 #include "effects/Picture2.h"
+#include "effects/ImageGrid.h"
 #include "effects/Convolution.h"
 #include "effects/ColorMap.h"
 #include "effects/CustomBpm.h"
@@ -134,6 +135,7 @@ bool Engine::Init(const EngineConfig& Config, bgfx::RendererType::Enum Renderer)
     EffectRegistry.Register("Dynamic Shift",      []() { return std::make_unique<DynamicShift>(); });
     EffectRegistry.Register("Texer",              []() { return std::make_unique<Texer>(); });
     EffectRegistry.Register("Texer II",           []() { return std::make_unique<Texer2>(); });
+    EffectRegistry.Register("Image Grid",         []() { return std::make_unique<ImageGrid>(); });
     EffectRegistry.Register("Multi Delay",        []() { return std::make_unique<MultiDelay>(); });
     EffectRegistry.Register("Triangle",           []() { return std::make_unique<Triangle>(); });
     EffectRegistry.Register("Video Delay",        []() { return std::make_unique<VideoDelay>(); });
