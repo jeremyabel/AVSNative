@@ -3,7 +3,7 @@
 
 #include "effects/Convolution.h"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 #include <SDL3/SDL_dialog.h>
 
 #include <cstdint>

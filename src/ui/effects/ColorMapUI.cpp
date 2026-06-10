@@ -3,7 +3,7 @@
 
 #include "effects/ColorMap.h"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 #include <imgui_gradient/imgui_gradient.hpp>
 #include <SDL3/SDL_dialog.h>
 

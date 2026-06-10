@@ -1,6 +1,6 @@
 #include "ui/ConfigUi.h"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 #include <TextEditor.h>
 
 #include <string>

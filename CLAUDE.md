@@ -9,7 +9,7 @@ When implementing or debugging an effect, always check the corresponding JS file
 ## Build
 
 ```
-cmake --build e:/WinampAVS/AVS_Native/build --config Release --target avs_editor
+cmake --build e:/Workspace/AVSNative/build --config Release --target avs_editor
 ```
 
 Run with a preset path as the first argument:
@@ -103,10 +103,14 @@ The editor is split across two SDL3 windows:
 
 **CMake targets:**
 - `avs_engine` — static lib: engine + effects, no UI headers
-- `avs_ui` — static lib: `src/ui/` + bgfx's bundled dear-imgui + bgfx examples imgui backend
+- `avs_ui` — static lib: `src/ui/` + self-hosted Dear ImGui (docking) + backends
 - `avs_editor` — executable: links `avs_ui` (which pulls in `avs_engine`)
 
-**ImGui integration** uses bgfx's own bundled dear-imgui fork (`lib/bgfx.cmake/bgfx/3rdparty/dear-imgui/`) and its examples imgui renderer (`lib/bgfx.cmake/bgfx/examples/common/imgui/imgui.cpp`). SDL3 keyboard events are translated to ImGui key events manually in `App::ProcessEvents()` — there is no `imgui_impl_sdl3`. The C++ standard is C++20 (required by bx SIMD headers).
+**ImGui integration** uses our own Dear ImGui **docking branch** (git submodule at `lib/imgui`, pinned to `v1.92.8-docking`), not bgfx's bundled fork. Platform input is the official `imgui_impl_sdl3` backend (`lib/imgui/backends/`); rendering is our own `imgui_impl_bgfx` (`src/ui/backends/imgui_impl_bgfx.{h,cpp}`, derived from bgfx's example render path and implementing the 1.92 `ImTextureData` texture API — it reuses only the example's compiled shader blobs `vs/fs_ocornut_imgui.bin.h`). `App` wires them: `ImGui_ImplSDL3_InitForOther` + `ImGui_ImplBgfx_Init(255)` in `Init`; `ImGui_ImplSDL3_ProcessEvent` in `ProcessEvents`; `NewFrame` trio at the end of `ProcessEvents`; `ImGui::Render()` + `ImGui_ImplBgfx_RenderDrawData` at the end of `RenderUI`. `IMGUI_DEFINE_MATH_OPERATORS` is defined PUBLIC on `avs_ui` (and `imgui_gradient`) so the inline ImVec operators are consistent across TUs. `imgui_gradient` and `ImGuiColorTextEdit` compile against `lib/imgui`. The C++ standard is C++20 (required by bx SIMD headers).
+
+nanovg's fontstash needs an external `stb_truetype` implementation (it used to come from bgfx's example imgui backend); `src/thirdparty/StbTrueTypeImpl.cpp` now provides it.
+
+**Docking UI** — `App::RenderUI` hosts a `DockSpaceOverViewport` (PassthruCentralNode). The Chain/Properties panels are plain dockable `ImGui::Begin` windows (no manual pos/size). On first run (no `imgui.ini`), `App::BuildDefaultDockLayout` uses `DockBuilder*` to dock **Effect Chain** left (~30%) and **Properties** in the central node; afterwards the layout persists via `imgui.ini` in the working directory. The FPS status bar is a bottom `BeginViewportSideBar`, created before the dockspace so it reserves its space.
 
 **View ID allocation:**
 - Views 0–N: effect chain render passes

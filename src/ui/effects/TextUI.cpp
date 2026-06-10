@@ -2,7 +2,7 @@
 
 #include "effects/Text.h"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 
 #include <cstring>
 

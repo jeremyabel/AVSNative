@@ -2,7 +2,7 @@
 
 #include "effects/CustomBpm.h"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 
 // The beat simulation lives in CustomBpm::Render(). This UI only edits the
 // parameters and displays the before/after beat meters the effect computes.

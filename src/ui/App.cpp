@@ -9,105 +9,17 @@
 #include "ui/ConfigPanel.h"
 #include "ui/FileDialog.h"
 
-// bgfx imgui backend — also pulls in <dear-imgui/imgui.h>
-#include <imgui/imgui.h>
+// Self-hosted Dear ImGui (docking) + our own backends.
+#include <imgui.h>
+#include <imgui_internal.h>            // DockBuilder* for the first-run default layout
+#include <imgui_impl_sdl3.h>
+#include "ui/backends/imgui_impl_bgfx.h"
 
 #include <SDL3/SDL.h>
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
 
-// ─── SDL scancode → ImGuiKey ──────────────────────────────────────────────────
-
-static ImGuiKey SdlScancodeToImGui(SDL_Scancode sc)
-{
-    switch (sc)
-    {
-    case SDL_SCANCODE_TAB:          return ImGuiKey_Tab;
-    case SDL_SCANCODE_LEFT:         return ImGuiKey_LeftArrow;
-    case SDL_SCANCODE_RIGHT:        return ImGuiKey_RightArrow;
-    case SDL_SCANCODE_UP:           return ImGuiKey_UpArrow;
-    case SDL_SCANCODE_DOWN:         return ImGuiKey_DownArrow;
-    case SDL_SCANCODE_PAGEUP:       return ImGuiKey_PageUp;
-    case SDL_SCANCODE_PAGEDOWN:     return ImGuiKey_PageDown;
-    case SDL_SCANCODE_HOME:         return ImGuiKey_Home;
-    case SDL_SCANCODE_END:          return ImGuiKey_End;
-    case SDL_SCANCODE_INSERT:       return ImGuiKey_Insert;
-    case SDL_SCANCODE_DELETE:       return ImGuiKey_Delete;
-    case SDL_SCANCODE_BACKSPACE:    return ImGuiKey_Backspace;
-    case SDL_SCANCODE_SPACE:        return ImGuiKey_Space;
-    case SDL_SCANCODE_RETURN:       return ImGuiKey_Enter;
-    case SDL_SCANCODE_ESCAPE:       return ImGuiKey_Escape;
-    case SDL_SCANCODE_APOSTROPHE:   return ImGuiKey_Apostrophe;
-    case SDL_SCANCODE_COMMA:        return ImGuiKey_Comma;
-    case SDL_SCANCODE_MINUS:        return ImGuiKey_Minus;
-    case SDL_SCANCODE_PERIOD:       return ImGuiKey_Period;
-    case SDL_SCANCODE_SLASH:        return ImGuiKey_Slash;
-    case SDL_SCANCODE_SEMICOLON:    return ImGuiKey_Semicolon;
-    case SDL_SCANCODE_EQUALS:       return ImGuiKey_Equal;
-    case SDL_SCANCODE_LEFTBRACKET:  return ImGuiKey_LeftBracket;
-    case SDL_SCANCODE_BACKSLASH:    return ImGuiKey_Backslash;
-    case SDL_SCANCODE_RIGHTBRACKET: return ImGuiKey_RightBracket;
-    case SDL_SCANCODE_GRAVE:        return ImGuiKey_GraveAccent;
-    case SDL_SCANCODE_CAPSLOCK:     return ImGuiKey_CapsLock;
-    case SDL_SCANCODE_F1:           return ImGuiKey_F1;
-    case SDL_SCANCODE_F2:           return ImGuiKey_F2;
-    case SDL_SCANCODE_F3:           return ImGuiKey_F3;
-    case SDL_SCANCODE_F4:           return ImGuiKey_F4;
-    case SDL_SCANCODE_F5:           return ImGuiKey_F5;
-    case SDL_SCANCODE_F6:           return ImGuiKey_F6;
-    case SDL_SCANCODE_F7:           return ImGuiKey_F7;
-    case SDL_SCANCODE_F8:           return ImGuiKey_F8;
-    case SDL_SCANCODE_F9:           return ImGuiKey_F9;
-    case SDL_SCANCODE_F10:          return ImGuiKey_F10;
-    case SDL_SCANCODE_F11:          return ImGuiKey_F11;
-    case SDL_SCANCODE_F12:          return ImGuiKey_F12;
-    case SDL_SCANCODE_A:            return ImGuiKey_A;
-    case SDL_SCANCODE_B:            return ImGuiKey_B;
-    case SDL_SCANCODE_C:            return ImGuiKey_C;
-    case SDL_SCANCODE_D:            return ImGuiKey_D;
-    case SDL_SCANCODE_E:            return ImGuiKey_E;
-    case SDL_SCANCODE_F:            return ImGuiKey_F;
-    case SDL_SCANCODE_G:            return ImGuiKey_G;
-    case SDL_SCANCODE_H:            return ImGuiKey_H;
-    case SDL_SCANCODE_I:            return ImGuiKey_I;
-    case SDL_SCANCODE_J:            return ImGuiKey_J;
-    case SDL_SCANCODE_K:            return ImGuiKey_K;
-    case SDL_SCANCODE_L:            return ImGuiKey_L;
-    case SDL_SCANCODE_M:            return ImGuiKey_M;
-    case SDL_SCANCODE_N:            return ImGuiKey_N;
-    case SDL_SCANCODE_O:            return ImGuiKey_O;
-    case SDL_SCANCODE_P:            return ImGuiKey_P;
-    case SDL_SCANCODE_Q:            return ImGuiKey_Q;
-    case SDL_SCANCODE_R:            return ImGuiKey_R;
-    case SDL_SCANCODE_S:            return ImGuiKey_S;
-    case SDL_SCANCODE_T:            return ImGuiKey_T;
-    case SDL_SCANCODE_U:            return ImGuiKey_U;
-    case SDL_SCANCODE_V:            return ImGuiKey_V;
-    case SDL_SCANCODE_W:            return ImGuiKey_W;
-    case SDL_SCANCODE_X:            return ImGuiKey_X;
-    case SDL_SCANCODE_Y:            return ImGuiKey_Y;
-    case SDL_SCANCODE_Z:            return ImGuiKey_Z;
-    case SDL_SCANCODE_0:            return ImGuiKey_0;
-    case SDL_SCANCODE_1:            return ImGuiKey_1;
-    case SDL_SCANCODE_2:            return ImGuiKey_2;
-    case SDL_SCANCODE_3:            return ImGuiKey_3;
-    case SDL_SCANCODE_4:            return ImGuiKey_4;
-    case SDL_SCANCODE_5:            return ImGuiKey_5;
-    case SDL_SCANCODE_6:            return ImGuiKey_6;
-    case SDL_SCANCODE_7:            return ImGuiKey_7;
-    case SDL_SCANCODE_8:            return ImGuiKey_8;
-    case SDL_SCANCODE_9:            return ImGuiKey_9;
-    case SDL_SCANCODE_LCTRL:        return ImGuiKey_LeftCtrl;
-    case SDL_SCANCODE_RCTRL:        return ImGuiKey_RightCtrl;
-    case SDL_SCANCODE_LSHIFT:       return ImGuiKey_LeftShift;
-    case SDL_SCANCODE_RSHIFT:       return ImGuiKey_RightShift;
-    case SDL_SCANCODE_LALT:         return ImGuiKey_LeftAlt;
-    case SDL_SCANCODE_RALT:         return ImGuiKey_RightAlt;
-    case SDL_SCANCODE_LGUI:         return ImGuiKey_LeftSuper;
-    case SDL_SCANCODE_RGUI:         return ImGuiKey_RightSuper;
-    default:                        return ImGuiKey_None;
-    }
-}
+#include <filesystem>
 
 // Helper: get the platform-native window handle from an SDL_Window.
 static void* NativeWindowHandle(SDL_Window* win)
@@ -276,8 +188,19 @@ void App::Init(const char* PresetPath)
         m_engine.GetAudio().ConnectDevice((SDL_AudioDeviceID)m_audioCaptureIds[0]);
     }
 
-    imguiCreate(18.0f);
-    SDL_StartTextInput(m_editorWin);
+    // ── Dear ImGui: context + platform (SDL3) + renderer (bgfx, view 255) ───────
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    ImGui::StyleColorsDark();
+
+    // Build the default dock layout only if there's no saved imgui.ini yet.
+    m_buildDefaultLayout = !std::filesystem::exists("imgui.ini");
+
+    ImGui_ImplSDL3_InitForOther(m_editorWin);   // bgfx owns rendering → "Other" variant
+    ImGui_ImplBgfx_Init(255);
 
     m_running = true;
 }
@@ -292,7 +215,9 @@ void App::Shutdown()
 
     m_running = false;
 
-    imguiDestroy();
+    ImGui_ImplBgfx_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
 
     m_engine.Shutdown();
 
@@ -311,7 +236,6 @@ void App::Shutdown()
     }
     if (m_editorWin)
     {
-        SDL_StopTextInput(m_editorWin);
         SDL_DestroyWindow(m_editorWin);
         m_editorWin = nullptr;
     }
@@ -339,15 +263,16 @@ void App::ResizeOutput(int32_t Width, int32_t Height)
 
 void App::ProcessEvents()
 {
-    // Keyboard events must reach ImGui IO before imguiBeginFrame() / NewFrame().
-    ImGuiIO& io = ImGui::GetIO();
-
     const SDL_WindowID editorID = SDL_GetWindowID(m_editorWin);
     const SDL_WindowID outputID = SDL_GetWindowID(m_outputWin);
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
+        // The SDL3 platform backend handles all ImGui input (mouse/keyboard/text/
+        // focus/clipboard). It only acts on events for the editor window it owns.
+        ImGui_ImplSDL3_ProcessEvent(&event);
+
         switch (event.type)
         {
         case SDL_EVENT_QUIT:
@@ -376,37 +301,11 @@ void App::ProcessEvents()
             break;
 
         case SDL_EVENT_KEY_DOWN:
-        case SDL_EVENT_KEY_UP:
-        {
-            // Only route keyboard to ImGui when the editor window has focus.
-            if (event.key.windowID != editorID)
-                break;
-
-            bool Down = (event.type == SDL_EVENT_KEY_DOWN);
-            SDL_Keymod Mod = event.key.mod;
-            io.AddKeyEvent(ImGuiMod_Ctrl,  (Mod & SDL_KMOD_CTRL)  != 0);
-            io.AddKeyEvent(ImGuiMod_Shift, (Mod & SDL_KMOD_SHIFT) != 0);
-            io.AddKeyEvent(ImGuiMod_Alt,   (Mod & SDL_KMOD_ALT)   != 0);
-            io.AddKeyEvent(ImGuiMod_Super, (Mod & SDL_KMOD_GUI)   != 0);
-
-            ImGuiKey Key = SdlScancodeToImGui(event.key.scancode);
-            if (Key != ImGuiKey_None)
-                io.AddKeyEvent(Key, Down);
-
-            if (!Down && event.key.key == SDLK_ESCAPE && !io.WantCaptureKeyboard)
+            // ESC quits, unless a text field has keyboard focus.
+            if (event.key.windowID == editorID &&
+                event.key.scancode == SDL_SCANCODE_ESCAPE &&
+                !ImGui::GetIO().WantCaptureKeyboard)
                 m_running = false;
-            break;
-        }
-
-        case SDL_EVENT_TEXT_INPUT:
-            if (event.text.windowID == editorID)
-                io.AddInputCharactersUTF8(event.text.text);
-            break;
-
-        case SDL_EVENT_MOUSE_WHEEL:
-            // Only scroll when the mouse is over the editor window.
-            if (event.wheel.windowID == editorID)
-                m_scroll += (int32_t)event.wheel.y;
             break;
 
         default:
@@ -414,20 +313,10 @@ void App::ProcessEvents()
         }
     }
 
-    // Read mouse state relative to the editor window.
-    float Mx = 0.0f, My = 0.0f;
-    SDL_MouseButtonFlags Buttons = SDL_GetMouseState(&Mx, &My);
-    m_mouseX = (int32_t)Mx;
-    m_mouseY = (int32_t)My;
-    m_mouseButtons = 0;
-    if (Buttons & SDL_BUTTON_LMASK) m_mouseButtons |= IMGUI_MBUT_LEFT;
-    if (Buttons & SDL_BUTTON_RMASK) m_mouseButtons |= IMGUI_MBUT_RIGHT;
-    if (Buttons & SDL_BUTTON_MMASK) m_mouseButtons |= IMGUI_MBUT_MIDDLE;
-
-    // Start the ImGui frame (calls ImGui::NewFrame internally).
-    // Pass editor window dimensions so ImGui layout stays within that window.
-    imguiBeginFrame(m_mouseX, m_mouseY, m_mouseButtons, m_scroll,
-                    (uint16_t)m_editorWidth, (uint16_t)m_editorHeight, -1, 255);
+    // Begin the ImGui frame (renderer first, then platform, then ImGui core).
+    ImGui_ImplBgfx_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
 }
 
 // ─── RenderUI ────────────────────────────────────────────────────────────────
@@ -476,6 +365,19 @@ void App::RenderUI()
         ImGui::EndMainMenuBar();
     }
 
+    // Status bar (bottom side bar) is created before the dockspace so the dockspace
+    // reserves the remaining work area for the dockable panels.
+    RenderStatusBar();
+
+    const ImGuiID dockId = ImGui::DockSpaceOverViewport(
+        0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+    if (m_buildDefaultLayout)
+    {
+        m_buildDefaultLayout = false;
+        BuildDefaultDockLayout(dockId);
+    }
+
     if (m_showOptions)
         RenderOptionsWindow();
 
@@ -501,7 +403,53 @@ void App::RenderUI()
 
     ConfigPanel::Render(m_engine, Selected);
 
-    imguiEndFrame();
+    // Submit all ImGui draw data to bgfx view 255.
+    ImGui::Render();
+    ImGui_ImplBgfx_RenderDrawData(ImGui::GetDrawData());
+}
+
+// ─── Dock layout ──────────────────────────────────────────────────────────────
+// First-run default: Effect Chain docked left (~30%), Properties filling the rest.
+// Only called when no imgui.ini exists; afterwards the layout persists via the ini.
+
+void App::BuildDefaultDockLayout(unsigned int dockId)
+{
+    ImGui::DockBuilderRemoveNode(dockId);
+    ImGui::DockBuilderAddNode(dockId, ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(dockId, ImGui::GetMainViewport()->WorkSize);
+
+    ImGuiID center = dockId;
+    const ImGuiID left = ImGui::DockBuilderSplitNode(
+        center, ImGuiDir_Left, 0.30f, nullptr, &center);
+
+    ImGui::DockBuilderDockWindow("Effect Chain", left);
+    ImGui::DockBuilderDockWindow("Properties",   center);
+    ImGui::DockBuilderFinish(dockId);
+}
+
+// ─── Status bar ───────────────────────────────────────────────────────────────
+// Bottom side bar attached to the main viewport. Shows the smoothed render-loop
+// framerate (engine tick + UI run in lockstep in Run()).
+
+void App::RenderStatusBar()
+{
+    const float barH = ImGui::GetFrameHeight();
+    const ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_MenuBar;
+
+    if (ImGui::BeginViewportSideBar("##StatusBar", ImGui::GetMainViewport(),
+                                    ImGuiDir_Down, barH, flags))
+    {
+        if (ImGui::BeginMenuBar())
+        {
+            const ImGuiIO& io = ImGui::GetIO();
+            const float ms = (io.Framerate > 0.0f) ? 1000.0f / io.Framerate : 0.0f;
+            ImGui::Text("FPS: %.1f  (%.2f ms/frame)", io.Framerate, ms);
+            ImGui::EndMenuBar();
+        }
+    }
+    ImGui::End();
 }
 
 // ─── Options helpers ──────────────────────────────────────────────────────────

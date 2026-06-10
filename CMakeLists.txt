@@ -45,10 +45,7 @@ add_subdirectory(lib/luajit)
 # consumers including the gradient headers get the ImVec2/ImVec4 operators too.
 add_subdirectory(lib/imgui_gradient)
 target_include_directories(imgui_gradient SYSTEM PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/lib/bgfx.cmake/bgfx/3rdparty/dear-imgui)  # imgui.h, imconfig.h
-# bgfx's imconfig.h routes IM_ASSERT through bx; link bx so imgui_gradient inherits
-# its include dirs, BX_CONFIG_* definitions and /Zc flags.
-target_link_libraries(imgui_gradient PRIVATE bx)
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui)  # imgui.h, imconfig.h, imgui_internal.h (self-hosted docking)
 target_compile_definitions(imgui_gradient PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(imgui_gradient PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus /Zc:preprocessor>)
 
@@ -197,6 +194,7 @@ add_library(avs_engine STATIC
     src/effects/Brightness.cpp
     src/effects/Text.cpp
     src/thirdparty/StbImageImpl.cpp
+    src/thirdparty/StbTrueTypeImpl.cpp
     src/engine/LuaRuntime.cpp
     src/engine/LuaUniformBridge.cpp
     # NanoVG bgfx backend (used by Simple and future vector effects)
@@ -232,13 +230,14 @@ add_dependencies(avs_engine avs_shaders)
 
 # ── avs_ui (static lib — depends on avs_engine + imgui) ──────────────────────
 add_library(avs_ui STATIC
-    # bgfx imgui rendering backend (uses embedded SPIRV shaders + bx)
-    ${BGFX_EXAMPLES_COMMON}/imgui/imgui.cpp
-    # dear-imgui core (bgfx's customised fork with dock/gizmo widgets)
-    ${BGFX_3RDPARTY}/dear-imgui/imgui.cpp
-    ${BGFX_3RDPARTY}/dear-imgui/imgui_draw.cpp
-    ${BGFX_3RDPARTY}/dear-imgui/imgui_tables.cpp
-    ${BGFX_3RDPARTY}/dear-imgui/imgui_widgets.cpp
+    # Dear ImGui core (self-hosted docking branch, git submodule at lib/imgui)
+    lib/imgui/imgui.cpp
+    lib/imgui/imgui_draw.cpp
+    lib/imgui/imgui_tables.cpp
+    lib/imgui/imgui_widgets.cpp
+    # official SDL3 platform backend + our own bgfx renderer backend
+    lib/imgui/backends/imgui_impl_sdl3.cpp
+    src/ui/backends/imgui_impl_bgfx.cpp
     # ImGuiColorTextEdit (code editor widget)
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/ImGuiColorTextEdit/TextEditor.cpp
     # editor UI panels
@@ -311,12 +310,16 @@ add_library(avs_ui STATIC
 
 target_include_directories(avs_ui
     PUBLIC  src
-    PRIVATE ${BGFX_3RDPARTY}                                            # <dear-imgui/...>, <iconfontheaders/...>
-    PRIVATE ${BGFX_3RDPARTY}/dear-imgui                                 # "imgui.h" for TextEditor.h
-    PRIVATE ${BGFX_EXAMPLES_COMMON}                                     # <imgui/imgui.h> (bgfx imgui API)
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui                       # "imgui.h", "imgui_internal.h" (also for TextEditor.h)
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui/backends              # "imgui_impl_sdl3.h"
+    PRIVATE ${BGFX_EXAMPLES_COMMON}/imgui                               # vs/fs_ocornut_imgui.bin.h (shader blobs only)
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/ImGuiColorTextEdit          # "TextEditor.h"
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui_gradient/include      # <imgui_gradient/imgui_gradient.hpp>
 )
+
+# Match imgui_gradient's PUBLIC IMGUI_DEFINE_MATH_OPERATORS so the inline ImVec2/ImVec4
+# operators have identical definitions across every TU that includes imgui.h (ODR).
+target_compile_definitions(avs_ui PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 
 target_link_libraries(avs_ui
     PUBLIC  avs_engine

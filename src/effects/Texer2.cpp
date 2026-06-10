@@ -9,6 +9,7 @@
 #include "generated/spirv/fs_texer2_comp.sc.bin.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 
@@ -122,6 +123,8 @@ void Texer2::OnConfigChanged(const std::vector<std::string>& changed)
 
 void Texer2::MakeDefaultImage()
 {
+    ResetAnimation();
+
     const int sz = 21;
     m_imgW = m_imgH = sz;
     m_imgPixels.resize(sz * sz * 4);
@@ -139,10 +142,48 @@ void Texer2::MakeDefaultImage()
     }
 }
 
+// ── Animation state ───────────────────────────────────────────────────────────
+
+void Texer2::ResetAnimation()
+{
+    m_frames.clear();
+    m_frameDelaysMs.clear();
+    m_curFrame     = 0;
+    m_frameAccumMs = 0.0;
+    m_haveTick     = false;
+}
+
+// Advance the displayed GIF frame by elapsed wall-clock time. No-op for static images.
+void Texer2::AdvanceAnimation()
+{
+    if (m_frames.size() <= 1) return;
+
+    const auto now = std::chrono::steady_clock::now();
+    if (!m_haveTick) { m_lastTick = now; m_haveTick = true; return; }
+
+    const double elapsedMs = std::chrono::duration<double, std::milli>(now - m_lastTick).count();
+    m_lastTick = now;
+
+    // Clamp huge gaps (window unfocused, breakpoint, …) so the catch-up loop can't spin.
+    m_frameAccumMs += std::min(elapsedMs, 1000.0);
+
+    const size_t prev = m_curFrame;
+    size_t guard = 0;
+    while (m_frameAccumMs >= (double)m_frameDelaysMs[m_curFrame] && guard++ < m_frames.size())
+    {
+        m_frameAccumMs -= (double)m_frameDelaysMs[m_curFrame];
+        m_curFrame = (m_curFrame + 1) % m_frames.size();
+    }
+    if (m_curFrame != prev)
+        m_imgPixels = m_frames[m_curFrame];
+}
+
 // ── LoadImage ─────────────────────────────────────────────────────────────────
 
 void Texer2::LoadImage(const std::string& dataUrl)
 {
+    ResetAnimation();
+
     if (dataUrl.empty()) { MakeDefaultImage(); return; }
 
     const auto commaPos = dataUrl.find(',');
@@ -151,12 +192,47 @@ void Texer2::LoadImage(const std::string& dataUrl)
     const std::vector<uint8_t> raw = Base64Decode(dataUrl.substr(commaPos + 1));
     if (raw.empty()) { MakeDefaultImage(); return; }
 
-    int w = 0, h = 0, ch = 0;
-    uint8_t* pixels = stbi_load_from_memory(raw.data(), (int)raw.size(), &w, &h, &ch, 4);
+    // Try the GIF loader first — it returns null for any non-GIF format. A GIF yields
+    // `frames` consecutive RGBA8 images (w*h*4 each) plus a per-frame delay array (ms).
+    int* delays = nullptr;
+    int  w = 0, h = 0, frames = 0, ch = 0;
+    uint8_t* gif = stbi_load_gif_from_memory(
+        raw.data(), (int)raw.size(), &delays, &w, &h, &frames, &ch, 4);
+    if (gif)
+    {
+        m_imgW = w; m_imgH = h;
+        const size_t frameBytes = (size_t)w * h * 4;
+
+        if (frames > 1)
+        {
+            m_frames.resize(frames);
+            m_frameDelaysMs.resize(frames);
+            for (int f = 0; f < frames; f++)
+            {
+                m_frames[f].assign(gif + (size_t)f * frameBytes, gif + (size_t)(f + 1) * frameBytes);
+                // A 0 delay (very common) plays as fast as possible in browsers; clamp to ~10fps.
+                m_frameDelaysMs[f] = (delays && delays[f] > 0) ? delays[f] : 100;
+            }
+            m_imgPixels = m_frames[0];
+        }
+        else
+        {
+            m_imgPixels.assign(gif, gif + frameBytes);   // single-frame GIF: treat as static
+        }
+
+        stbi_image_free(gif);
+        if (delays) stbi_image_free(delays);
+        return;
+    }
+    if (delays) stbi_image_free(delays);   // defensive; delays stays null on the non-GIF path
+
+    // Non-GIF (PNG/JPG/BMP/TGA/…): decode the single image.
+    int sw = 0, sh = 0, sch = 0;
+    uint8_t* pixels = stbi_load_from_memory(raw.data(), (int)raw.size(), &sw, &sh, &sch, 4);
     if (!pixels) { MakeDefaultImage(); return; }
 
-    m_imgW = w; m_imgH = h;
-    m_imgPixels.assign(pixels, pixels + w * h * 4);
+    m_imgW = sw; m_imgH = sh;
+    m_imgPixels.assign(pixels, pixels + (size_t)sw * sh * 4);
     stbi_image_free(pixels);
 }
 
@@ -394,6 +470,8 @@ void Texer2::Destroy()
 
 void Texer2::Render(const RenderContext& Context)
 {
+    AdvanceAnimation();   // step animated GIF to the current frame (no-op for static images)
+
     const int w = Context.Width, h = Context.Height;
     EnsureOverlay(w, h);
 

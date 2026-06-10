@@ -3,7 +3,7 @@
 
 #include "engine/Effect.h"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 #include <nlohmann/json.hpp>
 
 #include <string>

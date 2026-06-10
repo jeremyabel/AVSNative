@@ -3,7 +3,7 @@
 
 #include "effects/Picture2.h"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 #include <SDL3/SDL_dialog.h>
 #include <nlohmann/json.hpp>
 

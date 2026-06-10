@@ -44,12 +44,9 @@ private:
     int32_t  m_outputWidth  = 1280;
     int32_t  m_outputHeight = 720;
 
-    int32_t  m_mouseX       = 0;
-    int32_t  m_mouseY       = 0;
-    uint8_t  m_mouseButtons = 0;
-    int32_t  m_scroll       = 0;
-
     int32_t  m_selectedEffect = -1;
+
+    bool     m_buildDefaultLayout = false;  // build the dock layout on first frame (no imgui.ini)
 
     // Navigation stack for the ChainPanel.  Empty = viewing the root chain.
     // Each entry adds one level of nesting (i.e. an EffectList's inner chain).
@@ -68,4 +65,6 @@ private:
 
     void RefreshAudioDevices();
     void RenderOptionsWindow();
+    void RenderStatusBar();
+    void BuildDefaultDockLayout(unsigned int dockId);
 };

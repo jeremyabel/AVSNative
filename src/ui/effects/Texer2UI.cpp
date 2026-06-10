@@ -4,7 +4,7 @@
 
 #include "effects/Texer2.h"
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 #include <SDL3/SDL_dialog.h>
 
 #include <fstream>
@@ -41,10 +41,16 @@ static void DrawTexer2UI(Effect* effect)
 {
     auto* tex = static_cast<Texer2*>(effect);
 
-    const int imgW = tex->GetImageW();
-    const int imgH = tex->GetImageH();
+    const int imgW   = tex->GetImageW();
+    const int imgH   = tex->GetImageH();
+    const int frames = tex->GetFrameCount();
     if (imgW > 0 && imgH > 0)
-        ImGui::Text("Image: %d x %d", imgW, imgH);
+    {
+        if (frames > 1)
+            ImGui::Text("Image: %d x %d  (animated, %d frames)", imgW, imgH, frames);
+        else
+            ImGui::Text("Image: %d x %d", imgW, imgH);
+    }
     else
         ImGui::TextUnformatted("No image loaded");
 

@@ -6,9 +6,7 @@
 #include "engine/Registry.h"
 #include "ui/App.h"   // ChainNavEntry
 
-#include <imgui/imgui.h>
-
-static constexpr float kPanelWidth = 260.0f;
+#include <imgui.h>
 
 // Returns a reference to the selection variable for the current nav level.
 static int32_t& CurrentSelection(std::vector<ChainNavEntry>& nav, int32_t& rootSelected)
@@ -21,11 +19,7 @@ void ChainPanel::Render(Engine& engine,
                         int32_t& rootSelected,
                         EffectChain* currentChain)
 {
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(kPanelWidth, io.DisplaySize.y - 20.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.88f);
-
+    // Dockable panel — position/size come from the dockspace (or imgui.ini).
     if (!ImGui::Begin("Effect Chain", nullptr, ImGuiWindowFlags_None))
     {
         ImGui::End();
