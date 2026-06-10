@@ -186,6 +186,7 @@ Parameters are declared **once** per effect, eliminating the old 3-way duplicati
 - Sampler uniforms: `bgfx::createUniform("s_name", bgfx::UniformType::Sampler)`, then `bgfx::setTexture(slot, handle, texture)`.
 - Vec4 uniforms: `bgfx::createUniform("u_name", bgfx::UniformType::Vec4)`, then `bgfx::setUniform(handle, float[4])`.
 - **Shared quad vertex buffer** — `Engine` owns `BlitQuadVB` and exposes it via `Context.QuadVB`. Effects use `Context.QuadVB` directly; they do not create their own quad VBs.
+- **Point-sample inputs in per-pixel effects that branch on color.** FBO textures are created with the default **bilinear** filter (`FBOManager`, no `BGFX_SAMPLER_POINT`). For a 1:1 fullscreen pass, bilinear at texel centers is exact — but any sub-texel offset blends neighbors and injects **sub-LSB per-channel float noise**. If a shader makes a hard branching decision on the sampled color (e.g. strict channel-dominance tests `g > b`), that noise can flip the branch: a bit-exact gray pixel gets pushed into a color branch and tinted. Fix: override the sampler to point for that bind — `bgfx::setTexture(slot, uniform, tex, BGFX_SAMPLER_POINT)` — and/or round the reconstructed channels to integers before comparing (`floor(c*255.0 + 0.5)`) to match the original's integer pixel arithmetic. This was the root cause of a phantom cyan tint in Colorfade; see `fs_colorfade.sc` + `ColorFade::Render`.
 
 ## Coordinate conventions
 
