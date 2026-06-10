@@ -65,7 +65,7 @@ void App::Run(const char* PresetPath)
                 if (Preset::Load(path.c_str(), m_engine))
                 {
                     m_presetPath = path;
-                    m_chainNav.clear();
+                    m_selectedChain  = nullptr;
                     m_selectedEffect = -1;
                 }
             }
@@ -350,9 +350,11 @@ void App::RenderUI()
 
         if (ImGui::BeginMenu("Options"))
         {
-            if (ImGui::MenuItem("Audio..."))
+            if (ImGui::MenuItem("Options..."))
             {
                 m_showOptions = true;
+                m_pendingOutputW = m_outputWidth;
+                m_pendingOutputH = m_outputHeight;
                 RefreshAudioDevices();
             }
             ImGui::EndMenu();
@@ -381,25 +383,12 @@ void App::RenderUI()
     if (m_showOptions)
         RenderOptionsWindow();
 
-    // Resolve the chain and selection being displayed.
-    // When nav stack is non-empty the front-most entry owns the current chain.
-    EffectChain* currentChain = &m_engine.GetChain();
-    int32_t& currentSel = m_selectedEffect;
-    if (!m_chainNav.empty())
-    {
-        currentChain = m_chainNav.back().Chain;
-        currentSel   = m_chainNav.back().SelectedEffect;
-    }
-
-    ChainPanel::Render(m_engine, m_chainNav, m_selectedEffect, currentChain);
-
-    // Re-read selection after ChainPanel may have changed it.
-    int32_t displaySel = m_chainNav.empty() ? m_selectedEffect
-                                            : m_chainNav.back().SelectedEffect;
+    ChainPanel::Render(m_engine, m_engine.GetChain(), m_selectedChain, m_selectedEffect);
 
     Effect* Selected = nullptr;
-    if (displaySel >= 0 && displaySel < currentChain->Count())
-        Selected = currentChain->GetEntry(displaySel).Effect.get();
+    if (m_selectedChain && m_selectedEffect >= 0 &&
+        m_selectedEffect < m_selectedChain->Count())
+        Selected = m_selectedChain->GetEntry(m_selectedEffect).Effect.get();
 
     ConfigPanel::Render(m_engine, Selected);
 
@@ -473,7 +462,7 @@ void App::RefreshAudioDevices()
 
 void App::RenderOptionsWindow()
 {
-    ImGui::SetNextWindowSize(ImVec2(480, 155), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(480, 280), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Options", &m_showOptions, ImGuiWindowFlags_NoCollapse))
     {
         ImGui::End();
@@ -534,6 +523,47 @@ void App::RenderOptionsWindow()
         ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Device active");
     else
         ImGui::TextDisabled("Not connected");
+
+    // ── Output size ───────────────────────────────────────────────────────────
+    ImGui::Spacing();
+    ImGui::SeparatorText("Output Size");
+
+    static const struct { const char* label; int w, h; } kPresets[] = {
+        { "320 x 240",   320,  240 },
+        { "640 x 480",   640,  480 },
+        { "800 x 600",   800,  600 },
+        { "1280 x 720",  1280, 720 },
+        { "1920 x 1080", 1920, 1080 },
+    };
+
+    // Preset buttons
+    for (const auto& p : kPresets)
+    {
+        if (ImGui::Button(p.label))
+        {
+            m_pendingOutputW = p.w;
+            m_pendingOutputH = p.h;
+        }
+        ImGui::SameLine();
+    }
+    ImGui::NewLine();
+
+    // Custom W × H inputs + Apply
+    ImGui::SetNextItemWidth(80.0f);
+    ImGui::InputInt("##ow", &m_pendingOutputW, 0);
+    m_pendingOutputW = std::max(1, m_pendingOutputW);
+    ImGui::SameLine();
+    ImGui::TextUnformatted("x");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80.0f);
+    ImGui::InputInt("##oh", &m_pendingOutputH, 0);
+    m_pendingOutputH = std::max(1, m_pendingOutputH);
+    ImGui::SameLine();
+    if (ImGui::Button("Apply"))
+        SDL_SetWindowSize(m_outputWin, m_pendingOutputW, m_pendingOutputH);
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("(current: %d x %d)", m_outputWidth, m_outputHeight);
 
     ImGui::End();
 }

@@ -9,14 +9,6 @@ struct SDL_Window;
 class Engine;
 class EffectChain;
 
-// One level in the chain-panel navigation stack.
-struct ChainNavEntry
-{
-    EffectChain* Chain          = nullptr;
-    std::string  Label;           // breadcrumb display name
-    int32_t      SelectedEffect = -1;
-};
-
 class App
 {
 public:
@@ -44,13 +36,12 @@ private:
     int32_t  m_outputWidth  = 1280;
     int32_t  m_outputHeight = 720;
 
-    int32_t  m_selectedEffect = -1;
+    // Selected effect: both the chain it lives in and its index within that chain.
+    // selectedChain is nullptr when nothing is selected.
+    EffectChain* m_selectedChain  = nullptr;
+    int32_t      m_selectedEffect = -1;
 
     bool     m_buildDefaultLayout = false;  // build the dock layout on first frame (no imgui.ini)
-
-    // Navigation stack for the ChainPanel.  Empty = viewing the root chain.
-    // Each entry adds one level of nesting (i.e. an EffectList's inner chain).
-    std::vector<ChainNavEntry> m_chainNav;
 
     std::string m_presetPath;
     bool        m_pendingLoad      = false;
@@ -62,6 +53,8 @@ private:
     std::vector<uint32_t>    m_audioCaptureIds;    // SDL_AudioDeviceID per entry
     std::vector<std::string> m_audioCaptureNames;
     int                      m_audioCaptureIdx  = -1; // -1 = none selected
+    int                      m_pendingOutputW   = 1280;
+    int                      m_pendingOutputH   = 720;
 
     void RefreshAudioDevices();
     void RenderOptionsWindow();

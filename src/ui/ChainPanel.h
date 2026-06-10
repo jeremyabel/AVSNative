@@ -1,21 +1,19 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 
 class Engine;
 class EffectChain;
-struct ChainNavEntry;
 
 class ChainPanel
 {
 public:
-    // Renders the effect chain list.
-    // nav:            navigation stack managed by App (may be pushed/popped here)
-    // rootSelected:   selection index in the root chain (App owns this)
-    // currentChain:   the chain currently being displayed (derived from nav by App)
+    // Renders the full effect-chain tree (root + all nested EffectList children).
+    // selectedChain / selectedIdx identify the currently selected effect; both are
+    // written by this function as the user clicks or drags.  selectedChain is nullptr
+    // when nothing is selected.
     static void Render(Engine& engine,
-                       std::vector<ChainNavEntry>& nav,
-                       int32_t& rootSelected,
-                       EffectChain* currentChain);
+                       EffectChain& rootChain,
+                       EffectChain*& selectedChain,
+                       int32_t& selectedIdx);
 };

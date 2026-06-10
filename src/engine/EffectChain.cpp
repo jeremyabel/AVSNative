@@ -75,6 +75,19 @@ void EffectChain::Add(std::unique_ptr<Effect> Effect)
     Entries.push_back({ std::move(Effect), true });
 }
 
+void EffectChain::Insert(int32_t Index, EffectEntry Entry)
+{
+    Index = std::max(0, std::min(Index, (int32_t)Entries.size()));
+    Entries.insert(Entries.begin() + Index, std::move(Entry));
+}
+
+EffectEntry EffectChain::TakeOut(int32_t Index)
+{
+    EffectEntry entry = std::move(Entries[Index]);
+    Entries.erase(Entries.begin() + Index);
+    return entry;
+}
+
 void EffectChain::Clear()
 {
     for (auto& Entry : Entries)

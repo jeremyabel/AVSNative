@@ -4,139 +4,290 @@
 #include "engine/EffectChain.h"
 #include "engine/Engine.h"
 #include "engine/Registry.h"
-#include "ui/App.h"   // ChainNavEntry
 
 #include <imgui.h>
+#include <algorithm>
 
-// Returns a reference to the selection variable for the current nav level.
-static int32_t& CurrentSelection(std::vector<ChainNavEntry>& nav, int32_t& rootSelected)
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+struct ChainDragPayload
 {
-    return nav.empty() ? rootSelected : nav.back().SelectedEffect;
+    EffectChain* SrcChain;
+    int32_t      SrcIdx;
+};
+
+// Returns true if 'needle' is reachable from 'root' (directly or via containers).
+static bool IsChainReachable(EffectChain* root, EffectChain* needle)
+{
+    if (!root || !needle) return false;
+    if (root == needle)   return true;
+    for (int32_t i = 0; i < root->Count(); ++i)
+    {
+        EffectChain* inner = root->GetEntry(i).Effect->GetInnerChain();
+        if (inner && IsChainReachable(inner, needle))
+            return true;
+    }
+    return false;
 }
 
-void ChainPanel::Render(Engine& engine,
-                        std::vector<ChainNavEntry>& nav,
-                        int32_t& rootSelected,
-                        EffectChain* currentChain)
+// Apply a drag-drop move. Same-chain → Move(); cross-chain → TakeOut + Insert.
+// Returns the new index of the moved item in dstChain.
+static int32_t ApplyMove(const ChainDragPayload& src, EffectChain* dst, int32_t dstIdx)
 {
-    // Dockable panel — position/size come from the dockspace (or imgui.ini).
+    if (src.SrcChain == dst)
+    {
+        dst->Move(src.SrcIdx, dstIdx);
+        return dstIdx;
+    }
+    EffectEntry moved = src.SrcChain->TakeOut(src.SrcIdx);
+    dst->Insert(dstIdx, std::move(moved));
+    return dstIdx;
+}
+
+// Update (chain, idx) selection after a same-chain Move(from, to).
+static void AdjustSelectionAfterMove(EffectChain*& sc, int32_t& si,
+                                     EffectChain* chain,
+                                     int32_t from, int32_t to)
+{
+    if (sc != chain) return;
+    if      (si == from)                        si = to;
+    else if (from < to && si > from && si <= to) si--;
+    else if (from > to && si >= to && si < from) si++;
+}
+
+// Update (chain, idx) selection after a TakeOut from srcChain at srcIdx.
+static void AdjustSelectionAfterTakeOut(EffectChain*& sc, int32_t& si,
+                                        EffectChain* srcChain, int32_t srcIdx)
+{
+    if (sc == srcChain && si > srcIdx) si--;
+}
+
+// ---------------------------------------------------------------------------
+// Recursive item renderer
+// Returns true when a structural mutation happened and the caller should break.
+// ---------------------------------------------------------------------------
+
+static bool RenderChainItems(EffectChain& chain,
+                             EffectChain*& selectedChain,
+                             int32_t& selectedIdx)
+{
+    const float btnW    = ImGui::CalcTextSize("x").x
+                          + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+
+    for (int32_t i = 0; i < chain.Count(); ++i)
+    {
+        EffectEntry& entry      = chain.GetEntry(i);
+        const bool   isContainer = (entry.Effect->GetInnerChain() != nullptr);
+        const bool   selected    = (selectedChain == &chain && selectedIdx == i);
+        const std::string name   = entry.Effect->GetDescriptor().Name;
+
+        ImGui::PushID(entry.Effect.get());
+
+        bool doRemove = false;
+
+        // ── Checkbox ─────────────────────────────────────────────────────────
+        ImGui::Checkbox("##en", &entry.Enabled);
+        ImGui::SameLine();
+
+        if (isContainer)
+        {
+            // ── Tree-node for container effects (EffectList etc.) ─────────────
+            const ImGuiTreeNodeFlags flags =
+                ImGuiTreeNodeFlags_OpenOnArrow    |
+                ImGuiTreeNodeFlags_SpanAvailWidth |
+                ImGuiTreeNodeFlags_AllowOverlap   |
+                (selected ? ImGuiTreeNodeFlags_Selected : 0);
+
+            bool open = ImGui::TreeNodeEx("##tn", flags, "%s", name.c_str());
+
+            // Click on the label area (not the arrow) selects the effect.
+            if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+            {
+                selectedChain = &chain;
+                selectedIdx   = i;
+            }
+
+            // Drag source: drag the EffectList itself.
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+            {
+                ChainDragPayload pl{ &chain, i };
+                ImGui::SetDragDropPayload("CHAIN_ITEM", &pl, sizeof(pl));
+                ImGui::Text("Move: %s", name.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            // Drop ON the EffectList header → append to its inner chain.
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("CHAIN_ITEM"))
+                {
+                    const auto& pl    = *static_cast<const ChainDragPayload*>(p->Data);
+                    EffectChain* inner = entry.Effect->GetInnerChain();
+                    // Don't drop an effect onto itself.
+                    if (pl.SrcChain != &chain || pl.SrcIdx != i)
+                    {
+                        bool selWasSrc = (selectedChain == pl.SrcChain &&
+                                          selectedIdx   == pl.SrcIdx);
+                        int32_t insertAt = inner->Count();
+                        // If moving within the same chain and src comes before this
+                        // node, the outer chain's indices don't shift for the inner.
+                        AdjustSelectionAfterTakeOut(selectedChain, selectedIdx,
+                                                    pl.SrcChain, pl.SrcIdx);
+                        ApplyMove(pl, inner, insertAt);
+                        if (selWasSrc)
+                        {
+                            selectedChain = inner;
+                            selectedIdx   = inner->Count() - 1;
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                    ImGui::PopID();
+                    return true;
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            // "x" button overlaid at the right edge of the header row.
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - btnW);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
+            doRemove = ImGui::SmallButton("x");
+            ImGui::PopStyleColor();
+
+            if (open)
+            {
+                EffectChain* inner = entry.Effect->GetInnerChain();
+                bool mutated = RenderChainItems(*inner, selectedChain, selectedIdx);
+                ImGui::TreePop();
+                if (mutated) { ImGui::PopID(); return true; }
+            }
+        }
+        else
+        {
+            // ── Selectable for leaf effects ───────────────────────────────────
+            const float labelW = ImGui::GetContentRegionAvail().x - btnW - spacing;
+            if (ImGui::Selectable(name.c_str(), selected,
+                                  ImGuiSelectableFlags_None,
+                                  ImVec2(labelW, 0.0f)))
+            {
+                selectedChain = &chain;
+                selectedIdx   = i;
+            }
+
+            // Drag source.
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+            {
+                ChainDragPayload pl{ &chain, i };
+                ImGui::SetDragDropPayload("CHAIN_ITEM", &pl, sizeof(pl));
+                ImGui::Text("Move: %s", name.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            // Drop target: insert dragged effect at this position.
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("CHAIN_ITEM"))
+                {
+                    const auto& pl = *static_cast<const ChainDragPayload*>(p->Data);
+                    bool selWasSrc = (selectedChain == pl.SrcChain &&
+                                      selectedIdx   == pl.SrcIdx);
+
+                    int32_t newIdx;
+                    if (pl.SrcChain == &chain)
+                    {
+                        // Same-chain reorder.
+                        newIdx = i;
+                        AdjustSelectionAfterMove(selectedChain, selectedIdx,
+                                                 &chain, pl.SrcIdx, newIdx);
+                        chain.Move(pl.SrcIdx, newIdx);
+                    }
+                    else
+                    {
+                        // Cross-chain: the drop index in dst may shift if src
+                        // was removed from a chain that happens to be the same
+                        // object as dst — but by definition SrcChain != &chain here.
+                        newIdx = i;
+                        AdjustSelectionAfterTakeOut(selectedChain, selectedIdx,
+                                                    pl.SrcChain, pl.SrcIdx);
+                        if (selectedChain == &chain && selectedIdx >= newIdx)
+                            selectedIdx++;
+                        ApplyMove(pl, &chain, newIdx);
+                    }
+
+                    if (selWasSrc)
+                    {
+                        selectedChain = &chain;
+                        selectedIdx   = newIdx;
+                    }
+                    ImGui::EndDragDropTarget();
+                    ImGui::PopID();
+                    return true;
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            // "x" button.
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
+            doRemove = ImGui::SmallButton("x");
+            ImGui::PopStyleColor();
+        }
+
+        // ── Remove (deferred until after TreePop so ImGui stack is balanced) ─
+        if (doRemove)
+        {
+            // Clear selection if it lives inside the subtree being removed.
+            if (isContainer &&
+                IsChainReachable(entry.Effect->GetInnerChain(), selectedChain))
+            {
+                selectedChain = nullptr;
+                selectedIdx   = -1;
+            }
+            if (selectedChain == &chain)
+            {
+                if      (selectedIdx == i) { selectedChain = nullptr; selectedIdx = -1; }
+                else if (selectedIdx  > i) selectedIdx--;
+            }
+            chain.Remove(i);
+            ImGui::PopID();
+            return true;
+        }
+
+        ImGui::PopID();
+    }
+    return false;
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+void ChainPanel::Render(Engine& engine,
+                        EffectChain& rootChain,
+                        EffectChain*& selectedChain,
+                        int32_t& selectedIdx)
+{
     if (!ImGui::Begin("Effect Chain", nullptr, ImGuiWindowFlags_None))
     {
         ImGui::End();
         return;
     }
 
-    int32_t& selectedEffect = CurrentSelection(nav, rootSelected);
-
-    // ── Breadcrumb navigation ─────────────────────────────────────────────────
-    if (!nav.empty())
+    // Safety: if selectedChain no longer exists in the tree, clear selection.
+    if (selectedChain && !IsChainReachable(&rootChain, selectedChain))
     {
-        if (ImGui::SmallButton("< Back"))
-        {
-            nav.pop_back();
-            // currentChain and selectedEffect references now point at the level above;
-            // caller (App::RenderUI) will re-derive them next frame.
-            ImGui::End();
-            return;
-        }
-
-        ImGui::SameLine();
-        ImGui::TextDisabled("Root");
-        for (const auto& entry : nav)
-        {
-            ImGui::SameLine();
-            ImGui::TextDisabled(">");
-            ImGui::SameLine();
-            ImGui::TextUnformatted(entry.Label.c_str());
-        }
-        ImGui::Separator();
+        selectedChain = nullptr;
+        selectedIdx   = -1;
     }
-
-    // ── Effect list ───────────────────────────────────────────────────────────
-    const int32_t count = currentChain->Count();
-
-    // Clamp selection if effects were removed.
-    if (selectedEffect >= count)
-        selectedEffect = count - 1;
+    // Clamp index within the selected chain.
+    if (selectedChain && selectedIdx >= selectedChain->Count())
+        selectedIdx = selectedChain->Count() - 1;
 
     ImGui::BeginChild("##list", ImVec2(0.0f, -64.0f), true);
-
-    for (int32_t i = 0; i < count; ++i)
-    {
-        EffectEntry& entry = currentChain->GetEntry(i);
-        ImGui::PushID(i);
-
-        ImGui::Checkbox("##en", &entry.Enabled);
-        ImGui::SameLine();
-
-        bool selected = (i == selectedEffect);
-        std::string name = entry.Effect->GetDescriptor().Name;
-
-        // Reserve space on the right for: "▶" button (if EffectList) + "x" button
-        bool isContainer = (entry.Effect->GetInnerChain() != nullptr);
-        float rightButtons = 22.0f + (isContainer ? 26.0f : 0.0f);
-
-        if (ImGui::Selectable(name.c_str(), selected, ImGuiSelectableFlags_None,
-                              ImVec2(ImGui::GetContentRegionAvail().x - rightButtons, 0.0f)))
-        {
-            selectedEffect = i;
-        }
-
-        // Drag-to-reorder
-        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
-        {
-            ImGui::SetDragDropPayload("CHAIN_ITEM", &i, sizeof(i));
-            ImGui::Text("Move: %s", name.c_str());
-            ImGui::EndDragDropSource();
-        }
-        if (ImGui::BeginDragDropTarget())
-        {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CHAIN_ITEM"))
-            {
-                int32_t from = *static_cast<const int32_t*>(payload->Data);
-                currentChain->Move(from, i);
-                if (selectedEffect == from) selectedEffect = i;
-            }
-            ImGui::EndDragDropTarget();
-        }
-
-        // "▶" Enter button — only shown for EffectList (and any future containers)
-        if (isContainer)
-        {
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.35f, 0.6f, 1.0f));
-            if (ImGui::SmallButton(">"))
-            {
-                selectedEffect = i;
-                ChainNavEntry navEntry;
-                navEntry.Chain          = entry.Effect->GetInnerChain();
-                navEntry.Label          = name;
-                navEntry.SelectedEffect = -1;
-                nav.push_back(std::move(navEntry));
-                ImGui::PopStyleColor();
-                ImGui::PopID();
-                break; // nav changed; rebuild next frame
-            }
-            ImGui::PopStyleColor();
-        }
-
-        // "x" Remove button
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
-        if (ImGui::SmallButton("x"))
-        {
-            currentChain->Remove(i);
-            if (selectedEffect == i)      selectedEffect = -1;
-            else if (selectedEffect > i)  selectedEffect--;
-            ImGui::PopStyleColor();
-            ImGui::PopID();
-            break;
-        }
-        ImGui::PopStyleColor();
-
-        ImGui::PopID();
-    }
-
+    RenderChainItems(rootChain, selectedChain, selectedIdx);
     ImGui::EndChild();
 
     // ── Add Effect ────────────────────────────────────────────────────────────
@@ -145,6 +296,7 @@ void ChainPanel::Render(Engine& engine,
 
     const std::vector<std::string>& names = engine.GetRegistry().Names();
     static int32_t s_addIndex = 0;
+    if (s_addIndex >= (int32_t)names.size()) s_addIndex = 0;
 
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 60.0f);
     if (ImGui::BeginCombo("##add", names.empty() ? "(none)" : names[s_addIndex].c_str()))
@@ -167,8 +319,17 @@ void ChainPanel::Render(Engine& engine,
         if (effect)
         {
             effect->Init();
-            selectedEffect = currentChain->Count();
-            currentChain->Add(std::move(effect));
+
+            // Insert after the currently selected item in its chain,
+            // or append to the root chain when nothing is selected.
+            EffectChain* target = selectedChain ? selectedChain : &rootChain;
+            int32_t insertAt = (selectedChain && selectedIdx >= 0)
+                ? std::min(selectedIdx + 1, target->Count())
+                : target->Count();
+
+            target->Insert(insertAt, { std::move(effect), true });
+            selectedChain = target;
+            selectedIdx   = insertAt;
         }
     }
 

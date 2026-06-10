@@ -22,6 +22,12 @@ public:
     void Render(RenderContext Context);
 
     void Add(std::unique_ptr<Effect> Effect);
+    // Insert an EffectEntry at the given index (shifting later entries down).
+    // Index is clamped to [0, Count()], so Insert(Count(), ...) is equivalent to Add.
+    void Insert(int32_t Index, EffectEntry Entry);
+    // Remove the entry at Index and return it WITHOUT calling Destroy().
+    // Used for cross-chain drag-and-drop; caller takes ownership.
+    EffectEntry TakeOut(int32_t Index);
     void Remove(int32_t Index);
     void Move(int32_t From, int32_t To);
     // Calls Destroy() on every effect and clears the list.
