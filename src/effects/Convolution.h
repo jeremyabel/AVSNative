@@ -21,7 +21,7 @@ struct ConvolutionConfig
 class Convolution : public ReflectedEffect<ConvolutionConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 

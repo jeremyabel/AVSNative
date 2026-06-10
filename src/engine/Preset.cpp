@@ -15,8 +15,7 @@
 // the same way.
 static void LoadChain(EffectChain& Chain,
                       const nlohmann::json& EffectsArray,
-                      Registry& Reg,
-                      bgfx::RendererType::Enum RendererType)
+                      Registry& Reg)
 {
     for (const auto& Item : EffectsArray)
     {
@@ -33,7 +32,7 @@ static void LoadChain(EffectChain& Chain,
             continue;
         }
 
-        Effect->Init(RendererType);
+        Effect->Init();
 
         if (Item.contains("config"))
         {
@@ -45,7 +44,7 @@ static void LoadChain(EffectChain& Chain,
             // because it has no access to the Registry.
             EffectChain* Inner = Effect->GetInnerChain();
             if (Inner && Cfg.contains("effects") && Cfg["effects"].is_array())
-                LoadChain(*Inner, Cfg["effects"], Reg, RendererType);
+                LoadChain(*Inner, Cfg["effects"], Reg);
         }
 
         Chain.Add(std::move(Effect));
@@ -78,8 +77,7 @@ bool Preset::Load(const char* Path, Engine& Engine)
     if (!Json.contains("effects"))
         return true;
 
-    LoadChain(Engine.GetChain(), Json["effects"],
-              Engine.GetRegistry(), Engine.GetRendererType());
+    LoadChain(Engine.GetChain(), Json["effects"], Engine.GetRegistry());
     return true;
 }
 

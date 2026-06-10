@@ -83,7 +83,7 @@ void main()
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void ColorModifier::Init(bgfx::RendererType::Enum /*Renderer*/)
+void ColorModifier::Init()
 {
     InputUnif = bgfx::createUniform("s_input",     bgfx::UniformType::Sampler);
     BeatUnif  = bgfx::createUniform("u_cmod_beat", bgfx::UniformType::Vec4);

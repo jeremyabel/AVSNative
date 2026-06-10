@@ -20,7 +20,7 @@ struct SimpleConfig
 class Simple : public ReflectedEffect<SimpleConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 

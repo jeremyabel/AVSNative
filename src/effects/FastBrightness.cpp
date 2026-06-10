@@ -5,19 +5,20 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_fastbrightness.sc.bin.h"
 
-void FastBrightness::Init(bgfx::RendererType::Enum /*Renderer*/)
+void FastBrightness::Init()
 {
-    const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,      sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_fastbrightness_spv,  sizeof(fs_fastbrightness_spv)));
-    Program       = bgfx::createProgram(vs, fs, true);
-    TexUniform    = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_fastbrightness_spv, sizeof(fs_fastbrightness_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
+    
+    TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_fbParams", bgfx::UniformType::Vec4);
 }
 
 void FastBrightness::Render(const RenderContext& Context)
 {
-    const float params[4] = { (float)Cfg.Dir, 0.0f, 0.0f, 0.0f };
-    bgfx::setUniform(ParamsUniform, params);
+    const float Params[4] = { (float)Cfg.Dir, 0.f, 0.f, 0.f };
+    bgfx::setUniform(ParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -28,11 +29,16 @@ void FastBrightness::Render(const RenderContext& Context)
 
 void FastBrightness::Destroy()
 {
-    if (bgfx::isValid(ParamsUniform)) bgfx::destroy(ParamsUniform);
-    if (bgfx::isValid(TexUniform))    bgfx::destroy(TexUniform);
-    if (bgfx::isValid(Program))       bgfx::destroy(Program);
+    if (bgfx::isValid(ParamsUniform))
+        bgfx::destroy(ParamsUniform);
+    
+    if (bgfx::isValid(TexUniform))
+        bgfx::destroy(TexUniform);
+    
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
 
     ParamsUniform = BGFX_INVALID_HANDLE;
-    TexUniform    = BGFX_INVALID_HANDLE;
-    Program       = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }

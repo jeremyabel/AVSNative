@@ -7,7 +7,7 @@
 
 static constexpr float k_phi = 1.6180339887f;
 
-void Scatter::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Scatter::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_scatter_spv, sizeof(fs_scatter_spv)));

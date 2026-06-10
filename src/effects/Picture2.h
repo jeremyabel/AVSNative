@@ -19,7 +19,7 @@ struct Picture2Config
 class Picture2 : public ReflectedEffect<Picture2Config>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 

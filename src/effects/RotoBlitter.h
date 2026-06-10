@@ -17,7 +17,7 @@ struct RotoBlitterConfig
 class RotoBlitter : public ReflectedEffect<RotoBlitterConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 

@@ -32,7 +32,7 @@ void Starfield::Colorize(uint8_t Bright, uint8_t Cr, uint8_t Cg, uint8_t Cb,
 
 // ─── Init / Destroy ───────────────────────────────────────────────────────────
 
-void Starfield::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Starfield::Init()
 {
     // Blit program — copies input texture to output
     {

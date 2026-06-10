@@ -81,7 +81,7 @@ void main() {
 
 // ---------------------------------------------------------------------------
 
-void Movement::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Movement::Init()
 {
     Cfg.Code = k_polarDefault;
 

@@ -16,7 +16,7 @@ static constexpr float k4PiOver5 = 3.14159265358979323846f * 4.0f / 5.0f;
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void RotatingStars::Init(bgfx::RendererType::Enum /*Renderer*/)
+void RotatingStars::Init()
 {
     const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_simple_spv,    sizeof(fs_simple_spv)));

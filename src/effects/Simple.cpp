@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cmath>
 
-void Simple::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Simple::Init()
 {
     const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_simple_spv,    sizeof(fs_simple_spv)));

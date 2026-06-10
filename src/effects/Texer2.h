@@ -27,7 +27,7 @@ struct Texer2Config
 class Texer2 : public ReflectedEffect<Texer2Config>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Destroy()                               override;
     void Render(const RenderContext& Context)    override;
 

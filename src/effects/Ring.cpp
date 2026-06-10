@@ -16,7 +16,7 @@ static constexpr float kTwoPiOver80 = 3.14159265358979323846f * 2.0f / 80.0f;
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void Ring::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Ring::Init()
 {
     const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_simple_spv,    sizeof(fs_simple_spv)));

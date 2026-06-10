@@ -10,7 +10,7 @@
 
 static constexpr float kPi = 3.14159265358979323846f;
 
-void RotoBlitter::Init(bgfx::RendererType::Enum /*Renderer*/)
+void RotoBlitter::Init()
 {
     const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,   sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_rotoblitter_spv,  sizeof(fs_rotoblitter_spv)));

@@ -72,7 +72,7 @@ static bool Contains(const std::vector<std::string>& v, const std::string& s)
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void DynamicMovement::Init(bgfx::RendererType::Enum /*Renderer*/)
+void DynamicMovement::Init()
 {
     Cfg.PixelCode = k_defaultPixel;
 

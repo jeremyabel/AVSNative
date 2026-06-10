@@ -14,7 +14,7 @@
 
 static constexpr float kPi = 3.14159265358979323846f;
 
-void BassSpin::Init(bgfx::RendererType::Enum /*Renderer*/)
+void BassSpin::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_simple_spv,     sizeof(fs_simple_spv)));

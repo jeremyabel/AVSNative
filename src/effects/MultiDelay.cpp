@@ -104,7 +104,7 @@ void EnsureSlot(MultiDelayShared& S, int i, uint16_t w, uint16_t h)
 
 // ── Effect ──────────────────────────────────────────────────────────────────────
 
-void MultiDelay::Init(bgfx::RendererType::Enum /*Renderer*/)
+void MultiDelay::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_blit_spv,       sizeof(fs_blit_spv)));

@@ -26,7 +26,7 @@ void CustomBpm::OnConfigChanged(const std::vector<std::string>& changed)
     else if (has("invert")    && Cfg.Invert)    { Cfg.Arbitrary = false; Cfg.Skip = false; }
 }
 
-void CustomBpm::Init(bgfx::RendererType::Enum /*Renderer*/)
+void CustomBpm::Init()
 {
 }
 

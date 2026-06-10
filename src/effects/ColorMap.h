@@ -42,7 +42,7 @@ public:
     static constexpr int kNumMaps = 8;
     static constexpr int kLutSize = 256;
 
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 

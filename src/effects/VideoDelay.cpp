@@ -23,7 +23,7 @@ static bgfx::TextureHandle MakeSlot(uint16_t w, uint16_t h)
         BGFX_TEXTURE_BLIT_DST | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, mem);
 }
 
-void VideoDelay::Init(bgfx::RendererType::Enum /*Renderer*/)
+void VideoDelay::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_blit_spv,       sizeof(fs_blit_spv)));

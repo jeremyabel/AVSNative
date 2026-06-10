@@ -56,7 +56,7 @@ void Convolution::OnConfigChanged(const std::vector<std::string>& changed)
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void Convolution::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Convolution::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,   sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_convolution_spv,  sizeof(fs_convolution_spv)));

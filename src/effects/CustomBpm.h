@@ -26,7 +26,7 @@ struct CustomBpmConfig
 class CustomBpm : public ReflectedEffect<CustomBpmConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 

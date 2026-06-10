@@ -1,6 +1,6 @@
 #include "SetRenderMode.h"
 
-void SetRenderMode::Init(bgfx::RendererType::Enum /*Renderer*/)
+void SetRenderMode::Init()
 {
 }
 

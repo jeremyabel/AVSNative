@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cstdlib>
 
-void MovingParticle::Init(bgfx::RendererType::Enum /*Renderer*/)
+void MovingParticle::Init()
 {
     const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_movingparticle_spv, sizeof(fs_movingparticle_spv)));

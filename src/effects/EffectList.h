@@ -21,7 +21,7 @@ struct EffectListConfig
 class EffectList : public ReflectedEffect<EffectListConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
@@ -51,7 +51,6 @@ private:
     // Isolated ping-pong for sub-effects; persists across frames
     InnerFBOManager InnerFbos;
     bool            InnerFbosReady = false;
-    bgfx::RendererType::Enum SavedRenderer = bgfx::RendererType::Noop;
 
     // Runtime state
     int32_t OnBeatCooldown = 0;

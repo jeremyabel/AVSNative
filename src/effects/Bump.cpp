@@ -14,7 +14,7 @@ static const std::vector<std::string> k_builtins = {
     "getspec", "getosc",
 };
 
-void Bump::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Bump::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_bump_spv, sizeof(fs_bump_spv)));

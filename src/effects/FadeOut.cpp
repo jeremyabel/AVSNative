@@ -5,7 +5,7 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_fadeout.sc.bin.h"
 
-void FadeOut::Init(bgfx::RendererType::Enum Renderer)
+void FadeOut::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_fadeout_spv, sizeof(fs_fadeout_spv)));
@@ -19,7 +19,7 @@ void FadeOut::Render(const RenderContext& Context)
 {
     // Speed maps directly to blend amount: 0 = no fade, 1 = instant wipe to color.
     // speed=0.08 → 8% per frame toward target, equivalent to AVS_Remake fade=0.92.
-    const float Params[4] = { Cfg.Color[0] / 255.0f, Cfg.Color[1] / 255.0f, Cfg.Color[2] / 255.0f, Cfg.Speed };
+    const float Params[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, Cfg.Speed };
 
     bgfx::setUniform(FadeParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);

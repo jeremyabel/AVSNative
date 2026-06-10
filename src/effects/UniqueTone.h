@@ -12,7 +12,7 @@ struct UniqueToneConfig
 class UniqueTone : public ReflectedEffect<UniqueToneConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 

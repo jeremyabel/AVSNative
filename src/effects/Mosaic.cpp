@@ -5,7 +5,7 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_mosaic.sc.bin.h"
 
-void Mosaic::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Mosaic::Init()
 {
     const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_mosaic_spv,     sizeof(fs_mosaic_spv)));

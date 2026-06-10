@@ -91,7 +91,7 @@ void Picture2::OnConfigChanged(const std::vector<std::string>& /*changed*/) {}
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void Picture2::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Picture2::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,  sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_picture2_spv, sizeof(fs_picture2_spv)));

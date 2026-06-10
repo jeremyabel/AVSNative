@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-void Interleave::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Interleave::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_interleave_spv, sizeof(fs_interleave_spv)));

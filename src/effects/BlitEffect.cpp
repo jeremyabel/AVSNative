@@ -5,7 +5,7 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_bliteffect.sc.bin.h"
 
-void BlitEffect::Init(bgfx::RendererType::Enum /*Renderer*/)
+void BlitEffect::Init()
 {
     const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,   sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_bliteffect_spv,   sizeof(fs_bliteffect_spv)));

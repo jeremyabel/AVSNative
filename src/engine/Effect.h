@@ -89,7 +89,7 @@ class Effect
 {
 public:
 
-    virtual void Init(bgfx::RendererType::Enum Renderer) = 0;
+    virtual void Init() = 0;
     virtual void Render(const RenderContext& Context) = 0;
     virtual EffectDesc GetDescriptor() const = 0;
     virtual nlohmann::json GetConfig() const = 0;

@@ -5,20 +5,20 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_brightness.sc.bin.h"
 
-// cfg → per-channel multiplier (matches smp_begin's tab_red/green/blue formula).
-static float ChannelMult(int cfg)
+// Channel → per-channel multiplier (matches smp_begin's tab_red/green/blue formula).
+static float ChannelMult(int Channel)
 {
-    return 1.0f + (cfg < 0 ? 1.0f : 16.0f) * ((float)cfg / 4096.0f);
+    return 1.f + (Channel < 0 ? 1.f : 16.f) * ((float)Channel / 4096.f);
 }
 
-void Brightness::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Brightness::Init()
 {
-    const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_brightness_spv, sizeof(fs_brightness_spv)));
-    m_program  = bgfx::createProgram(VS, FS, true);
-    m_uInput   = bgfx::createUniform("s_input",   bgfx::UniformType::Sampler);
-    m_uMult    = bgfx::createUniform("u_mult",    bgfx::UniformType::Vec4);
-    m_uParams  = bgfx::createUniform("u_params",  bgfx::UniformType::Vec4);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_brightness_spv, sizeof(fs_brightness_spv)));
+    m_program = bgfx::createProgram(VertShader, FragShader, true);
+    m_uInput = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    m_uMult = bgfx::createUniform("u_mult", bgfx::UniformType::Vec4);
+    m_uParams = bgfx::createUniform("u_params", bgfx::UniformType::Vec4);
     m_uExclude = bgfx::createUniform("u_exclude", bgfx::UniformType::Vec4);
 }
 
@@ -36,10 +36,9 @@ void Brightness::Destroy()
 
 void Brightness::Render(const RenderContext& Context)
 {
-    const float mult[4] = { ChannelMult(Cfg.Red), ChannelMult(Cfg.Green), ChannelMult(Cfg.Blue), 0.0f };
-    const float params[4] = { (float)Cfg.Blend, Cfg.Exclude ? 1.0f : 0.0f, Cfg.Distance / 255.0f, 0.0f };
-    const float excl[4] = { Cfg.ExcludeColor[0] / 255.0f, Cfg.ExcludeColor[1] / 255.0f,
-                            Cfg.ExcludeColor[2] / 255.0f, 0.0f };
+    const float mult[4] = { ChannelMult(Cfg.Red), ChannelMult(Cfg.Green), ChannelMult(Cfg.Blue), 0.f };
+    const float params[4] = { (float)Cfg.Blend, Cfg.Exclude ? 1.f : 0.f, Cfg.Distance / 255.f, 0.f };
+    const float excl[4] = { Cfg.ExcludeColor[0] / 255.f, Cfg.ExcludeColor[1] / 255.f, Cfg.ExcludeColor[2] / 255.f, 0.f };
 
     bgfx::setUniform(m_uMult, mult);
     bgfx::setUniform(m_uParams, params);

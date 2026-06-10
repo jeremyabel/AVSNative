@@ -6,16 +6,16 @@
 #include "generated/spirv/fs_colorfade.sc.bin.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdlib>
 
-void ColorFade::Init(bgfx::RendererType::Enum /*Renderer*/)
+void ColorFade::Init()
 {
-    const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_colorfade_spv,  sizeof(fs_colorfade_spv)));
-    Program       = bgfx::createProgram(vs, fs, true);
-    TexUniform    = bgfx::createUniform("s_texColor",  bgfx::UniformType::Sampler);
-    ParamsUniform = bgfx::createUniform("u_cfParams",  bgfx::UniformType::Vec4);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_colorfade_spv, sizeof(fs_colorfade_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
+    
+    TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
+    ParamsUniform = bgfx::createUniform("u_cfParams", bgfx::UniformType::Vec4);
 
     m_fp[0] = (float)Cfg.Faders[0];
     m_fp[1] = (float)Cfg.Faders[1];
@@ -49,7 +49,9 @@ void ColorFade::UpdateFaderPos(bool isBeat)
         {
             // rand() % 33 gives [0,32]; subtract 6 → [-6, 26]
             for (int i = 0; i < 3; i++)
+            {
                 m_fp[i] = (float)(rand() % 33 - 6);
+            }
         }
         else
         {
@@ -65,13 +67,14 @@ void ColorFade::Render(const RenderContext& Context)
     UpdateFaderPos(Context.IsBeat());
 
     // Convert from [0,64] fader space (32=neutral) to integer deltas [-32,+32]
-    const float params[4] = {
+    const float Params[4] = {
         m_fp[0] - 32.0f,
         m_fp[1] - 32.0f,
         m_fp[2] - 32.0f,
         0.0f
     };
-    bgfx::setUniform(ParamsUniform, params);
+    
+    bgfx::setUniform(ParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -82,11 +85,16 @@ void ColorFade::Render(const RenderContext& Context)
 
 void ColorFade::Destroy()
 {
-    if (bgfx::isValid(ParamsUniform)) bgfx::destroy(ParamsUniform);
-    if (bgfx::isValid(TexUniform))    bgfx::destroy(TexUniform);
-    if (bgfx::isValid(Program))       bgfx::destroy(Program);
+    if (bgfx::isValid(ParamsUniform))
+        bgfx::destroy(ParamsUniform);
+    
+    if (bgfx::isValid(TexUniform))
+        bgfx::destroy(TexUniform);
+    
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
 
     ParamsUniform = BGFX_INVALID_HANDLE;
-    TexUniform    = BGFX_INVALID_HANDLE;
-    Program       = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }

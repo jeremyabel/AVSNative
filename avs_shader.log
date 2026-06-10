@@ -1,0 +1,8 @@
+[ShaderCompiler] GlslToSpirv OK  stage=fragment  spirv_words=692
+[ShaderCompiler] GlslToSpirv OK  stage=vertex  spirv_words=340
+[ShaderCompiler] GlslToSpirv OK  stage=vertex  spirv_words=824
+[ShaderCompiler] GlslToSpirv OK  stage=fragment  spirv_words=142
+[ShaderCompiler] GlslToSpirv OK  stage=fragment  spirv_words=692
+[ShaderCompiler] GlslToSpirv OK  stage=vertex  spirv_words=340
+[ShaderCompiler] GlslToSpirv OK  stage=vertex  spirv_words=824
+[ShaderCompiler] GlslToSpirv OK  stage=fragment  spirv_words=142

@@ -17,7 +17,7 @@ struct PictureConfig
 class Picture : public ReflectedEffect<PictureConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 

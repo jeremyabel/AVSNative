@@ -100,7 +100,7 @@ int Text::ResolveFontId(const std::string& family, bool bold, bool italic)
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void Text::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Text::Init()
 {
     const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_simple_spv,    sizeof(fs_simple_spv)));

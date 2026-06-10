@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-void Timescope::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Timescope::Init()
 {
     const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_timescope_spv,  sizeof(fs_timescope_spv)));

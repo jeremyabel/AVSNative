@@ -9,7 +9,7 @@ static constexpr uint64_t kScratchFlags =
     BGFX_TEXTURE_RT |
     BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
 
-void Blur::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Blur::Init()
 {
     const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_blur_spv,       sizeof(fs_blur_spv)));

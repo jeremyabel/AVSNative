@@ -87,7 +87,7 @@ void main()
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void DynamicDistanceModifier::Init(bgfx::RendererType::Enum /*Renderer*/)
+void DynamicDistanceModifier::Init()
 {
     Params0Unif = bgfx::createUniform("u_ddm_params0", bgfx::UniformType::Vec4);
     Params1Unif = bgfx::createUniform("u_ddm_params1", bgfx::UniformType::Vec4);

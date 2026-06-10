@@ -10,7 +10,7 @@ struct ClearConfig
 class Clear : public ReflectedEffect<ClearConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 

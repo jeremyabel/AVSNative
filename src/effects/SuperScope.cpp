@@ -32,7 +32,7 @@ static const char* k_defaultPoint =
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void SuperScope::Init(bgfx::RendererType::Enum /*Renderer*/)
+void SuperScope::Init()
 {
     const bgfx::ShaderHandle vs = bgfx::createShader(
         bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));

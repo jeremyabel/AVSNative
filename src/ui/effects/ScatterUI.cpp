@@ -1,7 +1,7 @@
 #include "ui/ConfigUiRegistry.h"
 
-// Scatter has no parameters.
 void RegisterScatterUI(ConfigUiRegistry& reg)
 {
+    // Scatter has no parameters
     reg.Register("Scatter", &DrawDefault);
 }

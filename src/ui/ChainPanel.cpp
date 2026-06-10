@@ -172,7 +172,7 @@ void ChainPanel::Render(Engine& engine,
         auto effect = engine.GetRegistry().Create(names[s_addIndex]);
         if (effect)
         {
-            effect->Init(engine.GetRendererType());
+            effect->Init();
             selectedEffect = currentChain->Count();
             currentChain->Add(std::move(effect));
         }

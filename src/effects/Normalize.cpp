@@ -107,7 +107,7 @@ void Normalize::CompileProgram(const char* FragGlsl, const BgfxUniformDesc* Unif
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void Normalize::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Normalize::Init()
 {
     m_srcSizeUnif = bgfx::createUniform("u_srcSize", bgfx::UniformType::Vec4);
     m_inputUnif   = bgfx::createUniform("s_input",   bgfx::UniformType::Sampler);

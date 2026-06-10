@@ -19,7 +19,7 @@ static constexpr float kDfactorStep  = (kDfactorStart - 1.0f / 128.0f) / 64.0f;
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
-void OscilloscopeStar::Init(bgfx::RendererType::Enum /*Renderer*/)
+void OscilloscopeStar::Init()
 {
     const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_simple_spv,    sizeof(fs_simple_spv)));

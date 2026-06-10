@@ -9,10 +9,8 @@
 #include <algorithm>
 
 
-void EffectList::Init(bgfx::RendererType::Enum Renderer)
+void EffectList::Init()
 {
-    SavedRenderer = Renderer;
-
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_effectlist_blend_spv, sizeof(fs_effectlist_blend_spv)));
     BlendProgram = bgfx::createProgram(VS, FS, true);

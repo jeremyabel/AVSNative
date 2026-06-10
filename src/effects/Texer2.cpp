@@ -365,7 +365,7 @@ int   = function(n) return n >= 0 and math.floor(n) or math.ceil(n) end
 atan  = function(a,b) if b ~= nil then return math.atan2(a,b) else return math.atan(a) end end
 )";
 
-void Texer2::Init(bgfx::RendererType::Enum)
+void Texer2::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,   sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_texer2_comp_spv,  sizeof(fs_texer2_comp_spv)));

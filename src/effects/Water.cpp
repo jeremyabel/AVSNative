@@ -6,7 +6,7 @@
 #include "generated/spirv/fs_water.sc.bin.h"
 #include "generated/spirv/fs_blit.sc.bin.h"
 
-void Water::Init(bgfx::RendererType::Enum /*Renderer*/)
+void Water::Init()
 {
     {
         bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));

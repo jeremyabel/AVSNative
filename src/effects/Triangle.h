@@ -29,7 +29,7 @@ struct TriangleConfig
 class Triangle : public ReflectedEffect<TriangleConfig>
 {
 public:
-    void Init(bgfx::RendererType::Enum Renderer) override;
+    void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
     std::string GetScriptError(const std::string& paramName) const override;

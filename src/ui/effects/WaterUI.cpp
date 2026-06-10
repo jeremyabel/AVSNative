@@ -1,7 +1,7 @@
 #include "ui/ConfigUiRegistry.h"
 
-// Water has no parameters.
 void RegisterWaterUI(ConfigUiRegistry& reg)
 {
+    // Water has no parameters
     reg.Register("Water", &DrawDefault);
 }
