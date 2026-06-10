@@ -2,19 +2,6 @@
 
 #include <algorithm>
 
-const std::vector<Field>& CustomBpm::Fields() const
-{
-    static const std::vector<Field> kFields = {
-        ::Bool(&CustomBpmConfig::Arbitrary, "arbitrary", "Arbitrary BPM"),
-        ::Bool(&CustomBpmConfig::Skip,      "skip",      "Skip Beats"),
-        ::Bool(&CustomBpmConfig::Invert,    "invert",    "Invert Beat"),
-        RangeI(&CustomBpmConfig::ArbVal,    "arbVal",    "Arbitrary BPM", 6, 300),
-        RangeI(&CustomBpmConfig::SkipVal,   "skipVal",   "Skip",          1, 16),
-        RangeI(&CustomBpmConfig::SkipFirst, "skipfirst", "Skip First N",  0, 64),
-    };
-    return kFields;
-}
-
 void CustomBpm::OnConfigChanged(const std::vector<std::string>& changed)
 {
     // The three modes are mutually exclusive; turning one on clears the others.

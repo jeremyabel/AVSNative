@@ -10,7 +10,6 @@
 #include <nanovg/nanovg_bgfx.h>
 
 #include <algorithm>
-#include <cmath>
 
 void Simple::Init()
 {
@@ -45,8 +44,8 @@ void Simple::EnsureOverlay(int Width, int Height)
 
     DestroyOverlay();
     m_overlayFbo = nvgluCreateFramebuffer(m_nvg, Width, Height, 0);
-    m_overlayW   = Width;
-    m_overlayH   = Height;
+    m_overlayW = Width;
+    m_overlayH = Height;
 }
 
 void Simple::DestroyOverlay()

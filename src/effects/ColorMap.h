@@ -57,7 +57,23 @@ public:
     uint64_t ConfigVersion() const { return m_configVersion; }
 
 protected:
-    const std::vector<Field>& Fields() const override;
+    const std::vector<Field>& Fields() const override
+    {
+        static const std::vector<Field> kFields = {
+            SelectI(&ColorMapConfig::ColorKey, "colorKey", "Key",
+                    { "Red Channel", "Green Channel", "Blue Channel",
+                      "(R+G+B)/2", "Maximal Channel", "(R+G+B)/3" }),
+            SelectI(&ColorMapConfig::BlendMode, "blendmode", "Blend Mode",
+                    { "Replace", "Additive", "Maximum", "Minimum", "50/50",
+                      "Subtractive 1", "Subtractive 2", "Multiply", "XOR", "Adjustable" }),
+            RangeI(&ColorMapConfig::AdjustableAlpha, "adjustableAlpha", "Alpha", 0, 255),
+            SelectI(&ColorMapConfig::MapCycleMode, "mapCycleMode", "Cycling",
+                    { "None (single map)", "On-beat random", "On-beat sequential" }),
+            RangeI(&ColorMapConfig::MapCycleSpeed, "mapCycleSpeed", "Cycle Speed", 1, 64),
+            ::Bool(&ColorMapConfig::DontSkipFastBeats, "dontSkipFastBeats", "Don't Skip Fast Beats"),
+        };
+        return kFields;
+    }
     std::string EffectName() const override { return "Color Map"; }
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 

@@ -10,13 +10,13 @@
 
 void Interleave::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_interleave_spv, sizeof(fs_interleave_spv)));
-    Program = bgfx::createProgram(VS, FS, true);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_interleave_spv, sizeof(fs_interleave_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
 
-    TexUniform   = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
-    ColorUniform = bgfx::createUniform("u_ilColor",  bgfx::UniformType::Vec4);
-    GridUniform  = bgfx::createUniform("u_ilGrid",   bgfx::UniformType::Vec4);
+    TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
+    ColorUniform = bgfx::createUniform("u_ilColor", bgfx::UniformType::Vec4);
+    GridUniform = bgfx::createUniform("u_ilGrid", bgfx::UniformType::Vec4);
 }
 
 void Interleave::Render(const RenderContext& Context)
@@ -33,24 +33,14 @@ void Interleave::Render(const RenderContext& Context)
         CurY = Cfg.Y2;
     }
 
-    const int tx = std::max(0, int(std::round(CurX)));
-    const int ty = std::max(0, int(std::round(CurY)));
+    const int Tx = std::max(0, int(std::round(CurX)));
+    const int Ty = std::max(0, int(std::round(CurY)));
 
-    const float color[4] = {
-        Cfg.Color[0] / 255.0f,
-        Cfg.Color[1] / 255.0f,
-        Cfg.Color[2] / 255.0f,
-        float(Cfg.OutBlend)
-    };
-    const float grid[4] = {
-        float(tx),
-        float(ty),
-        float(Context.Width),
-        float(Context.Height)
-    };
+    const float Color[4] = { Cfg.Color[0] / 255.0f, Cfg.Color[1] / 255.0f, Cfg.Color[2] / 255.0f, float(Cfg.OutBlend) };
+    const float Grid[4] = { float(Tx), float(Ty), float(Context.Width), float(Context.Height) };
 
-    bgfx::setUniform(ColorUniform, color);
-    bgfx::setUniform(GridUniform,  grid);
+    bgfx::setUniform(ColorUniform, Color);
+    bgfx::setUniform(GridUniform, Grid);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -61,13 +51,20 @@ void Interleave::Render(const RenderContext& Context)
 
 void Interleave::Destroy()
 {
-    if (bgfx::isValid(GridUniform))  bgfx::destroy(GridUniform);
-    if (bgfx::isValid(ColorUniform)) bgfx::destroy(ColorUniform);
-    if (bgfx::isValid(TexUniform))   bgfx::destroy(TexUniform);
-    if (bgfx::isValid(Program))      bgfx::destroy(Program);
+    if (bgfx::isValid(GridUniform))
+        bgfx::destroy(GridUniform);
+    
+    if (bgfx::isValid(ColorUniform))
+        bgfx::destroy(ColorUniform);
+    
+    if (bgfx::isValid(TexUniform))
+        bgfx::destroy(TexUniform);
+    
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
 
-    GridUniform  = BGFX_INVALID_HANDLE;
+    GridUniform = BGFX_INVALID_HANDLE;
     ColorUniform = BGFX_INVALID_HANDLE;
-    TexUniform   = BGFX_INVALID_HANDLE;
-    Program      = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }

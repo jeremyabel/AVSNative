@@ -30,7 +30,23 @@ public:
     int GetImageH() const { return m_imgH; }
 
 protected:
-    const std::vector<Field>& Fields() const override;
+    const std::vector<Field>& Fields() const override
+    {
+        static const std::vector<std::string> kBlendNames = {
+            "Replace", "Additive", "Maximum", "50/50",
+            "Subtractive 1", "Subtractive 2", "Multiply",
+            "Adjustable", "XOR", "Minimum", "Ignore",
+        };
+        static const std::vector<Field> kFields = {
+            SelectI(&Picture2Config::BlendMode, "blendMode", "Blend Mode", kBlendNames),
+            RangeI(&Picture2Config::AdjustBlend, "adjustBlend", "Blend Amount", 0, 255),
+            ::Bool(&Picture2Config::Bilinear, "bilinear", "Bilinear"),
+            SelectI(&Picture2Config::OnBeatBlendMode, "onBeatBlendMode", "On-Beat Blend Mode", kBlendNames),
+            RangeI(&Picture2Config::OnBeatAdjustBlend, "onBeatAdjustBlend", "On-Beat Blend Amount", 0, 255),
+            ::Bool(&Picture2Config::OnBeatBilinear, "onBeatBilinear", "On-Beat Bilinear"),
+        };
+        return kFields;
+    }
     std::string EffectName() const override { return "Picture II"; }
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 

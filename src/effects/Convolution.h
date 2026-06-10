@@ -30,7 +30,17 @@ public:
     void           SetConfig(const nlohmann::json& cfg) override;
 
 protected:
-    const std::vector<Field>& Fields() const override;
+    const std::vector<Field>& Fields() const override
+    {
+        static const std::vector<Field> kFields = {
+            ::Bool(&ConvolutionConfig::Wrap,     "wrap",     "Wrap"),
+            ::Bool(&ConvolutionConfig::Absolute, "absolute", "Absolute"),
+            ::Bool(&ConvolutionConfig::TwoPass,  "twoPass",  "Two Pass"),
+            NumberI(&ConvolutionConfig::Bias,  "bias",  "Bias",  -100000, 100000),
+            NumberI(&ConvolutionConfig::Scale, "scale", "Scale", -100000, 100000),
+        };
+        return kFields;
+    }
     std::string EffectName() const override { return "Convolution Filter"; }
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 

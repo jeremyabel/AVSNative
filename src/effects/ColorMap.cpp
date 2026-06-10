@@ -9,26 +9,6 @@
 #include <algorithm>
 #include <cstdlib>
 
-// ── Field table (Maps + CurrentMap handled separately) ─────────────────────────
-
-const std::vector<Field>& ColorMap::Fields() const
-{
-    static const std::vector<Field> kFields = {
-        SelectI(&ColorMapConfig::ColorKey, "colorKey", "Key",
-                { "Red Channel", "Green Channel", "Blue Channel",
-                  "(R+G+B)/2", "Maximal Channel", "(R+G+B)/3" }),
-        SelectI(&ColorMapConfig::BlendMode, "blendmode", "Blend Mode",
-                { "Replace", "Additive", "Maximum", "Minimum", "50/50",
-                  "Subtractive 1", "Subtractive 2", "Multiply", "XOR", "Adjustable" }),
-        RangeI(&ColorMapConfig::AdjustableAlpha, "adjustableAlpha", "Alpha", 0, 255),
-        SelectI(&ColorMapConfig::MapCycleMode, "mapCycleMode", "Cycling",
-                { "None (single map)", "On-beat random", "On-beat sequential" }),
-        RangeI(&ColorMapConfig::MapCycleSpeed, "mapCycleSpeed", "Cycle Speed", 1, 64),
-        ::Bool(&ColorMapConfig::DontSkipFastBeats, "dontSkipFastBeats", "Don't Skip Fast Beats"),
-    };
-    return kFields;
-}
-
 // ── Baking ─────────────────────────────────────────────────────────────────────
 
 void ColorMap::BakeMap(int idx)

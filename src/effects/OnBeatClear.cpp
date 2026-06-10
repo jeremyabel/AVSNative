@@ -5,15 +5,13 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_onbeatclear.sc.bin.h"
 
-#include <algorithm>
-
 void OnBeatClear::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_onbeatclear_spv, sizeof(fs_onbeatclear_spv)));
-    Program = bgfx::createProgram(VS, FS, true);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_onbeatclear_spv, sizeof(fs_onbeatclear_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
 
-    TexUniform   = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
+    TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ColorUniform = bgfx::createUniform("u_obcColor", bgfx::UniformType::Vec4);
 }
 
@@ -26,14 +24,9 @@ void OnBeatClear::Render(const RenderContext& Context)
         {
             Cf = Df = 0;
 
-            const float color[4] = {
-                Cfg.Color[0] / 255.0f,
-                Cfg.Color[1] / 255.0f,
-                Cfg.Color[2] / 255.0f,
-                Cfg.Blend ? 1.0f : 0.0f
-            };
+            const float Color[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, Cfg.Blend ? 1.f : 0.f };
 
-            bgfx::setUniform(ColorUniform, color);
+            bgfx::setUniform(ColorUniform, Color);
             bgfx::setTexture(0, TexUniform, Context.InputTexture);
             bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
             bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -44,17 +37,25 @@ void OnBeatClear::Render(const RenderContext& Context)
     }
     else
     {
-        if (++Df >= Cfg.Nf) Df = 0;
+        if (++Df >= Cfg.Nf)
+        {
+            Df = 0;
+        }
     }
 }
 
 void OnBeatClear::Destroy()
 {
-    if (bgfx::isValid(ColorUniform)) bgfx::destroy(ColorUniform);
-    if (bgfx::isValid(TexUniform))   bgfx::destroy(TexUniform);
-    if (bgfx::isValid(Program))      bgfx::destroy(Program);
+    if (bgfx::isValid(ColorUniform))
+        bgfx::destroy(ColorUniform);
+    
+    if (bgfx::isValid(TexUniform))
+        bgfx::destroy(TexUniform);
+    
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
 
     ColorUniform = BGFX_INVALID_HANDLE;
-    TexUniform   = BGFX_INVALID_HANDLE;
-    Program      = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }

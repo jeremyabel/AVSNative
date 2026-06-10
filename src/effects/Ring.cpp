@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cmath>
 
-static constexpr float kTwoPiOver80 = 3.14159265358979323846f * 2.0f / 80.0f;
+#include "engine/MathConstants.h"
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
@@ -160,7 +160,7 @@ void Ring::Render(const RenderContext& Context)
 
     for (int q = 1; q <= 80; q++)
     {
-        a -= kTwoPiOver80;
+        a -= avs::TwoPi / 80.0f;
 
         // Mirrored audio: q=1..40 → bins 1..40, q=41..80 → bins 39..0
         const int idx = (q > 40) ? (80 - q) : q;

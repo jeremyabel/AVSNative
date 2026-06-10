@@ -29,7 +29,18 @@ public:
     int GetImageH() const { return m_imgH; }
 
 protected:
-    const std::vector<Field>& Fields() const override;
+    const std::vector<Field>& Fields() const override
+    {
+        static const std::vector<Field> kFields = {
+            SelectI(&PictureConfig::BlendMode, "blendMode", "Blend Mode",
+                    { "Replace", "Additive", "50/50" }),
+            ::Bool(&PictureConfig::OnBeatAdditive, "onBeatAdditive", "On-Beat Additive"),
+            RangeI(&PictureConfig::OnBeatDuration, "onBeatDuration", "On-Beat Duration", 0, 32),
+            SelectI(&PictureConfig::Fit, "fit", "Image Fit",
+                    { "Stretch", "Fit Width", "Fit Height" }),
+        };
+        return kFields;
+    }
     std::string EffectName() const override { return "Picture"; }
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 

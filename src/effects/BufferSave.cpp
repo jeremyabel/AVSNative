@@ -43,21 +43,21 @@ void BufferSave::SubmitBlend(uint8_t ViewId, bgfx::TextureHandle Base, bgfx::Tex
 void BufferSave::DoSave(const RenderContext& Context)
 {
     const FBOSlot& Scratch = Context.FboManager->GetScratch(Cfg.Slot);
-    const uint16_t W = Context.FboManager->GetWidth();
-    const uint16_t H = Context.FboManager->GetHeight();
+    const uint16_t Width = Context.FboManager->GetWidth();
+    const uint16_t Height = Context.FboManager->GetHeight();
 
     if (Cfg.BlendMode == 0)
     {
         // Replace: blit input → scratch (aux view executes after main, but both read from unmodified InputTexture so order doesn't matter)
-        const uint8_t AuxView = Context.ViewId + 1;
-        bgfx::setViewFrameBuffer(AuxView, Scratch.Fbo);
-        bgfx::setViewClear(AuxView, BGFX_CLEAR_NONE, 0);
-        bgfx::setViewRect(AuxView, 0, 0, W, H);
-        bgfx::touch(AuxView);
+        const uint8_t AuxViewId = Context.ViewId + 1;
+        bgfx::setViewFrameBuffer(AuxViewId, Scratch.Fbo);
+        bgfx::setViewClear(AuxViewId, BGFX_CLEAR_NONE, 0);
+        bgfx::setViewRect(AuxViewId, 0, 0, Width, Height);
+        bgfx::touch(AuxViewId);
 
         // ViewId → OutputFBO (pass-through); AuxView → Scratch.Fbo
         SubmitBlit(Context.ViewId, Context.InputTexture, Context.QuadVB);
-        SubmitBlit(AuxView, Context.InputTexture, Context.QuadVB);
+        SubmitBlit(AuxViewId, Context.InputTexture, Context.QuadVB);
     }
     else
     {
@@ -68,22 +68,22 @@ void BufferSave::DoSave(const RenderContext& Context)
         //   ViewId+0 → OutputFBO : blend (intermediate)
         //   ViewId+1 → Scratch   : blit GetNext().Texture (= intermediate)
         //   ViewId+2 → OutputFBO : blit InputTexture (pass-through, overwrites blend)
-        const uint8_t ScratchView = Context.ViewId + 1;
-        const uint8_t PassthroughView = Context.ViewId + 2;
+        const uint8_t ScratchViewId = Context.ViewId + 1;
+        const uint8_t PassthroughViewId = Context.ViewId + 2;
 
-        bgfx::setViewFrameBuffer(ScratchView, Scratch.Fbo);
-        bgfx::setViewClear(ScratchView, BGFX_CLEAR_NONE, 0);
-        bgfx::setViewRect(ScratchView, 0, 0, W, H);
-        bgfx::touch(ScratchView);
+        bgfx::setViewFrameBuffer(ScratchViewId, Scratch.Fbo);
+        bgfx::setViewClear(ScratchViewId, BGFX_CLEAR_NONE, 0);
+        bgfx::setViewRect(ScratchViewId, 0, 0, Width, Height);
+        bgfx::touch(ScratchViewId);
 
-        bgfx::setViewFrameBuffer(PassthroughView, Context.OutputFBO);
-        bgfx::setViewClear(PassthroughView, BGFX_CLEAR_NONE, 0);
-        bgfx::setViewRect(PassthroughView, 0, 0, W, H);
-        bgfx::touch(PassthroughView);
+        bgfx::setViewFrameBuffer(PassthroughViewId, Context.OutputFBO);
+        bgfx::setViewClear(PassthroughViewId, BGFX_CLEAR_NONE, 0);
+        bgfx::setViewRect(PassthroughViewId, 0, 0, Width, Height);
+        bgfx::touch(PassthroughViewId);
 
         SubmitBlend(Context.ViewId, Scratch.Texture, Context.InputTexture, Context.QuadVB);
-        SubmitBlit(ScratchView, Context.FboManager->GetNext().Texture, Context.QuadVB);
-        SubmitBlit(PassthroughView, Context.InputTexture, Context.QuadVB);
+        SubmitBlit(ScratchViewId, Context.FboManager->GetNext().Texture, Context.QuadVB);
+        SubmitBlit(PassthroughViewId, Context.InputTexture, Context.QuadVB);
     }
 
     Context.FboManager->Swap();

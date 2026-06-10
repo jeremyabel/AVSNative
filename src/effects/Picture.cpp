@@ -35,20 +35,6 @@ static std::vector<uint8_t> Base64Decode(const std::string& b64)
     return out;
 }
 
-// ── Field table ───────────────────────────────────────────────────────────────
-
-const std::vector<Field>& Picture::Fields() const
-{
-    static const std::vector<Field> kFields = {
-        SelectI(&PictureConfig::BlendMode, "blendMode", "Blend Mode",
-                { "Replace", "Additive", "50/50" }),
-        ::Bool(&PictureConfig::OnBeatAdditive, "onBeatAdditive", "On-Beat Additive"),
-        RangeI(&PictureConfig::OnBeatDuration, "onBeatDuration", "On-Beat Duration", 0, 32),
-        SelectI(&PictureConfig::Fit, "fit", "Image Fit",
-                { "Stretch", "Fit Width", "Fit Height" }),
-    };
-    return kFields;
-}
 
 // ── GetConfig / SetConfig ─────────────────────────────────────────────────────
 

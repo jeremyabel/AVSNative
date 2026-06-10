@@ -13,7 +13,7 @@ void SetRenderMode::Render(const RenderContext& Context)
     {
         *Context.LineBlendMode =
             ((uint32_t)(Cfg.LineWidth & 0xFF) << 16) |
-            ((uint32_t)(Cfg.Alpha     & 0xFF) <<  8) |
+            ((uint32_t)(Cfg.Alpha & 0xFF) <<  8) |
              (uint32_t)(Cfg.BlendMode & 0xFF);
     }
 }

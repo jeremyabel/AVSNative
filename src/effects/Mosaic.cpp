@@ -5,6 +5,9 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_mosaic.sc.bin.h"
 
+#include <algorithm>
+#include <cstdlib>
+
 void Mosaic::Init()
 {
     const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -12,15 +15,41 @@ void Mosaic::Init()
     Program       = bgfx::createProgram(vs, fs, true);
     TexUniform    = bgfx::createUniform("s_texColor",    bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_mosaicParams", bgfx::UniformType::Vec4);
+
+    m_curSize = Cfg.Size;
 }
 
 void Mosaic::Render(const RenderContext& Context)
 {
+    // ── On-beat size selection + cooldown decay (ported from e_mosaic.cpp). ──────
+    if (Cfg.OnBeatSizeChange && Context.IsBeat())
+    {
+        m_curSize  = Cfg.OnBeatSize;
+        m_cooldown = Cfg.OnBeatDuration;
+    }
+    else if (m_cooldown == 0)
+    {
+        m_curSize = Cfg.Size;
+    }
+
+    if (m_cooldown > 0)
+    {
+        m_cooldown--;
+        if (m_cooldown > 0)
+        {
+            const int dur = std::max(1, Cfg.OnBeatDuration);
+            const int a   = std::abs(Cfg.Size - Cfg.OnBeatSize) / dur;
+            m_curSize += a * (Cfg.OnBeatSize > Cfg.Size ? -1 : 1);
+        }
+    }
+
+    const int cs = std::clamp(m_curSize, 1, 100);
+
     const float params[4] = {
-        (float)Cfg.BlockSize,
+        (float)cs,
         (float)Context.Width,
         (float)Context.Height,
-        0.0f
+        (float)Cfg.Blend,
     };
     bgfx::setUniform(ParamsUniform, params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);

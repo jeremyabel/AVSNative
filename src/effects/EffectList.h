@@ -32,7 +32,29 @@ public:
     uint8_t ExpectedViewCount() const override;
 
 protected:
-    const std::vector<Field>& Fields() const override;
+    const std::vector<Field>& Fields() const override
+    {
+        static const std::vector<std::string> kBlendOpts = {
+            "Ignore", "Replace", "50/50", "Maximum", "Additive",
+            "Subtractive 1", "Subtractive 2", "Every Other Line", "Every Other Pixel",
+            "XOR", "Adjustable", "Multiply", "Buffer", "Minimum"
+        };
+        static const std::vector<std::string> kSlotOpts = { "0","1","2","3","4","5","6","7" };
+
+        static const std::vector<Field> f = {
+            Bool(&EffectListConfig::OnBeat, "onBeat", "Enable on Beat"),
+            NumberI(&EffectListConfig::OnBeatFrames, "onBeatFrames", "For N Frames", 0, 64),
+            Bool(&EffectListConfig::ClearFrame, "clearFrame", "Clear Frame"),
+            SelectI(&EffectListConfig::InBlend, "inBlend", "Input Blend", kBlendOpts),
+            SelectI(&EffectListConfig::InBlendBuf, "inBlendBuf", "Input Buffer", kSlotOpts),
+            Bool(&EffectListConfig::InBlendBufInvert, "inBlendBufInvert", "Invert Input Mask"),
+            SelectI(&EffectListConfig::OutBlend, "outBlend", "Output Blend", kBlendOpts),
+            SelectI(&EffectListConfig::OutBlendBuf, "outBlendBuf", "Output Buffer", kSlotOpts),
+            Bool(&EffectListConfig::OutBlendBufInvert, "outBlendBufInvert", "Invert Output Mask"),
+            Range(&EffectListConfig::BlendAmt, "blendAmt", "Blend Amount", 0.0f, 1.0f, 0.01f),
+        };
+        return f;
+    }
     std::string EffectName() const override { return "Effect List"; }
 
 private:

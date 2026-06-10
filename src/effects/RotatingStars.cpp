@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cmath>
 
-static constexpr float k4PiOver5 = 3.14159265358979323846f * 4.0f / 5.0f;
+#include "engine/MathConstants.h"
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
@@ -140,13 +140,13 @@ void RotatingStars::Render(const RenderContext& Context)
         float angle = -m_r;
         float lx = std::trunc(std::cos(angle) * vw) + cx;
         float ly = std::trunc(std::sin(angle) * vh) + cy;
-        angle += k4PiOver5;
+        angle += avs::Pi * 4.0f / 5.0f;
 
         for (int t = 0; t < 5; t++)
         {
             const float nx = std::trunc(std::cos(angle) * vw) + cx;
             const float ny = std::trunc(std::sin(angle) * vh) + cy;
-            angle += k4PiOver5;
+            angle += avs::Pi * 4.0f / 5.0f;
 
             // Only draw if at least one endpoint is on screen (matches JS skip logic).
             const bool lOn = (lx >= 0 && lx < W && ly >= 0 && ly < H);

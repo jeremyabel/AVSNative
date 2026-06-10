@@ -35,32 +35,6 @@ static std::vector<uint8_t> Base64Decode(const std::string& b64)
     return out;
 }
 
-// ── Field table ───────────────────────────────────────────────────────────────
-
-static const char* kBlendNames[] = {
-    "Replace", "Additive", "Maximum", "50/50",
-    "Subtractive 1", "Subtractive 2", "Multiply",
-    "Adjustable", "XOR", "Minimum", "Ignore",
-};
-
-const std::vector<Field>& Picture2::Fields() const
-{
-    static const std::vector<Field> kFields = {
-        SelectI(&Picture2Config::BlendMode, "blendMode", "Blend Mode",
-                { kBlendNames[0], kBlendNames[1], kBlendNames[2], kBlendNames[3],
-                  kBlendNames[4], kBlendNames[5], kBlendNames[6], kBlendNames[7],
-                  kBlendNames[8], kBlendNames[9], kBlendNames[10] }),
-        RangeI(&Picture2Config::AdjustBlend, "adjustBlend", "Blend Amount", 0, 255),
-        ::Bool(&Picture2Config::Bilinear, "bilinear", "Bilinear"),
-        SelectI(&Picture2Config::OnBeatBlendMode, "onBeatBlendMode", "On-Beat Blend Mode",
-                { kBlendNames[0], kBlendNames[1], kBlendNames[2], kBlendNames[3],
-                  kBlendNames[4], kBlendNames[5], kBlendNames[6], kBlendNames[7],
-                  kBlendNames[8], kBlendNames[9], kBlendNames[10] }),
-        RangeI(&Picture2Config::OnBeatAdjustBlend, "onBeatAdjustBlend", "On-Beat Blend Amount", 0, 255),
-        ::Bool(&Picture2Config::OnBeatBilinear, "onBeatBilinear", "On-Beat Bilinear"),
-    };
-    return kFields;
-}
 
 // ── GetConfig / SetConfig ─────────────────────────────────────────────────────
 

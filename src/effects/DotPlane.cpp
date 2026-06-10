@@ -1,4 +1,5 @@
 #include "DotPlane.h"
+#include "engine/MathConstants.h"
 
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
@@ -10,13 +11,12 @@
 #include <cmath>
 #include <cstring>
 
-static constexpr float kPi = 3.14159265358979323846f;
 
 // ── Matrix helpers (ported from matrix.cpp). ──────────────────────────────────
 
 static void MatRot(float* m, int axis, float deg)
 {
-    const float r = deg * kPi / 180.0f;
+    const float r = deg * avs::Pi / 180.0f;
     std::fill(m, m + 16, 0.0f);
     m[(axis - 1) * 4 + (axis - 1)] = 1.0f;
     m[15] = 1.0f;

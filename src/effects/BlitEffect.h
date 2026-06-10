@@ -4,20 +4,22 @@
 
 struct BlitEffectConfig
 {
-    float Zoom     = 1.05f;
-    float Rotation = 0.0f;  // radians added per frame
-    float CenterX  = 0.5f;
-    float CenterY  = 0.5f;
+    float Zoom = 1.05f;
+    float Rotation = 0.0f;
+    float CenterX = 0.5f;
+    float CenterY = 0.5f;
 };
 
 class BlitEffect : public ReflectedEffect<BlitEffectConfig>
 {
 public:
+    
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
 protected:
+    
     const std::vector<Field>& Fields() const override
     {
         static const std::vector<Field> f = {
@@ -31,9 +33,10 @@ protected:
     std::string EffectName() const override { return "Blit"; }
 
 private:
-    float m_angle = 0.0f;    // accumulated rotation, runtime only
+    
+    float Angle = 0.f;
 
-    bgfx::ProgramHandle Program       = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform    = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle ParamsUniform = BGFX_INVALID_HANDLE;
 };

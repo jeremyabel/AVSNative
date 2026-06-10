@@ -1,4 +1,5 @@
 #include "BassSpin.h"
+#include "engine/MathConstants.h"
 
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
@@ -12,7 +13,6 @@
 #include <algorithm>
 #include <cmath>
 
-static constexpr float kPi = 3.14159265358979323846f;
 
 void BassSpin::Init()
 {
@@ -97,7 +97,7 @@ void BassSpin::Render(const RenderContext& Context)
 
             // Exponential velocity smoothing
             V[tri] = 0.7f * float(std::max(a - 104, 12)) / 96.0f + 0.3f * V[tri];
-            Rv[tri] += kPi / 6.0f * V[tri] * Dir[tri];
+            Rv[tri] += avs::Pi / 6.0f * V[tri] * Dir[tri];
 
             // Arm endpoint (truncated to integer pixels, matching Math.trunc)
             const float sizeF = float(screenSize) * float(a) / 256.0f;

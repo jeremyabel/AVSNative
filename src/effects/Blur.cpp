@@ -5,27 +5,28 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_blur.sc.bin.h"
 
-static constexpr uint64_t kScratchFlags =
-    BGFX_TEXTURE_RT |
-    BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
-
 void Blur::Init()
 {
-    const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_blur_spv,       sizeof(fs_blur_spv)));
-    Program       = bgfx::createProgram(vs, fs, true);
-    TexUniform    = bgfx::createUniform("s_texColor",  bgfx::UniformType::Sampler);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_blur_spv, sizeof(fs_blur_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
+    
+    TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_blurParams", bgfx::UniformType::Vec4);
 }
 
 void Blur::EnsureScratch(uint16_t Width, uint16_t Height)
 {
     if (ScratchW == Width && ScratchH == Height)
+    {
         return;
+    }
+    
     DestroyScratch();
-    ScratchFBO = bgfx::createFrameBuffer(Width, Height, bgfx::TextureFormat::RGBA8, kScratchFlags);
-    ScratchW   = Width;
-    ScratchH   = Height;
+    
+    ScratchFBO = bgfx::createFrameBuffer(Width, Height, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+    ScratchW = Width;
+    ScratchH = Height;
 }
 
 void Blur::DestroyScratch()
@@ -35,42 +36,41 @@ void Blur::DestroyScratch()
         bgfx::destroy(ScratchFBO);
         ScratchFBO = BGFX_INVALID_HANDLE;
     }
+    
     ScratchW = ScratchH = 0;
 }
 
 void Blur::Render(const RenderContext& Context)
 {
-    const uint16_t W = (uint16_t)Context.Width;
-    const uint16_t H = (uint16_t)Context.Height;
-    EnsureScratch(W, H);
+    const uint16_t Width = (uint16_t)Context.Width;
+    const uint16_t Height = (uint16_t)Context.Height;
+    EnsureScratch(Width, Height);
 
-    const int radius = (Cfg.Intensity == 3) ? 4 : (Cfg.Intensity == 2) ? 2 : 1;
+    const float Radius = (Cfg.Intensity == 3) ? 4.f : (Cfg.Intensity == 2) ? 2.f : 1.f;
+    const float HorizParams[4] = { 1.f / (float)Width, 0.f, Radius, 0.f };
+    const float VertParams[4] = { 0.f, 1.f / (float)Height, Radius, 0.f };
 
-    // ── View N : horizontal pass — InputTexture → ScratchFBO ─────────────────
-    const uint8_t hView = Context.ViewId;
-    bgfx::setViewFrameBuffer(hView, ScratchFBO);
-    bgfx::setViewRect(hView, 0, 0, W, H);
-    bgfx::setViewClear(hView, BGFX_CLEAR_NONE);
-
-    float hParams[4] = { 1.0f / W, 0.0f, (float)radius, 0.0f };
-    bgfx::setUniform(ParamsUniform, hParams);
+    // Horizontal pass: InputTexture to ScratchFBO
+    const uint8_t HorizViewId = Context.ViewId;
+    bgfx::setViewFrameBuffer(HorizViewId, ScratchFBO);
+    bgfx::setViewRect(HorizViewId, 0, 0, Width, Height);
+    bgfx::setViewClear(HorizViewId, BGFX_CLEAR_NONE);
+    bgfx::setUniform(ParamsUniform, HorizParams);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(hView, Program);
+    bgfx::submit(HorizViewId, Program);
 
-    // ── View N+1 : vertical pass — ScratchFBO → OutputFBO ───────────────────
-    const uint8_t vView = Context.ViewId + 1;
-    bgfx::setViewFrameBuffer(vView, Context.OutputFBO);
-    bgfx::setViewRect(vView, 0, 0, W, H);
-    bgfx::setViewClear(vView, BGFX_CLEAR_NONE);
-
-    float vParams[4] = { 0.0f, 1.0f / H, (float)radius, 0.0f };
-    bgfx::setUniform(ParamsUniform, vParams);
+    // Vertical pass: ScratchFBO to OutputFBO
+    const uint8_t VertViewId = Context.ViewId + 1;
+    bgfx::setViewFrameBuffer(VertViewId, Context.OutputFBO);
+    bgfx::setViewRect(VertViewId, 0, 0, Width, Height);
+    bgfx::setViewClear(VertViewId, BGFX_CLEAR_NONE);
+    bgfx::setUniform(ParamsUniform, VertParams);
     bgfx::setTexture(0, TexUniform, bgfx::getTexture(ScratchFBO));
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(vView, Program);
+    bgfx::submit(VertViewId, Program);
 
     Context.FboManager->Swap();
 }
@@ -79,11 +79,16 @@ void Blur::Destroy()
 {
     DestroyScratch();
 
-    if (bgfx::isValid(ParamsUniform)) bgfx::destroy(ParamsUniform);
-    if (bgfx::isValid(TexUniform))    bgfx::destroy(TexUniform);
-    if (bgfx::isValid(Program))       bgfx::destroy(Program);
+    if (bgfx::isValid(ParamsUniform))
+        bgfx::destroy(ParamsUniform);
+    
+    if (bgfx::isValid(TexUniform))
+        bgfx::destroy(TexUniform);
+    
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
 
     ParamsUniform = BGFX_INVALID_HANDLE;
-    TexUniform    = BGFX_INVALID_HANDLE;
-    Program       = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }

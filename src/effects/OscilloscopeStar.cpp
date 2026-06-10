@@ -12,8 +12,8 @@
 #include <algorithm>
 #include <cmath>
 
-static constexpr float kTwoPiOver5  = 3.14159265358979323846f * 2.0f / 5.0f;
-static constexpr float kTwoPi       = 3.14159265358979323846f * 2.0f;
+#include "engine/MathConstants.h"
+
 static constexpr float kDfactorStart = 1.0f / 1024.0f;
 static constexpr float kDfactorStep  = (kDfactorStart - 1.0f / 128.0f) / 64.0f;
 
@@ -136,7 +136,7 @@ void OscilloscopeStar::Render(const RenderContext& Context)
     int ii = 0;
     for (int q = 0; q < 5; q++)
     {
-        const float angle = m_currentRotation + q * kTwoPiOver5;
+        const float angle = m_currentRotation + q * (avs::TwoPi / 5.0f);
         const float cosA  = std::cos(angle);
         const float sinA  = std::sin(angle);
 
@@ -170,8 +170,8 @@ void OscilloscopeStar::Render(const RenderContext& Context)
 
     // Advance rotation, wrapping in [0, 2π)
     m_currentRotation += 0.01f * (float)Cfg.Rotation;
-    while (m_currentRotation >= kTwoPi) m_currentRotation -= kTwoPi;
-    while (m_currentRotation <  0.0f)   m_currentRotation += kTwoPi;
+    while (m_currentRotation >= avs::TwoPi) m_currentRotation -= avs::TwoPi;
+    while (m_currentRotation <  0.0f)       m_currentRotation += avs::TwoPi;
 
     nvgEndFrame(m_nvg);
     nvgluBindFramebuffer(nullptr);

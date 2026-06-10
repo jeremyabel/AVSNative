@@ -17,12 +17,7 @@ void Grain::Init()
 
 void Grain::Render(const RenderContext& Context)
 {
-    const float Params[4] = {
-        (float)Cfg.Amount,
-        (float)Cfg.BlendMode,
-        Cfg.IsStatic ? 1.f : 0.f,
-        (float)(Context.Frame & 0xFFFF),
-    };
+    const float Params[4] = { (float)Cfg.Amount, (float)Cfg.BlendMode, Cfg.IsStatic ? 1.f : 0.f, (float)(Context.Frame & 0xFFFF) };
 
     bgfx::setUniform(ParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);

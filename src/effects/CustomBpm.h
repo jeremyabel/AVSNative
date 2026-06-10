@@ -38,7 +38,18 @@ public:
     int OutMeterSeg() const { return m_outSeg; }
 
 protected:
-    const std::vector<Field>& Fields() const override;
+    const std::vector<Field>& Fields() const override
+    {
+        static const std::vector<Field> kFields = {
+            ::Bool(&CustomBpmConfig::Arbitrary, "arbitrary", "Arbitrary BPM"),
+            ::Bool(&CustomBpmConfig::Skip,      "skip",      "Skip Beats"),
+            ::Bool(&CustomBpmConfig::Invert,    "invert",    "Invert Beat"),
+            RangeI(&CustomBpmConfig::ArbVal,    "arbVal",    "Arbitrary BPM", 6, 300),
+            RangeI(&CustomBpmConfig::SkipVal,   "skipVal",   "Skip",          1, 16),
+            RangeI(&CustomBpmConfig::SkipFirst, "skipfirst", "Skip First N",  0, 64),
+        };
+        return kFields;
+    }
     std::string EffectName() const override { return "Custom BPM"; }
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 

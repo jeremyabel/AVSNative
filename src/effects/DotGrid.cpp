@@ -9,14 +9,14 @@
 
 void DotGrid::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_dotgrid_spv, sizeof(fs_dotgrid_spv)));
-    Program = bgfx::createProgram(VS, FS, true);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_dotgrid_spv, sizeof(fs_dotgrid_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
 
-    TexUniform   = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
-    ColorUniform = bgfx::createUniform("u_dgColor",  bgfx::UniformType::Vec4);
-    GridUniform  = bgfx::createUniform("u_dgGrid",   bgfx::UniformType::Vec4);
-    SizeUniform  = bgfx::createUniform("u_dgSize",   bgfx::UniformType::Vec4);
+    TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
+    ColorUniform = bgfx::createUniform("u_dgColor", bgfx::UniformType::Vec4);
+    GridUniform = bgfx::createUniform("u_dgGrid", bgfx::UniformType::Vec4);
+    SizeUniform = bgfx::createUniform("u_dgSize", bgfx::UniformType::Vec4);
 }
 
 void DotGrid::Render(const RenderContext& Context)
@@ -46,36 +46,44 @@ void DotGrid::Render(const RenderContext& Context)
     const int sx      = (sxRaw + spacing) % spacing;  // ensure non-negative
     const int sy      = (syRaw + spacing) % spacing;
 
-    const float color[4] = { cr / 255.0f, cg / 255.0f, cb / 255.0f, float(Cfg.BlendMode) };
-    const float grid[4]  = { float(spacing), float(sx), float(sy), 0.0f };
-    const float size[4]  = { float(Context.Width), float(Context.Height), 0.0f, 0.0f };
+    const float Color[4] = { cr / 255.0f, cg / 255.0f, cb / 255.0f, float(Cfg.BlendMode) };
+    const float Grid[4]  = { float(spacing), float(sx), float(sy), 0.0f };
+    const float Size[4]  = { float(Context.Width), float(Context.Height), 0.0f, 0.0f };
 
-    bgfx::setUniform(ColorUniform, color);
-    bgfx::setUniform(GridUniform,  grid);
-    bgfx::setUniform(SizeUniform,  size);
+    bgfx::setUniform(ColorUniform, Color);
+    bgfx::setUniform(GridUniform, Grid);
+    bgfx::setUniform(SizeUniform, Size);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
     bgfx::submit(Context.ViewId, Program);
+    
+    Context.FboManager->Swap();
 
-    // Advance scroll after rendering (matches JS order)
     Xp += Cfg.SpeedX;
     Yp += Cfg.SpeedY;
-
-    Context.FboManager->Swap();
 }
 
 void DotGrid::Destroy()
 {
-    if (bgfx::isValid(SizeUniform))  bgfx::destroy(SizeUniform);
-    if (bgfx::isValid(GridUniform))  bgfx::destroy(GridUniform);
-    if (bgfx::isValid(ColorUniform)) bgfx::destroy(ColorUniform);
-    if (bgfx::isValid(TexUniform))   bgfx::destroy(TexUniform);
-    if (bgfx::isValid(Program))      bgfx::destroy(Program);
+    if (bgfx::isValid(SizeUniform))
+        bgfx::destroy(SizeUniform);
+    
+    if (bgfx::isValid(GridUniform))
+        bgfx::destroy(GridUniform);
+    
+    if (bgfx::isValid(ColorUniform))
+        bgfx::destroy(ColorUniform);
+    
+    if (bgfx::isValid(TexUniform))
+        bgfx::destroy(TexUniform);
+    
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
 
-    SizeUniform  = BGFX_INVALID_HANDLE;
-    GridUniform  = BGFX_INVALID_HANDLE;
+    SizeUniform = BGFX_INVALID_HANDLE;
+    GridUniform = BGFX_INVALID_HANDLE;
     ColorUniform = BGFX_INVALID_HANDLE;
-    TexUniform   = BGFX_INVALID_HANDLE;
-    Program      = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }

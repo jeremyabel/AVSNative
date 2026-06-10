@@ -43,7 +43,19 @@ public:
     int GetImageH() const { return m_imgH; }
 
 protected:
-    const std::vector<Field>& Fields() const override;
+    const std::vector<Field>& Fields() const override
+    {
+        static const std::vector<Field> kFields = {
+            ::Bool(&Texer2Config::Resize,    "resize",    "Resizing"),
+            ::Bool(&Texer2Config::Wrap,      "wrap",      "Wrap Around"),
+            ::Bool(&Texer2Config::Colorize,  "colorize",  "Color Filtering"),
+            Lua  (&Texer2Config::InitCode,   "initCode",  "Init"),
+            Lua  (&Texer2Config::FrameCode,  "frameCode", "Frame"),
+            Lua  (&Texer2Config::BeatCode,   "beatCode",  "Beat"),
+            Lua  (&Texer2Config::PointCode,  "pointCode", "Point"),
+        };
+        return kFields;
+    }
     std::string EffectName() const override { return "Texer II"; }
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 

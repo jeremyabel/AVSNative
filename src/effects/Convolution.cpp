@@ -8,20 +8,6 @@
 
 #include <algorithm>
 
-// ── Field table (kernel handled separately in Get/SetConfig) ───────────────────
-
-const std::vector<Field>& Convolution::Fields() const
-{
-    static const std::vector<Field> kFields = {
-        ::Bool(&ConvolutionConfig::Wrap,     "wrap",     "Wrap"),
-        ::Bool(&ConvolutionConfig::Absolute, "absolute", "Absolute"),
-        ::Bool(&ConvolutionConfig::TwoPass,  "twoPass",  "Two Pass"),
-        NumberI(&ConvolutionConfig::Bias,  "bias",  "Bias",  -100000, 100000),
-        NumberI(&ConvolutionConfig::Scale, "scale", "Scale", -100000, 100000),
-    };
-    return kFields;
-}
-
 // ── GetConfig / SetConfig ─────────────────────────────────────────────────────
 
 nlohmann::json Convolution::GetConfig() const

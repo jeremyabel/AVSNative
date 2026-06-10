@@ -7,8 +7,8 @@
 
 void Clear::Init()
 {
-    bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_clear_spv, sizeof(fs_clear_spv)));
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_clear_spv, sizeof(fs_clear_spv)));
     Program = bgfx::createProgram(VertShader, FragShader, true);
 
     ColorUniform = bgfx::createUniform("u_clearColor", bgfx::UniformType::Vec4);

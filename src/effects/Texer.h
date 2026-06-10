@@ -36,7 +36,15 @@ public:
     int GetImageH() const { return m_imgH; }
 
 protected:
-    const std::vector<Field>& Fields() const override;
+    const std::vector<Field>& Fields() const override
+    {
+        static const std::vector<Field> kFields = {
+            ::Bool(&TexerConfig::AddToInput,   "addToInput",   "Add to Input"),
+            ::Bool(&TexerConfig::Colorize,     "colorize",     "Colorize"),
+            RangeI(&TexerConfig::NumParticles, "numParticles", "Particles", 1, 1024),
+        };
+        return kFields;
+    }
     std::string EffectName() const override { return "Texer"; }
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 

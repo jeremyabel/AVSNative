@@ -61,22 +61,6 @@ static std::string SubstitutePi(std::string code)
     return code;
 }
 
-// ── Field table ───────────────────────────────────────────────────────────────
-
-const std::vector<Field>& Texer2::Fields() const
-{
-    static const std::vector<Field> kFields = {
-        ::Bool(&Texer2Config::Resize,    "resize",    "Resizing"),
-        ::Bool(&Texer2Config::Wrap,      "wrap",      "Wrap Around"),
-        ::Bool(&Texer2Config::Colorize,  "colorize",  "Color Filtering"),
-        Lua  (&Texer2Config::InitCode,   "initCode",  "Init"),
-        Lua  (&Texer2Config::FrameCode,  "frameCode", "Frame"),
-        Lua  (&Texer2Config::BeatCode,   "beatCode",  "Beat"),
-        Lua  (&Texer2Config::PointCode,  "pointCode", "Point"),
-    };
-    return kFields;
-}
-
 // ── GetConfig / SetConfig ─────────────────────────────────────────────────────
 
 nlohmann::json Texer2::GetConfig() const

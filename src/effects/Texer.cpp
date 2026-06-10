@@ -36,18 +36,6 @@ static std::vector<uint8_t> Base64Decode(const std::string& b64)
     return out;
 }
 
-// ── Field table ───────────────────────────────────────────────────────────────
-
-const std::vector<Field>& Texer::Fields() const
-{
-    static const std::vector<Field> kFields = {
-        ::Bool(&TexerConfig::AddToInput,   "addToInput",   "Add to Input"),
-        ::Bool(&TexerConfig::Colorize,     "colorize",     "Colorize"),
-        RangeI(&TexerConfig::NumParticles, "numParticles", "Particles", 1, 1024),
-    };
-    return kFields;
-}
-
 // ── GetConfig / SetConfig ─────────────────────────────────────────────────────
 
 nlohmann::json Texer::GetConfig() const

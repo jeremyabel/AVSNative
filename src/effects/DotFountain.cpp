@@ -1,4 +1,5 @@
 #include "DotFountain.h"
+#include "engine/MathConstants.h"
 
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
@@ -10,13 +11,12 @@
 #include <cmath>
 #include <cstring>
 
-static constexpr float kPi = 3.14159265358979323846f;
 
 // ── Matrix helpers (exact port of matrix.cpp; column-major-ish flat 4x4 as in JS) ──
 
 static void MatRot(float* m, int axis, float deg)
 {
-    const float r = deg * kPi / 180.0f;
+    const float r = deg * avs::Pi / 180.0f;
     std::fill(m, m + 16, 0.0f);
     m[(axis - 1) * 4 + (axis - 1)] = 1.0f;
     m[15] = 1.0f;
@@ -165,7 +165,7 @@ void DotFountain::Render(const RenderContext& Context)
         m_colG[a] = m_mapG[colorIdx];
         m_colB[a] = m_mapB[colorIdx];
 
-        const float angle = a * kPi * 2.0f / NUM_ANG;
+        const float angle = a * avs::Pi * 2.0f / NUM_ANG;
         m_ax[a] = std::sin(angle);
         m_ay[a] = std::cos(angle);
     }

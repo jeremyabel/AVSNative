@@ -31,7 +31,7 @@ void AddBorders::Render(const RenderContext& Context)
     const float Color[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, 0.f };
 
     bgfx::setUniform(BorderParamsUniform, Params);
-    bgfx::setUniform(BorderColorUniform,  Color);
+    bgfx::setUniform(BorderColorUniform, Color);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);

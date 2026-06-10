@@ -18,6 +18,7 @@ void ColorClip::Init()
 void ColorClip::Render(const RenderContext& Context)
 {
     const float Clip[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, 0.f };
+    
     bgfx::setUniform(ColorUniform, Clip);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);

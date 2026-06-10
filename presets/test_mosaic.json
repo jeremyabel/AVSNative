@@ -1,0 +1,4 @@
+{ "effects": [
+  { "type": "MovingParticle", "enabled": true, "config": { "color": [0,200,255], "distance": 13, "size": 33, "blendMode": 1 } },
+  { "type": "Mosaic", "enabled": true, "config": { "size": 40, "onBeatSizeChange": true, "onBeatSize": 8, "onBeatDuration": 20, "blend": 0 } }
+] }

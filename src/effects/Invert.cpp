@@ -7,9 +7,9 @@
 
 void Invert::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_invert_spv, sizeof(fs_invert_spv)));
-    Program = bgfx::createProgram(VS, FS, true);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_invert_spv, sizeof(fs_invert_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
 
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 }
@@ -26,9 +26,12 @@ void Invert::Render(const RenderContext& Context)
 
 void Invert::Destroy()
 {
-    if (bgfx::isValid(TexUniform)) bgfx::destroy(TexUniform);
-    if (bgfx::isValid(Program))    bgfx::destroy(Program);
+    if (bgfx::isValid(TexUniform))
+        bgfx::destroy(TexUniform);
+    
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
 
     TexUniform = BGFX_INVALID_HANDLE;
-    Program    = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }

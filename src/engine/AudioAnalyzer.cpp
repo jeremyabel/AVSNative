@@ -1,4 +1,5 @@
 #include "engine/AudioAnalyzer.h"
+#include "engine/MathConstants.h"
 
 #include <kiss_fftr.h>
 #include <SDL3/SDL.h>
@@ -11,7 +12,6 @@
 #include <cmath>
 #include <cstring>
 
-static constexpr float kPi = 3.14159265358979323846f;
 
 // ─── Init / Shutdown ─────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ bool AudioAnalyzer::Init()
 
     // Pre-compute Hann window.
     for (int i = 0; i < kAudioFFTSize; i++)
-        m_window[i] = 0.5f * (1.0f - cosf(2.0f * kPi * i / (kAudioFFTSize - 1)));
+        m_window[i] = 0.5f * (1.0f - cosf(2.0f * avs::Pi * i / (kAudioFFTSize - 1)));
 
     // Allocate kissfft real-FFT plan.
     m_fftCfg = kiss_fftr_alloc(kAudioFFTSize, 0, nullptr, nullptr);
