@@ -51,8 +51,12 @@ void App::Run(const char* PresetPath)
 {
     Init(PresetPath);
 
+    constexpr Uint64 kFrameTargetNs = 1'000'000'000ULL / 60; // 60 fps cap
+
     while (m_running)
     {
+        const Uint64 frameStart = SDL_GetTicksNS();
+
         ProcessEvents();
 
         if (m_pendingLoad)
@@ -77,7 +81,18 @@ void App::Run(const char* PresetPath)
             std::string path = FileDialog::Save("Save Preset",
                 m_presetPath.empty() ? nullptr : m_presetPath.c_str());
             if (!path.empty() && Preset::Save(path.c_str(), m_engine))
+            {
                 m_presetPath = path;
+                if (m_pendingNewAfterSave)
+                {
+                    m_pendingNewAfterSave = false;
+                    ClearPreset();
+                }
+            }
+            else
+            {
+                m_pendingNewAfterSave = false; // dialog cancelled — abort New
+            }
         }
 
         if (m_pendingAudioFile)
@@ -98,6 +113,13 @@ void App::Run(const char* PresetPath)
         m_engine.Tick();
         RenderUI();
         bgfx::frame();
+
+        if (m_limitFramerate)
+        {
+            const Uint64 elapsed = SDL_GetTicksNS() - frameStart;
+            if (elapsed < kFrameTargetNs)
+                SDL_DelayNS(kFrameTargetNs - elapsed);
+        }
     }
 
     Shutdown();
@@ -242,6 +264,16 @@ void App::Shutdown()
     SDL_Quit();
 }
 
+// ─── ClearPreset ─────────────────────────────────────────────────────────────
+
+void App::ClearPreset()
+{
+    m_engine.GetChain().Clear();
+    m_presetPath     = "";
+    m_selectedChain  = nullptr;
+    m_selectedEffect = -1;
+}
+
 // ─── Resize helpers ───────────────────────────────────────────────────────────
 
 void App::ResizeOutput(int32_t Width, int32_t Height)
@@ -333,6 +365,9 @@ void App::RenderUI()
     {
         if (ImGui::BeginMenu("File"))
         {
+            if (ImGui::MenuItem("New..."))
+                m_showNewConfirm = true;
+
             if (ImGui::MenuItem("Load..."))
                 m_pendingLoad = true;
 
@@ -382,6 +417,58 @@ void App::RenderUI()
 
     if (m_showOptions)
         RenderOptionsWindow();
+
+    // ── New-preset confirmation modal ─────────────────────────────────────────
+    // OpenPopup must be called in the same window context as BeginPopupModal, so
+    // we use a flag set by the menu item and call OpenPopup here in the main frame.
+    if (m_showNewConfirm)
+    {
+        m_showNewConfirm = false;
+        ImGui::OpenPopup("##new_confirm");
+    }
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
+                            ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("##new_confirm", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize |
+                               ImGuiWindowFlags_NoTitleBar))
+    {
+        ImGui::Text("Create a new preset?");
+        ImGui::Text("Unsaved changes will be lost.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // "Save" — write to the known path immediately, or open Save As if no path.
+        if (ImGui::Button("Save"))
+        {
+            if (!m_presetPath.empty())
+            {
+                Preset::Save(m_presetPath.c_str(), m_engine);
+                ClearPreset();
+            }
+            else
+            {
+                // No path yet: open the Save As dialog next loop iteration,
+                // then clear once the dialog confirms a destination.
+                m_pendingSave         = true;
+                m_pendingNewAfterSave = true;
+            }
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Don't Save"))
+        {
+            ClearPreset();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+            ImGui::CloseCurrentPopup();
+
+        ImGui::EndPopup();
+    }
 
     ChainPanel::Render(m_engine, m_engine.GetChain(), m_selectedChain, m_selectedEffect);
 
@@ -468,6 +555,9 @@ void App::RenderOptionsWindow()
         ImGui::End();
         return;
     }
+
+    ImGui::SeparatorText("Performance");
+    ImGui::Checkbox("Limit framerate to 60 fps", &m_limitFramerate);
 
     ImGui::SeparatorText("Audio Input");
 

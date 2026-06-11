@@ -44,9 +44,12 @@ private:
     bool     m_buildDefaultLayout = false;  // build the dock layout on first frame (no imgui.ini)
 
     std::string m_presetPath;
-    bool        m_pendingLoad      = false;
-    bool        m_pendingSave      = false;
-    bool        m_pendingAudioFile = false;
+    bool        m_pendingLoad         = false;
+    bool        m_pendingSave         = false;
+    bool        m_pendingNewAfterSave = false; // clear preset after Save As completes
+    bool        m_showNewConfirm     = false; // open the "New?" modal next frame
+    bool        m_limitFramerate    = true;  // cap render loop to 60 fps
+    bool        m_pendingAudioFile    = false;
 
     // ── Options window ────────────────────────────────────────────────────────
     bool                     m_showOptions      = false;
@@ -56,6 +59,7 @@ private:
     int                      m_pendingOutputW   = 1280;
     int                      m_pendingOutputH   = 720;
 
+    void ClearPreset();
     void RefreshAudioDevices();
     void RenderOptionsWindow();
     void RenderStatusBar();

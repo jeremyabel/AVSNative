@@ -64,6 +64,75 @@ static void AdjustSelectionAfterTakeOut(EffectChain*& sc, int32_t& si,
     if (sc == srcChain && si > srcIdx) si--;
 }
 
+// True if moving the dragged effect into 'target' would nest a container inside
+// its own subtree (or itself) — which would create a cycle and recurse forever.
+static bool WouldCreateCycle(const ChainDragPayload& pl, EffectChain* target)
+{
+    if (pl.SrcIdx < 0 || pl.SrcIdx >= pl.SrcChain->Count()) return false;
+    EffectChain* inner = pl.SrcChain->GetEntry(pl.SrcIdx).Effect->GetInnerChain();
+    return inner && IsChainReachable(inner, target);
+}
+
+// A thin drop zone representing insertion index 'idx' (0..Count) in 'chain'.
+// Drawing an insertion line while hovered. Returns true if a drop mutated a chain.
+static bool RenderGap(EffectChain& chain, int32_t idx,
+                      EffectChain*& selectedChain, int32_t& selectedIdx)
+{
+    ImGui::PushID(idx);
+    // Keep the hit zone thin without inflating the list's vertical rhythm.
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+    const float w = ImGui::GetContentRegionAvail().x;
+    ImGui::InvisibleButton("##gap", ImVec2(w > 1.0f ? w : 1.0f, 5.0f));
+    ImGui::PopStyleVar();
+
+    bool mutated = false;
+    if (ImGui::BeginDragDropTarget())
+    {
+        const ImVec2 a = ImGui::GetItemRectMin();
+        const ImVec2 b = ImGui::GetItemRectMax();
+        const float  y = (a.y + b.y) * 0.5f;
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(a.x, y), ImVec2(b.x, y),
+            ImGui::GetColorU32(ImGuiCol_DragDropTarget), 2.0f);
+
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(
+                "CHAIN_ITEM", ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+        {
+            const auto& pl = *static_cast<const ChainDragPayload*>(p->Data);
+            if (!WouldCreateCycle(pl, &chain))
+            {
+                const bool selWasSrc = (selectedChain == pl.SrcChain &&
+                                        selectedIdx   == pl.SrcIdx);
+                int32_t landed;
+                if (pl.SrcChain == &chain)
+                {
+                    // Same chain: convert the gap index to Move()'s post-erase target.
+                    const int32_t to = (pl.SrcIdx < idx) ? idx - 1 : idx;
+                    AdjustSelectionAfterMove(selectedChain, selectedIdx, &chain, pl.SrcIdx, to);
+                    chain.Move(pl.SrcIdx, to);
+                    landed = to;
+                }
+                else
+                {
+                    AdjustSelectionAfterTakeOut(selectedChain, selectedIdx, pl.SrcChain, pl.SrcIdx);
+                    if (selectedChain == &chain && selectedIdx >= idx)
+                        selectedIdx++;
+                    EffectEntry moved = pl.SrcChain->TakeOut(pl.SrcIdx);
+                    chain.Insert(idx, std::move(moved));
+                    landed = idx;
+                }
+                if (selWasSrc) { selectedChain = &chain; selectedIdx = landed; }
+                mutated = true;
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    ImGui::PopID();
+    return mutated;
+}
+
 // ---------------------------------------------------------------------------
 // Recursive item renderer
 // Returns true when a structural mutation happened and the caller should break.
@@ -76,6 +145,10 @@ static bool RenderChainItems(EffectChain& chain,
     const float btnW    = ImGui::CalcTextSize("x").x
                           + ImGui::GetStyle().FramePadding.x * 2.0f;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
+
+    // Insertion gap above the first item (targets index 0 of this chain).
+    if (RenderGap(chain, 0, selectedChain, selectedIdx))
+        return true;
 
     for (int32_t i = 0; i < chain.Count(); ++i)
     {
@@ -126,8 +199,9 @@ static bool RenderChainItems(EffectChain& chain,
                 {
                     const auto& pl    = *static_cast<const ChainDragPayload*>(p->Data);
                     EffectChain* inner = entry.Effect->GetInnerChain();
-                    // Don't drop an effect onto itself.
-                    if (pl.SrcChain != &chain || pl.SrcIdx != i)
+                    // Don't drop onto itself, and don't nest a container in its own subtree.
+                    if ((pl.SrcChain != &chain || pl.SrcIdx != i) &&
+                        !WouldCreateCycle(pl, inner))
                     {
                         bool selWasSrc = (selectedChain == pl.SrcChain &&
                                           selectedIdx   == pl.SrcIdx);
@@ -177,56 +251,14 @@ static bool RenderChainItems(EffectChain& chain,
                 selectedIdx   = i;
             }
 
-            // Drag source.
+            // Drag source. (Reordering/insertion is handled by the gap targets;
+            // leaf items are not themselves drop targets.)
             if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
             {
                 ChainDragPayload pl{ &chain, i };
                 ImGui::SetDragDropPayload("CHAIN_ITEM", &pl, sizeof(pl));
                 ImGui::Text("Move: %s", name.c_str());
                 ImGui::EndDragDropSource();
-            }
-
-            // Drop target: insert dragged effect at this position.
-            if (ImGui::BeginDragDropTarget())
-            {
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("CHAIN_ITEM"))
-                {
-                    const auto& pl = *static_cast<const ChainDragPayload*>(p->Data);
-                    bool selWasSrc = (selectedChain == pl.SrcChain &&
-                                      selectedIdx   == pl.SrcIdx);
-
-                    int32_t newIdx;
-                    if (pl.SrcChain == &chain)
-                    {
-                        // Same-chain reorder.
-                        newIdx = i;
-                        AdjustSelectionAfterMove(selectedChain, selectedIdx,
-                                                 &chain, pl.SrcIdx, newIdx);
-                        chain.Move(pl.SrcIdx, newIdx);
-                    }
-                    else
-                    {
-                        // Cross-chain: the drop index in dst may shift if src
-                        // was removed from a chain that happens to be the same
-                        // object as dst — but by definition SrcChain != &chain here.
-                        newIdx = i;
-                        AdjustSelectionAfterTakeOut(selectedChain, selectedIdx,
-                                                    pl.SrcChain, pl.SrcIdx);
-                        if (selectedChain == &chain && selectedIdx >= newIdx)
-                            selectedIdx++;
-                        ApplyMove(pl, &chain, newIdx);
-                    }
-
-                    if (selWasSrc)
-                    {
-                        selectedChain = &chain;
-                        selectedIdx   = newIdx;
-                    }
-                    ImGui::EndDragDropTarget();
-                    ImGui::PopID();
-                    return true;
-                }
-                ImGui::EndDragDropTarget();
             }
 
             // "x" button.
@@ -257,6 +289,10 @@ static bool RenderChainItems(EffectChain& chain,
         }
 
         ImGui::PopID();
+
+        // Insertion gap below this item (targets index i+1 of this chain).
+        if (RenderGap(chain, i + 1, selectedChain, selectedIdx))
+            return true;
     }
     return false;
 }
