@@ -17,9 +17,16 @@ static void SDLCALL OnResult(void* userdata, const char* const* filelist, int /*
     r->done.store(true, std::memory_order_release);
 }
 
-static const SDL_DialogFileFilter k_jsonFilters[] = {
-    { "JSON Presets", "json" },
-    { "All Files",    "*"    },
+// Open accepts both the .avsz bundle and legacy asset-less .json presets.
+static const SDL_DialogFileFilter k_openFilters[] = {
+    { "AVS Presets", "avsz;json" },
+    { "All Files",   "*"         },
+};
+
+// Save always writes the .avsz bundle.
+static const SDL_DialogFileFilter k_saveFilters[] = {
+    { "AVS Preset", "avsz" },
+    { "All Files",  "*"    },
 };
 
 static const SDL_DialogFileFilter k_mp3Filters[] = {
@@ -33,7 +40,7 @@ std::string FileDialog::Open(const char* /*Title*/,
 {
     if (!Filters || NFilters == 0)
     {
-        Filters  = k_jsonFilters;
+        Filters  = k_openFilters;
         NFilters = 2;
     }
 
@@ -54,7 +61,7 @@ std::string FileDialog::Save(const char* /*Title*/,
 {
     if (!Filters || NFilters == 0)
     {
-        Filters  = k_jsonFilters;
+        Filters  = k_saveFilters;
         NFilters = 2;
     }
 

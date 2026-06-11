@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <string>
 
+class Effect;
+
 namespace ConfigUi
 {
 enum class Lang
@@ -28,4 +30,9 @@ void ResetEditors();
 
 // uint8 RGB color picker. Returns true if changed.
 bool ColorEdit(const char* label, std::array<uint8_t, 3>& c);
+
+// Opens an image file picker; on selection reads the raw bytes and hands them to
+// the effect via Effect::ApplyAsset(configKey, basename, bytes) — no base64. The
+// raw bytes are bundled into the preset on save. Returns true if an image loaded.
+bool PickImageInto(Effect* effect, const char* configKey);
 } // namespace ConfigUi

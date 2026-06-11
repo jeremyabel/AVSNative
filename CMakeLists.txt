@@ -135,6 +135,7 @@ add_library(avs_engine STATIC
     src/engine/FBOManager.cpp
     src/engine/Registry.cpp
     src/engine/Preset.cpp
+    src/engine/ZipArchive.cpp
     src/engine/ShaderCompiler.cpp
     src/engine/AudioAnalyzer.cpp
     src/effects/AddBorders.cpp

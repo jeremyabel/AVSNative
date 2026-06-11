@@ -80,6 +80,16 @@ void App::Run(const char* PresetPath)
             m_pendingSave = false;
             std::string path = FileDialog::Save("Save Preset",
                 m_presetPath.empty() ? nullptr : m_presetPath.c_str());
+            // Presets are .avsz bundles — append the extension if the user omitted it.
+            if (!path.empty())
+            {
+                const size_t slash = path.find_last_of("/\\");
+                const size_t dot    = path.find_last_of('.');
+                const bool hasExt = (dot != std::string::npos &&
+                                     (slash == std::string::npos || dot > slash));
+                if (!hasExt)
+                    path += ".avsz";
+            }
             if (!path.empty() && Preset::Save(path.c_str(), m_engine))
             {
                 m_presetPath = path;

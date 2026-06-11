@@ -13,7 +13,7 @@
 // See ref/AVSWeb/src/effects/texer.js.
 struct TexerConfig
 {
-    std::string ImageData    = "";     // base64 data URL; empty = built-in soft-dot
+    std::string ImageData    = "";     // bundle asset ref/name; empty = built-in soft-dot
     bool        AddToInput   = false;
     bool        Colorize     = false;
     int         NumParticles = 100;   // max stamps per frame
@@ -29,9 +29,13 @@ public:
     // Uses 2 views: blitViewId (blit input→staging) + drawViewId (upload→output FBO).
     uint8_t ExpectedViewCount() const override { return 2; }
 
-    // ImageData is too large for the reflection table; handled via GetConfig/SetConfig.
+    // ImageData is handled via GetConfig/SetConfig; the binary asset via the bundle API.
     nlohmann::json GetConfig() const override;
     void           SetConfig(const nlohmann::json& cfg) override;
+
+    std::vector<PresetAsset> CollectAssets() const override;
+    void ApplyAsset(const std::string& key, const std::string& name,
+                    std::vector<uint8_t> bytes) override;
 
     int GetImageW() const { return m_imgW; }
     int GetImageH() const { return m_imgH; }
@@ -52,7 +56,7 @@ protected:
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
-    void LoadImage(const std::string& dataUrl);
+    void BuildFromRaw(const std::vector<uint8_t>& raw);
     void MakeDefaultImage();
     void ResetAnimation();
     void AdvanceAnimation();   // advance m_curFrame by wall-clock time, refresh m_imgPixels
@@ -65,6 +69,8 @@ private:
     bgfx::TextureHandle m_outTex     = BGFX_INVALID_HANDLE;  // upload texture for output
 
     std::vector<uint8_t> m_imgPixels;    // current frame, RGBA8 (what Stamp() reads)
+    std::vector<uint8_t> m_raw;          // original image bytes (for re-bundling)
+    std::string          m_name;         // original filename
     int m_imgW = 0, m_imgH = 0;
 
     // Animated-GIF playback. m_frames is empty for a static image (single decoded frame

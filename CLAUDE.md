@@ -210,7 +210,7 @@ Effect config properties store colors as `std::array<uint8_t, 3>` (0–255), ser
 
 ## Preset serialization
 
-`Preset::Load` and `Preset::Save` are in `src/engine/Preset.cpp`. The JSON format is:
+`Preset::Load` and `Preset::Save` are in `src/engine/Preset.cpp`. The preset JSON is:
 
 ```json
 {
@@ -222,6 +222,15 @@ Effect config properties store colors as `std::array<uint8_t, 3>` (0–255), ser
 
 `EffectList` stores its inner chain under `config.effects` (same schema, nested). `Preset::Load` uses a recursive `LoadChain()` helper — after calling `SetConfig` on any effect it checks `effect->GetInnerChain()` and if non-null, recurses into `config["effects"]`. This means `EffectList::SetConfig` only handles its own properties; it does not create inner effects (it has no access to the Registry).
 
+### Bundle format (`.avsz`) — binary assets are NOT base64
+
+Presets are saved as a **store-only ZIP** named `*.avsz` (no compression — pure bundling, openable by any unzip tool) containing `preset.json` plus the raw, unmodified image/GIF files under `assets/`. Base64 is gone entirely (it was slow for multi-MB GIFs). The zip layer is `src/engine/ZipArchive.h/.cpp` — a self-contained store reader/writer with its own CRC32 (don't reuse the vendored miniz: its archive APIs are disabled and it lives in `bimg` → duplicate `mz_*` symbols).
+
+- **Asset interface** (`src/engine/Effect.h`): asset-bearing effects override `CollectAssets()` (returns `PresetAsset{Key, Name, Bytes}` to bundle on save) and `ApplyAsset(key, name, bytes)` (receives raw bytes on load, after `SetConfig`). Empty defaults, so non-asset effects need nothing. The 5 asset effects are ImageGrid (`imageData`/`imageData2`, two slots), Picture, Picture2, Texer, Texer2 — each retains the raw bytes + original filename and builds its texture via a `BuildFromRaw(bytes)` (ImageGrid: `LoadActiveImage` from `m_slotRaw`). Their `imageData` config value is the bundle path `assets/<name>`, not a data URL; `SetConfig` just stores the string, bytes arrive via `ApplyAsset`.
+- **Save** (`Preset.cpp`): a recursive `SerialiseChain(chain, assets, usedNames)` walks the tree, calls `CollectAssets()` per effect, stores each asset as `assets/<original-filename>` (with `_N` on basename collisions via `usedNames`), and rewrites `config[key]` to that path. `preset.json` is the first zip entry. EffectList recursion rebuilds nested `config.effects` so nested asset refs are rewritten too.
+- **Load** auto-detects by magic bytes: `PK\x03\x04` → bundle (read zip, parse `preset.json`, and in `LoadChain` after `SetConfig` resolve any string config value starting with `assets/` to bytes → `ApplyAsset`); otherwise plain JSON (asset-less presets still load). Legacy base64 `.json` presets are NOT supported — re-make them as bundles.
+- **UI**: `ConfigUi::PickImageInto(effect, key)` reads the picked file and hands raw bytes + basename to `effect->ApplyAsset` — no base64 encode (the old per-UI `Base64Encode` helpers are gone). `FileDialog` filters: open `avsz;json`, save `avsz`; `App.cpp` appends `.avsz` if the user omits it.
+
 ## Key files
 
 | File | Purpose |
@@ -231,7 +240,8 @@ Effect config properties store colors as `std::array<uint8_t, 3>` (0–255), ser
 | `src/engine/Effect.h` | Base class + `RenderContext` struct (includes `QuadVB`, `LineBlendMode`) |
 | `src/engine/LuaRuntime.h/.cpp` | LuaJIT sandboxed scripting runtime; see WohlSoft quirk above |
 | `src/engine/Reflect.h` | Param reflection: `Field`, factory helpers, `ReflectedEffect<Config>` base |
-| `src/engine/Preset.h/.cpp` | JSON preset load/save with recursive EffectList support |
+| `src/engine/Preset.h/.cpp` | `.avsz` bundle (or plain-JSON) preset load/save; recursive EffectList + asset collect/resolve |
+| `src/engine/ZipArchive.h/.cpp` | Self-contained store-only (no compression) zip reader/writer + CRC32 for `.avsz` bundles |
 | `src/ui/ConfigPanel.cpp` | Thin host that dispatches to the per-effect UI registry |
 | `src/ui/ConfigUiRegistry.h/.cpp` | Name→draw-fn registry + `DrawDefault` auto-generator + central registration |
 | `src/ui/ConfigUi.h/.cpp` | Shared UI helpers (code editor instances, color conversion) |

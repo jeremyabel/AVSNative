@@ -85,6 +85,16 @@ struct EffectDesc
 
 class EffectChain;
 
+// A binary asset (image/GIF) an effect contributes to / receives from a preset
+// bundle. Key is the config key it belongs to (e.g. "imageData"); Name is the
+// original file basename (e.g. "cat.gif"), used as the bundle entry name.
+struct PresetAsset
+{
+    std::string          Key;
+    std::string          Name;
+    std::vector<uint8_t> Bytes;
+};
+
 class Effect
 {
 public:
@@ -100,6 +110,15 @@ public:
     // Returns the inner EffectChain for container effects (e.g. EffectList).
     // Returns nullptr for all leaf effects.
     virtual EffectChain* GetInnerChain() { return nullptr; }
+
+    // ── Preset bundle assets (images/GIFs stored as raw files in the .avsz) ────
+    // Effects with binary assets override these. CollectAssets returns the raw
+    // bytes to bundle on save (with the original filename). ApplyAsset delivers
+    // raw bytes on load (called after SetConfig); the effect caches them, keeps
+    // the name for re-save, and rebuilds. Default: no assets.
+    virtual std::vector<PresetAsset> CollectAssets() const { return {}; }
+    virtual void ApplyAsset(const std::string& /*key*/, const std::string& /*name*/,
+                            std::vector<uint8_t> /*bytes*/) {}
 
     // Returns the last script error for a named param (Lua/Glsl blocks), or empty string.
     virtual std::string GetScriptError(const std::string& /*paramName*/) const { return {}; }

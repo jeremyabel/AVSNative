@@ -3,7 +3,9 @@
 #include "engine/Reflect.h"
 
 #include <bgfx/bgfx.h>
+#include <cstdint>
 #include <string>
+#include <vector>
 
 struct Picture2Config
 {
@@ -13,7 +15,7 @@ struct Picture2Config
     bool OnBeatBilinear    = true;
     int  AdjustBlend       = 128;   // 0-255, used when BlendMode == 7 (Adjustable)
     int  OnBeatAdjustBlend = 128;
-    std::string ImageData  = "";    // base64 data URL, managed outside reflection
+    std::string ImageData  = "";    // bundle asset ref/name; raw bytes arrive via ApplyAsset
 };
 
 class Picture2 : public ReflectedEffect<Picture2Config>
@@ -25,6 +27,10 @@ public:
 
     nlohmann::json GetConfig() const override;
     void           SetConfig(const nlohmann::json& cfg) override;
+
+    std::vector<PresetAsset> CollectAssets() const override;
+    void ApplyAsset(const std::string& key, const std::string& name,
+                    std::vector<uint8_t> bytes) override;
 
     int GetImageW() const { return m_imgW; }
     int GetImageH() const { return m_imgH; }
@@ -51,13 +57,16 @@ protected:
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
-    void LoadImage(const std::string& dataUrl);
+    void BuildFromRaw(const std::vector<uint8_t>& raw);
 
     bgfx::ProgramHandle m_prog       = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_inputUnif  = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_imageUnif  = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_paramsUnif = BGFX_INVALID_HANDLE;
     bgfx::TextureHandle m_imageTex   = BGFX_INVALID_HANDLE;
+
+    std::vector<uint8_t> m_raw;   // original image bytes (for re-bundling)
+    std::string          m_name;  // original filename
 
     int  m_imgW   = 0;
     int  m_imgH   = 0;

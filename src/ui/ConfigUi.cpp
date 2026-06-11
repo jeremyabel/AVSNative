@@ -1,10 +1,18 @@
 #include "ui/ConfigUi.h"
+#include "ui/FileDialog.h"
+
+#include "engine/Effect.h"
 
 #include <imgui.h>
 #include <TextEditor.h>
+#include <SDL3/SDL_dialog.h>
 
+#include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace
 {
@@ -67,5 +75,31 @@ bool ColorEdit(const char* label, std::array<uint8_t, 3>& c)
         return true;
     }
     return false;
+}
+
+bool PickImageInto(Effect* effect, const char* configKey)
+{
+    static const SDL_DialogFileFilter kImgFilters[] = {
+        { "Images",    "png;jpg;jpeg;bmp;gif;tga;psd" },
+        { "All Files", "*"                             },
+    };
+
+    const std::string path = FileDialog::Open("Open Image", kImgFilters, 2);
+    if (path.empty())
+        return false;
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f)
+        return false;
+    std::vector<uint8_t> raw((std::istreambuf_iterator<char>(f)),
+                             std::istreambuf_iterator<char>());
+    if (raw.empty())
+        return false;
+
+    const size_t sep = path.find_last_of("/\\");
+    const std::string name = (sep == std::string::npos) ? path : path.substr(sep + 1);
+
+    effect->ApplyAsset(configKey, name, std::move(raw));
+    return true;
 }
 } // namespace ConfigUi

@@ -11,31 +11,6 @@
 #include <cmath>
 #include <cstring>
 
-// ── Base64 decode ─────────────────────────────────────────────────────────────
-
-static std::vector<uint8_t> Base64Decode(const std::string& b64)
-{
-    static const char kChars[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    std::vector<uint8_t> out;
-    out.reserve(b64.size() / 4 * 3 + 3);
-    int accum = 0, bits = 0;
-    for (unsigned char c : b64) {
-        if (c == '=') break;
-        const char* pos = std::strchr(kChars, (char)c);
-        if (!pos) continue;
-        accum = (accum << 6) | (int)(pos - kChars);
-        bits += 6;
-        if (bits >= 8) {
-            bits -= 8;
-            out.push_back((uint8_t)(accum >> bits));
-            accum &= (1 << bits) - 1;
-        }
-    }
-    return out;
-}
-
 // ── GetConfig / SetConfig ─────────────────────────────────────────────────────
 
 nlohmann::json Texer::GetConfig() const
@@ -49,16 +24,28 @@ void Texer::SetConfig(const nlohmann::json& cfg)
 {
     ReflectedEffect<TexerConfig>::SetConfig(cfg);
 
+    // imageData is a bundle asset reference — raw bytes arrive via ApplyAsset.
     if (cfg.contains("imageData") && cfg["imageData"].is_string())
-    {
-        const std::string newData = cfg["imageData"].get<std::string>();
-        if (newData != Cfg.ImageData)
-        {
-            Cfg.ImageData = newData;
-            if (m_inited)
-                LoadImage(Cfg.ImageData);
-        }
-    }
+        Cfg.ImageData = cfg["imageData"].get<std::string>();
+}
+
+// ── Preset bundle assets ──────────────────────────────────────────────────────
+
+std::vector<PresetAsset> Texer::CollectAssets() const
+{
+    if (m_raw.empty())
+        return {};
+    return { { "imageData", m_name, m_raw } };
+}
+
+void Texer::ApplyAsset(const std::string& /*key*/, const std::string& name,
+                       std::vector<uint8_t> bytes)
+{
+    m_raw  = std::move(bytes);
+    m_name = name;
+    Cfg.ImageData = name;
+    if (m_inited)
+        BuildFromRaw(m_raw);
 }
 
 void Texer::OnConfigChanged(const std::vector<std::string>& /*changed*/) {}
@@ -122,22 +109,12 @@ void Texer::AdvanceAnimation()
         m_imgPixels = m_frames[m_curFrame];
 }
 
-// ── LoadImage ─────────────────────────────────────────────────────────────────
+// ── BuildFromRaw ──────────────────────────────────────────────────────────────
 
-void Texer::LoadImage(const std::string& dataUrl)
+void Texer::BuildFromRaw(const std::vector<uint8_t>& raw)
 {
     ResetAnimation();
 
-    if (dataUrl.empty())
-    {
-        MakeDefaultImage();
-        return;
-    }
-
-    const auto commaPos = dataUrl.find(',');
-    if (commaPos == std::string::npos) { MakeDefaultImage(); return; }
-
-    const std::vector<uint8_t> raw = Base64Decode(dataUrl.substr(commaPos + 1));
     if (raw.empty()) { MakeDefaultImage(); return; }
 
     // Try the GIF loader first — it returns null for any non-GIF format. A GIF yields
@@ -272,7 +249,7 @@ void Texer::Init()
     m_texUnif = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
     m_inited = true;
-    LoadImage(Cfg.ImageData);
+    MakeDefaultImage();  // soft-dot until ApplyAsset delivers a bundled image (if any)
 }
 
 void Texer::Destroy()

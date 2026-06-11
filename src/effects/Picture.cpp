@@ -7,34 +7,7 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_picture.sc.bin.h"
 
-#include <cstring>
 #include <vector>
-
-// ── Base64 decode ─────────────────────────────────────────────────────────────
-
-static std::vector<uint8_t> Base64Decode(const std::string& b64)
-{
-    static const char kChars[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    std::vector<uint8_t> out;
-    out.reserve(b64.size() / 4 * 3 + 3);
-    int accum = 0, bits = 0;
-    for (unsigned char c : b64) {
-        if (c == '=') break;
-        const char* pos = std::strchr(kChars, (char)c);
-        if (!pos) continue;
-        accum = (accum << 6) | (int)(pos - kChars);
-        bits += 6;
-        if (bits >= 8) {
-            bits -= 8;
-            out.push_back((uint8_t)(accum >> bits));
-            accum &= (1 << bits) - 1;
-        }
-    }
-    return out;
-}
-
 
 // ── GetConfig / SetConfig ─────────────────────────────────────────────────────
 
@@ -49,16 +22,29 @@ void Picture::SetConfig(const nlohmann::json& cfg)
 {
     ReflectedEffect<PictureConfig>::SetConfig(cfg);
 
+    // imageData is a bundle asset reference — raw bytes arrive via ApplyAsset, not
+    // decoded here. Just store the string for round-trip.
     if (cfg.contains("imageData") && cfg["imageData"].is_string())
-    {
-        const std::string newData = cfg["imageData"].get<std::string>();
-        if (newData != Cfg.ImageData)
-        {
-            Cfg.ImageData = newData;
-            if (m_inited)
-                LoadImage(Cfg.ImageData);
-        }
-    }
+        Cfg.ImageData = cfg["imageData"].get<std::string>();
+}
+
+// ── Preset bundle assets ──────────────────────────────────────────────────────
+
+std::vector<PresetAsset> Picture::CollectAssets() const
+{
+    if (m_raw.empty())
+        return {};
+    return { { "imageData", m_name, m_raw } };
+}
+
+void Picture::ApplyAsset(const std::string& /*key*/, const std::string& name,
+                         std::vector<uint8_t> bytes)
+{
+    m_raw  = std::move(bytes);
+    m_name = name;
+    Cfg.ImageData = name;  // non-empty marker for round-trip
+    if (m_inited)
+        BuildFromRaw(m_raw);
 }
 
 void Picture::OnConfigChanged(const std::vector<std::string>& /*changed*/) {}
@@ -76,9 +62,7 @@ void Picture::Init()
     m_paramsUnif = bgfx::createUniform("u_picParams", bgfx::UniformType::Vec4);
 
     m_inited = true;
-
-    if (!Cfg.ImageData.empty())
-        LoadImage(Cfg.ImageData);
+    // No image until ApplyAsset delivers the bundled bytes (called after SetConfig).
 }
 
 void Picture::Destroy()
@@ -98,9 +82,9 @@ void Picture::Destroy()
     m_inited = false;
 }
 
-// ── LoadImage ─────────────────────────────────────────────────────────────────
+// ── BuildFromRaw ──────────────────────────────────────────────────────────────
 
-void Picture::LoadImage(const std::string& dataUrl)
+void Picture::BuildFromRaw(const std::vector<uint8_t>& raw)
 {
     if (bgfx::isValid(m_imageTex))
     {
@@ -109,13 +93,6 @@ void Picture::LoadImage(const std::string& dataUrl)
     }
     m_imgW = m_imgH = 0;
 
-    if (dataUrl.empty()) return;
-
-    // Parse "data:<mime>;base64,<data>"
-    const auto commaPos = dataUrl.find(',');
-    if (commaPos == std::string::npos) return;
-
-    const std::vector<uint8_t> raw = Base64Decode(dataUrl.substr(commaPos + 1));
     if (raw.empty()) return;
 
     int w = 0, h = 0, ch = 0;

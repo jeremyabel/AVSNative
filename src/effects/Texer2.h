@@ -15,7 +15,7 @@
 // See ref/AVSWeb/src/effects/texer2.js.
 struct Texer2Config
 {
-    std::string ImageData  = "";         // base64 data URL; empty = built-in soft-dot
+    std::string ImageData  = "";         // bundle asset ref/name; empty = built-in soft-dot
     std::string InitCode   = "n=300";
     std::string FrameCode  = "";
     std::string BeatCode   = "";
@@ -34,6 +34,10 @@ public:
 
     nlohmann::json GetConfig() const override;
     void           SetConfig(const nlohmann::json& cfg) override;
+
+    std::vector<PresetAsset> CollectAssets() const override;
+    void ApplyAsset(const std::string& key, const std::string& name,
+                    std::vector<uint8_t> bytes) override;
 
     std::string GetScriptError(const std::string& paramName) const override
     {
@@ -63,7 +67,7 @@ protected:
     void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
-    void LoadImage(const std::string& dataUrl);
+    void BuildFromRaw(const std::vector<uint8_t>& raw);
     void MakeDefaultImage();
     void ResetAnimation();
     void AdvanceAnimation();   // advance m_curFrame by wall-clock time, refresh m_imgPixels
@@ -82,6 +86,8 @@ private:
     bgfx::TextureHandle m_overlayTex  = BGFX_INVALID_HANDLE;
 
     std::vector<uint8_t> m_imgPixels;   // current frame, RGBA8 (what StampParticle() reads)
+    std::vector<uint8_t> m_raw;         // original image bytes (for re-bundling)
+    std::string          m_name;        // original filename
     int m_imgW = 0, m_imgH = 0;
 
     // Animated-GIF playback. m_frames is empty for a static image (single decoded frame

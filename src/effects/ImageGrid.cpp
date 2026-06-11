@@ -1,6 +1,7 @@
 #include "ImageGrid.h"
 
 #include "engine/FBOManager.h"
+#include "thirdparty/StbGifStream.h"
 
 #include <stb/stb_image.h>
 
@@ -20,30 +21,6 @@ const std::vector<std::string> ImageGrid::k_builtins = {
     "x", "y", "sizex", "sizey", "r", "width", "height", "b",
 };
 
-// ── Base64 decode ─────────────────────────────────────────────────────────────
-
-static std::vector<uint8_t> Base64Decode(const std::string& b64)
-{
-    static const char kChars[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::vector<uint8_t> out;
-    out.reserve(b64.size() / 4 * 3 + 3);
-    int accum = 0, bits = 0;
-    for (unsigned char c : b64) {
-        if (c == '=') break;
-        const char* pos = std::strchr(kChars, (char)c);
-        if (!pos) continue;
-        accum = (accum << 6) | (int)(pos - kChars);
-        bits += 6;
-        if (bits >= 8) {
-            bits -= 8;
-            out.push_back((uint8_t)(accum >> bits));
-            accum &= (1 << bits) - 1;
-        }
-    }
-    return out;
-}
-
 // ── $pi substitution ─────────────────────────────────────────────────────────
 
 static std::string SubstitutePi(std::string code)
@@ -61,7 +38,9 @@ static std::string SubstitutePi(std::string code)
 nlohmann::json ImageGrid::GetConfig() const
 {
     nlohmann::json j = ReflectedEffect<ImageGridConfig>::GetConfig();
-    j["imageData"] = Cfg.ImageData;
+    j["imageData"]   = Cfg.ImageData;
+    j["imageData2"]  = Cfg.ImageData2;
+    j["activeImage"] = Cfg.ActiveImage;
     return j;
 }
 
@@ -69,16 +48,47 @@ void ImageGrid::SetConfig(const nlohmann::json& cfg)
 {
     ReflectedEffect<ImageGridConfig>::SetConfig(cfg);
 
-    if (cfg.contains("imageData") && cfg["imageData"].is_string())
+    bool activeChanged = false;
+
+    if (cfg.contains("activeImage") && cfg["activeImage"].is_number_integer())
     {
-        const std::string newData = cfg["imageData"].get<std::string>();
-        if (newData != Cfg.ImageData)
-        {
-            Cfg.ImageData = newData;
-            if (m_inited)
-                LoadImage(Cfg.ImageData);
-        }
+        const int v = cfg["activeImage"].get<int>() ? 1 : 0;
+        if (v != Cfg.ActiveImage) { Cfg.ActiveImage = v; activeChanged = true; }
     }
+    // imageData/imageData2 are bundle asset references — the raw bytes arrive via
+    // ApplyAsset, not decoded here. Just store the strings for round-trip.
+    if (cfg.contains("imageData") && cfg["imageData"].is_string())
+        Cfg.ImageData = cfg["imageData"].get<std::string>();
+    if (cfg.contains("imageData2") && cfg["imageData2"].is_string())
+        Cfg.ImageData2 = cfg["imageData2"].get<std::string>();
+
+    // On a slot toggle, rebuild the texture from the (already cached) raw bytes.
+    if (m_inited && activeChanged)
+        LoadActiveImage();
+}
+
+// ── Preset bundle assets ──────────────────────────────────────────────────────
+
+std::vector<PresetAsset> ImageGrid::CollectAssets() const
+{
+    std::vector<PresetAsset> out;
+    if (!m_slotRaw[0].empty())
+        out.push_back({ "imageData",  m_slotName[0], m_slotRaw[0] });
+    if (!m_slotRaw[1].empty())
+        out.push_back({ "imageData2", m_slotName[1], m_slotRaw[1] });
+    return out;
+}
+
+void ImageGrid::ApplyAsset(const std::string& key, const std::string& name,
+                           std::vector<uint8_t> bytes)
+{
+    const int slot = (key == "imageData2") ? 1 : 0;
+    m_slotRaw[slot]  = std::move(bytes);
+    m_slotName[slot] = name;
+    (slot == 1 ? Cfg.ImageData2 : Cfg.ImageData) = name;  // non-empty marker for UI/round-trip
+
+    if (m_inited && slot == (Cfg.ActiveImage == 1 ? 1 : 0))
+        LoadActiveImage();
 }
 
 // ── OnConfigChanged ───────────────────────────────────────────────────────────
@@ -138,19 +148,35 @@ void ImageGrid::MakeDefaultImage()
 
 void ImageGrid::ResetAnimation()
 {
-    for (auto& h : m_gpuFrames)
-        if (bgfx::isValid(h)) bgfx::destroy(h);
-    m_gpuFrames.clear();
+    if (m_gif) { GifStreamClose(m_gif); m_gif = nullptr; }
+    m_frames.clear();
     m_frameDelaysMs.clear();
+    m_fullyCached  = false;
     m_curFrame     = 0;
+    m_uploadedFrame = (size_t)-1;
     m_frameAccumMs = 0.0;
     m_haveTick     = false;
 }
 
-// Advance m_curFrame by wall-clock time. No GPU work — Render() reads m_gpuFrames[m_curFrame].
+// Upload the current frame's cached pixels into the mutable texture, but only
+// when the displayed frame actually changed (the sole per-frame GPU cost).
+void ImageGrid::UploadCurrentFrame()
+{
+    if (m_curFrame >= m_frames.size() || m_curFrame == m_uploadedFrame) return;
+    if (!bgfx::isValid(m_imageTex)) return;
+
+    const uint32_t frameBytes = (uint32_t)((size_t)m_imgW * m_imgH * 4);
+    bgfx::updateTexture2D(m_imageTex, 0, 0, 0, 0, (uint16_t)m_imgW, (uint16_t)m_imgH,
+        bgfx::copy(m_frames[m_curFrame].data(), frameBytes));
+    m_uploadedFrame = m_curFrame;
+}
+
+// Advance m_curFrame by wall-clock time, decoding + caching frames on demand the
+// first time through, then uploading the current frame to the mutable texture.
 void ImageGrid::AdvanceAnimation()
 {
-    if (m_gpuFrames.size() <= 1) return;
+    if (m_frames.empty()) return;                       // static image
+    if (m_fullyCached && m_frames.size() <= 1) return;  // single-frame GIF
 
     const auto now = std::chrono::steady_clock::now();
     if (!m_haveTick) { m_lastTick = now; m_haveTick = true; return; }
@@ -162,67 +188,85 @@ void ImageGrid::AdvanceAnimation()
     m_frameAccumMs += std::min(elapsedMs, 1000.0);
 
     size_t guard = 0;
-    while (m_frameAccumMs >= (double)m_frameDelaysMs[m_curFrame] && guard++ < m_gpuFrames.size())
+    while (m_frameAccumMs >= (double)m_frameDelaysMs[m_curFrame] && guard++ < 240)
     {
         m_frameAccumMs -= (double)m_frameDelaysMs[m_curFrame];
-        m_curFrame = (m_curFrame + 1) % m_gpuFrames.size();
-    }
-}
 
-// ── LoadImage (GPU texture, repeat wrap for seamless tiling) ──────────────────
-
-void ImageGrid::LoadImage(const std::string& dataUrl)
-{
-    ResetAnimation();
-
-    if (dataUrl.empty()) { MakeDefaultImage(); return; }
-
-    const auto commaPos = dataUrl.find(',');
-    if (commaPos == std::string::npos) { MakeDefaultImage(); return; }
-
-    const std::vector<uint8_t> raw = Base64Decode(dataUrl.substr(commaPos + 1));
-    if (raw.empty()) { MakeDefaultImage(); return; }
-
-    // Try the GIF loader first — returns null for any non-GIF format.
-    int* delays = nullptr;
-    int  w = 0, h = 0, frames = 0, ch = 0;
-    uint8_t* gif = stbi_load_gif_from_memory(
-        raw.data(), (int)raw.size(), &delays, &w, &h, &frames, &ch, 4);
-    if (gif)
-    {
-        m_imgW = w; m_imgH = h;
-        const size_t frameBytes = (size_t)w * h * 4;
-
-        if (bgfx::isValid(m_imageTex)) { bgfx::destroy(m_imageTex); m_imageTex = BGFX_INVALID_HANDLE; }
-
-        if (frames > 1)
+        size_t next = m_curFrame + 1;
+        if (next < m_frames.size())
         {
-            // Pre-load every frame as a separate GPU texture. AdvanceAnimation() just
-            // updates m_curFrame; Render() binds m_gpuFrames[m_curFrame] directly.
-            m_gpuFrames.resize(frames);
-            m_frameDelaysMs.resize(frames);
-            for (int f = 0; f < frames; f++)
+            // Already decoded earlier — replay from cache.
+        }
+        else if (m_gif)
+        {
+            // First time reaching this frame: decode + cache it.
+            const uint8_t* px = nullptr; int delay = 0;
+            if (GifStreamNextFrame(m_gif, &px, &delay))
             {
-                m_gpuFrames[f] = bgfx::createTexture2D((uint16_t)w, (uint16_t)h, false, 1,
-                    bgfx::TextureFormat::RGBA8, 0,
-                    bgfx::copy(gif + (size_t)f * frameBytes, (uint32_t)frameBytes));
-                // A 0 delay plays as fast as possible in browsers; clamp to ~10fps.
-                m_frameDelaysMs[f] = (delays && delays[f] > 0) ? delays[f] : 100;
+                const size_t frameBytes = (size_t)m_imgW * m_imgH * 4;
+                m_frames.emplace_back(px, px + frameBytes);
+                m_frameDelaysMs.push_back(delay > 0 ? delay : 100);
+            }
+            else
+            {
+                // End of stream: the cache now holds every frame. Stop decoding and
+                // loop back to frame 0 (subsequent loops replay from the cache).
+                GifStreamClose(m_gif); m_gif = nullptr;
+                m_fullyCached = true;
+                next = 0;
             }
         }
         else
         {
-            // Single-frame GIF: treat as a static image, use m_imageTex.
-            m_imageTex = bgfx::createTexture2D((uint16_t)w, (uint16_t)h, false, 1,
-                bgfx::TextureFormat::RGBA8, 0,
-                bgfx::copy(gif, (uint32_t)frameBytes));
+            next %= m_frames.size();  // fully cached — wrap around
         }
 
-        stbi_image_free(gif);
-        if (delays) stbi_image_free(delays);
-        return;
+        if (m_frames.size() <= 1) { m_curFrame = 0; break; }  // single-frame GIF
+        m_curFrame = next % m_frames.size();
     }
-    if (delays) stbi_image_free(delays);
+
+    UploadCurrentFrame();
+}
+
+// ── Image loading (raw bytes cached per slot, delivered via ApplyAsset) ───────
+
+// (Re)build the texture from the active slot's cached raw bytes. Only frame 0 of a
+// GIF is decoded here; the rest stream in during playback (AdvanceAnimation).
+void ImageGrid::LoadActiveImage()
+{
+    ResetAnimation();
+
+    const std::vector<uint8_t>& raw = m_slotRaw[Cfg.ActiveImage == 1 ? 1 : 0];
+    if (raw.empty()) { MakeDefaultImage(); return; }
+
+    // Try the streaming GIF decoder first — returns null for any non-GIF format.
+    int gw = 0, gh = 0;
+    if (GifStream* gs = GifStreamOpen(raw.data(), (int)raw.size(), &gw, &gh))
+    {
+        const uint8_t* px0 = nullptr; int delay0 = 0;
+        if (GifStreamNextFrame(gs, &px0, &delay0))
+        {
+            m_imgW = gw; m_imgH = gh;
+            const uint32_t frameBytes = (uint32_t)((size_t)gw * gh * 4);
+
+            m_frames.emplace_back(px0, px0 + frameBytes);
+            m_frameDelaysMs.push_back(delay0 > 0 ? delay0 : 100);
+
+            if (bgfx::isValid(m_imageTex)) { bgfx::destroy(m_imageTex); m_imageTex = BGFX_INVALID_HANDLE; }
+
+            // Mutable texture (no initial memory) so AdvanceAnimation can update it per
+            // frame. Flags 0 = repeat wrap + bilinear, same as the static path.
+            m_imageTex = bgfx::createTexture2D((uint16_t)gw, (uint16_t)gh, false, 1,
+                bgfx::TextureFormat::RGBA8, 0);
+            bgfx::updateTexture2D(m_imageTex, 0, 0, 0, 0, (uint16_t)gw, (uint16_t)gh,
+                bgfx::copy(m_frames[0].data(), frameBytes));
+            m_uploadedFrame = 0;
+
+            m_gif = gs;  // keep open to decode remaining frames lazily
+            return;
+        }
+        GifStreamClose(gs);  // 0-frame / corrupt GIF — fall through to static decode
+    }
 
     // Non-GIF (PNG/JPG/BMP/TGA/…): decode the single image.
     int sw = 0, sh = 0, sch = 0;
@@ -298,15 +342,19 @@ void ImageGrid::Init()
     CompileAll();
 
     m_inited = true;
-    LoadImage(Cfg.ImageData);
+    LoadActiveImage();  // shows the default checkerboard until ApplyAsset delivers bytes
     RunInit();
 }
 
 void ImageGrid::Destroy()
 {
-    for (auto& h : m_gpuFrames)
-        if (bgfx::isValid(h)) bgfx::destroy(h);
-    m_gpuFrames.clear();
+    if (m_gif) { GifStreamClose(m_gif); m_gif = nullptr; }
+    m_frames.clear();
+    m_frameDelaysMs.clear();
+    m_slotRaw[0].clear();
+    m_slotRaw[1].clear();
+    m_slotName[0].clear();
+    m_slotName[1].clear();
     if (bgfx::isValid(m_imageTex))   bgfx::destroy(m_imageTex);
     if (bgfx::isValid(m_paramsUnif)) bgfx::destroy(m_paramsUnif);
     if (bgfx::isValid(m_xformUnif))  bgfx::destroy(m_xformUnif);
@@ -356,11 +404,8 @@ void ImageGrid::Render(const RenderContext& Ctx)
     bgfx::setUniform(m_xformUnif,  xform);
     bgfx::setUniform(m_paramsUnif, params);
 
-    const bgfx::TextureHandle curTex =
-        m_gpuFrames.empty() ? m_imageTex : m_gpuFrames[m_curFrame];
-
     bgfx::setTexture(0, m_inputUnif, Ctx.InputTexture);
-    bgfx::setTexture(1, m_imageUnif, curTex);
+    bgfx::setTexture(1, m_imageUnif, m_imageTex);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Ctx.QuadVB);
     bgfx::submit(Ctx.ViewId, m_prog);
