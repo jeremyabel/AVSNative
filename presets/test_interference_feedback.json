@@ -1,0 +1,45 @@
+{
+  "effects": [
+    {
+      "config": {
+        "color": [
+          0,
+          0,
+          0
+        ]
+      },
+      "enabled": false,
+      "type": "Clear"
+    },
+    {
+      "config": {
+        "antialiasing": false,
+        "beatCode": "",
+        "frameCode": "",
+        "initCode": "n = 1",
+        "triangleCode": "x1 = 0;\ny1 = 0;\nx2 = 0.5;\ny2 = 0;\nx3 = 0.5;\ny3 = 0.5;"
+      },
+      "enabled": true,
+      "type": "Triangle"
+    },
+    {
+      "config": {
+        "alpha": 255.0,
+        "alpha2": 192.0,
+        "distance": 64.0,
+        "distance2": 32.0,
+        "nPoints": 6,
+        "onbeat": true,
+        "outBlend": 0,
+        "reverseRotation": false,
+        "rgb": true,
+        "rotation": 255.0,
+        "rotationinc": 0.0,
+        "rotationinc2": 25.0,
+        "speed": 0.20000000298023224
+      },
+      "enabled": true,
+      "type": "Interferences"
+    }
+  ]
+}

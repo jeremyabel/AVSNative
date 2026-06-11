@@ -1,0 +1,59 @@
+{
+  "effects": [
+    {
+      "config": {
+        "color": [
+          0,
+          0,
+          0
+        ]
+      },
+      "enabled": false,
+      "type": "Clear"
+    },
+    {
+      "config": {
+        "antialiasing": false,
+        "beatCode": "",
+        "frameCode": "",
+        "initCode": "n = 1",
+        "triangleCode": "x1 = 0;\ny1 = 0;\nx2 = 0.5;\ny2 = 0;\nx3 = 0.5;\ny3 = 0.5;"
+      },
+      "enabled": true,
+      "type": "Triangle"
+    },
+    {
+      "config": {
+        "alpha": 54.0,
+        "alpha2": 192.0,
+        "distance": 22.0,
+        "distance2": 32.0,
+        "nPoints": 6,
+        "onbeat": false,
+        "outBlend": 2,
+        "reverseRotation": true,
+        "rgb": true,
+        "rotation": 27.955062866210938,
+        "rotationinc": 0.0,
+        "rotationinc2": 25.0,
+        "speed": 0.20000000298023224
+      },
+      "enabled": true,
+      "type": "Interferences"
+    },
+    {
+      "config": {
+        "beat_fader0": 8,
+        "beat_fader1": -8,
+        "beat_fader2": -8,
+        "fader0": 32,
+        "fader1": 32,
+        "fader2": -8,
+        "gradual": false,
+        "random_beat": false
+      },
+      "enabled": true,
+      "type": "Colorfade"
+    }
+  ]
+}
