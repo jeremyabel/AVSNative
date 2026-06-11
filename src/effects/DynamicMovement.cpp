@@ -3,6 +3,7 @@
 #include "engine/FBOManager.h"
 #include "engine/ShaderCompiler.h"
 #include "engine/AudioGlsl.h"
+#include "engine/ShaderSnippets.h"
 
 #include <algorithm>
 #include <regex>
@@ -31,24 +32,9 @@ void main() {
 }
 )";
 
-// 8-bit integer bilinear — matches the original AVS C++ blend_bilinear_2x2 exactly.
-static const char* k_bilinearCompat = R"(
-vec3 bilinearCompat(sampler2D tex, vec2 uv, ivec2 sz) {
-    vec2  pos = uv * vec2(sz);
-    ivec2 i0  = ivec2(floor(pos));
-    ivec2 f8  = ivec2(fract(pos) * 256.0);
-    ivec2 i1  = min(i0 + ivec2(1), sz - ivec2(1));
-    i0 = clamp(i0, ivec2(0), sz - ivec2(1));
-    ivec3 tl = ivec3(round(texelFetch(tex, i0,                 0).rgb * 255.0));
-    ivec3 tr = ivec3(round(texelFetch(tex, ivec2(i1.x, i0.y), 0).rgb * 255.0));
-    ivec3 bl = ivec3(round(texelFetch(tex, ivec2(i0.x, i1.y), 0).rgb * 255.0));
-    ivec3 br = ivec3(round(texelFetch(tex, i1,                0).rgb * 255.0));
-    int fx = f8.x, fy = f8.y;
-    ivec3 top = (tl * (256 - fx) + tr * fx) >> 8;
-    ivec3 bot = (bl * (256 - fx) + br * fx) >> 8;
-    return vec3((top * (256 - fy) + bot * fy) >> 8) / 255.0;
-}
-)";
+// 8-bit integer bilinear — shared with the static .sc effects (and Movement).
+// See src/engine/ShaderSnippets.h / src/shaders/bilinear_compat.sh.
+static const char* k_bilinearCompat = avs::kBilinearCompatGlsl;
 
 // Scan GLSL pixel code for assigned identifiers (plain `=` and compound `+=` etc.).
 static std::vector<std::string> ScanAssigned(const std::string& code)

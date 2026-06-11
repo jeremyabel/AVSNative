@@ -24,6 +24,7 @@ struct DynamicDistanceModifierConfig
     std::string BeatCode  = "";
     bool Blend    = false;   // 50/50 with the original
     bool Bilinear = false;   // linear vs nearest input sampling
+    bool Compat   = false;   // 8-bit integer bilinear matching win32 (needs Bilinear)
 };
 
 class DynamicDistanceModifier : public ReflectedEffect<DynamicDistanceModifierConfig>
@@ -45,6 +46,7 @@ protected:
         static const std::vector<Field> f = {
             ::Bool(&DynamicDistanceModifierConfig::Blend,    "blend",     "Blend"),
             ::Bool(&DynamicDistanceModifierConfig::Bilinear, "bilinear",  "Bilinear Filtering"),
+            ::Bool(&DynamicDistanceModifierConfig::Compat, "bilinearCompat", "Bilinear (precise)"),
             Glsl(&DynamicDistanceModifierConfig::PixelCode,  "pixelCode", "Pixel (GLSL)"),
             Lua (&DynamicDistanceModifierConfig::InitCode,   "initCode",  "Init"),
             Lua (&DynamicDistanceModifierConfig::FrameCode,  "frameCode", "Frame"),

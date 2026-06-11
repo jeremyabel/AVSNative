@@ -79,13 +79,18 @@ void DynamicShift::Render(const RenderContext& Context)
     const double y     = m_lua.GetEnvNumber("y");
     const double alpha = std::clamp(m_lua.GetEnvNumber("alpha"), 0.0, 1.0);
 
+    // compat = original AVS 8-bit integer bilinear (only meaningful when Subpixel).
+    const bool compat = Cfg.Subpixel && Cfg.Compat;
+
     const float p0[4] = { (float)x, (float)y, (float)Context.Width, (float)Context.Height };
-    const float p1[4] = { Cfg.Blend ? 1.0f : 0.0f, (float)alpha, 0.0f, 0.0f };
+    const float p1[4] = { Cfg.Blend ? 1.0f : 0.0f, (float)alpha, compat ? 1.0f : 0.0f, 0.0f };
     bgfx::setUniform(Params0Unif, p0);
     bgfx::setUniform(Params1Unif, p1);
 
+    // Compat does its own integer texelFetch blend → bind POINT. Otherwise bilinear
+    // when Subpixel, else nearest.
     uint32_t samplerFlags = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
-    if (!Cfg.Subpixel)
+    if (!Cfg.Subpixel || compat)
         samplerFlags |= BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT;
 
     bgfx::setTexture(0, InputUnif, Context.InputTexture, samplerFlags);

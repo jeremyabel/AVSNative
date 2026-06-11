@@ -48,12 +48,21 @@ void Interferences::Render(const RenderContext& Context)
     // ReverseRotation drops the negation to match the AVSWeb JS reference instead.
     const float vSign = Cfg.ReverseRotation ? -1.0f : 1.0f;
 
+    // Integer pixel offsets, exactly like the win32 original:
+    //   xpoints[i] = (int)(cos(angle) * distance)
+    // Truncating to whole pixels and dividing by the buffer size yields a
+    // texel-aligned UV offset. Combined with point sampling in the shader, each
+    // fetch reads one source texel with no bilinear blend — which is what keeps
+    // the feedback loop bounded (fractional offsets + bilinear filtering act as a
+    // spatial low-pass with gain >= 1 and make the buffer bloom/blow out).
     float offsets[16] = {};
     for (int i = 0; i < Cfg.NPoints && i < 8; ++i)
     {
         const float a = a0 + float(i) * angleStep;
-        offsets[i * 2 + 0] = std::cos(a) * dist / fw;
-        offsets[i * 2 + 1] = vSign * std::sin(a) * dist / fh;
+        const int ipx = (int)(std::cos(a) * dist);   // truncate toward zero (matches (int) cast)
+        const int ipy = (int)(std::sin(a) * dist);
+        offsets[i * 2 + 0] = float(ipx) / fw;
+        offsets[i * 2 + 1] = vSign * float(ipy) / fh;
     }
 
     // Advance rotation (matches JS single-step wrap)
@@ -73,14 +82,18 @@ void Interferences::Render(const RenderContext& Context)
     // rgb mode is only active when nPoints is exactly 3 or 6
     const int rgbFlag = (Cfg.RGB && (Cfg.NPoints == 3 || Cfg.NPoints == 6)) ? 1 : 0;
 
-    const float Params[4] = { float(Cfg.NPoints), alpha / 255.0f, float(rgbFlag), float(Cfg.OutBlend) };
+    // Pass alpha as an integer 0..255 — the shader does the multiply in integer
+    // pixel space (floor(v*alpha/255)) to match the win32 lut_u8_multiply table.
+    const float alpha255 = std::floor(alpha);
+    const float Params[4] = { float(Cfg.NPoints), alpha255, float(rgbFlag), float(Cfg.OutBlend) };
 
     bgfx::setUniform(Offsets0, offsets + 0);
     bgfx::setUniform(Offsets1, offsets + 4);
     bgfx::setUniform(Offsets2, offsets + 8);
     bgfx::setUniform(Offsets3, offsets + 12);
     bgfx::setUniform(ParamsUniform, Params);
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    // Point sampling: feedback must read exact texels (see offset comment above).
+    bgfx::setTexture(0, TexUniform, Context.InputTexture, BGFX_SAMPLER_POINT);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
     bgfx::submit(Context.ViewId, Program);

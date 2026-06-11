@@ -34,6 +34,12 @@ static void DrawMovementUI(Effect* base)
     ImGui::SeparatorText("Sampling");
 
     if (ImGui::Checkbox("Bilinear", &c.Bilinear)) changed.push_back("bilinear");
+
+    // Precise = original AVS 8-bit integer bilinear; only meaningful with Bilinear on.
+    ImGui::BeginDisabled(!c.Bilinear);
+    if (ImGui::Checkbox("Bilinear (precise)", &c.Compat)) changed.push_back("bilinearCompat");
+    ImGui::EndDisabled();
+
     if (ImGui::Checkbox("Wrap",     &c.Wrap))     changed.push_back("wrap");
 
     // Conditional: "Blend" is meaningless when Source Map is on — hide it entirely.

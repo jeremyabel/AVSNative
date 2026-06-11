@@ -8,6 +8,13 @@ struct BlitEffectConfig
     float Rotation = 0.0f;
     float CenterX = 0.5f;
     float CenterY = 0.5f;
+    // Matches the win32 Blitter Feedback default (bilinear off = nearest). With
+    // this off, the zoom-feedback stays crisp like the original; bilinear softens
+    // and blooms the buffer across frames.
+    bool  Bilinear = false;
+    // When bilinear is on, use the original AVS 8-bit integer 2x2 blend instead of
+    // hardware bilinear (bit-exact match to win32). Ignored when Bilinear is off.
+    bool  Compat   = false;
 };
 
 class BlitEffect : public ReflectedEffect<BlitEffectConfig>
@@ -27,6 +34,8 @@ protected:
             Range(&BlitEffectConfig::Rotation, "rotation", "Rotation", -0.1f, 0.1f, 0.001f),
             Range(&BlitEffectConfig::CenterX, "centerX", "Center X", 0.0f, 1.0f, 0.01f),
             Range(&BlitEffectConfig::CenterY, "centerY", "Center Y", 0.0f, 1.0f, 0.01f),
+            Bool(&BlitEffectConfig::Bilinear, "bilinear", "Bilinear"),
+            Bool(&BlitEffectConfig::Compat, "bilinearCompat", "Bilinear (precise)"),
         };
         return f;
     }
@@ -39,4 +48,5 @@ private:
     bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle ParamsUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle FlagsUniform = BGFX_INVALID_HANDLE;
 };

@@ -2,6 +2,7 @@
 
 #include "engine/FBOManager.h"
 #include "engine/AudioGlsl.h"
+#include "engine/ShaderSnippets.h"
 
 #include <cmath>
 
@@ -35,7 +36,7 @@ std::string DynamicDistanceModifier::BuildFragGlsl() const
 {
     std::string uboDecl = "layout(std140, binding = 1) uniform _FragParams {\n"
                           "    vec4 u_ddm_params0;   // x=w y=h z=maxD w=beat\n"
-                          "    vec4 u_ddm_params1;   // x=blend\n"
+                          "    vec4 u_ddm_params1;   // x=blend y=compat\n"
                         + m_bridge.EmitUboMembers()
                         + "};\n";
 
@@ -47,7 +48,7 @@ layout(location = 0) out vec4 bgfx_FragData0;
 )") + uboDecl + R"(
 layout(binding = 2) uniform sampler2D s_input;
 layout(binding = 3) uniform sampler2D s_audio;
-)" + kAudioGlslFns + R"(
+)" + kAudioGlslFns + avs::kBilinearCompatGlsl + R"(
 void main()
 {
     vec2 uv     = v_texcoord0.xy;
@@ -74,12 +75,14 @@ void main()
         src_uv = clamp(vec2(0.5) + center * scale, 0.0, 1.0);
     }
 
-    vec4 mapped = texture(s_input, src_uv);
+    vec3 mapped = (u_ddm_params1.y > 0.5)
+        ? bilinearCompat(s_input, src_uv, textureSize(s_input, 0))
+        : texture(s_input, src_uv).rgb;
     if (u_ddm_params1.x > 0.5) {
-        vec4 orig = texture(s_input, uv);
-        bgfx_FragData0 = vec4((mapped.rgb + orig.rgb) * 0.5, 1.0);
+        vec3 orig = texture(s_input, uv).rgb;
+        bgfx_FragData0 = vec4((mapped + orig) * 0.5, 1.0);
     } else {
-        bgfx_FragData0 = vec4(mapped.rgb, 1.0);
+        bgfx_FragData0 = vec4(mapped, 1.0);
     }
 }
 )";
@@ -217,14 +220,19 @@ void DynamicDistanceModifier::Render(const RenderContext& Context)
     const float h    = (float)Context.Height;
     const float maxD = 0.5f * std::sqrt(w * w + h * h);
 
+    // compat = original AVS 8-bit integer bilinear (only meaningful when Bilinear).
+    const bool compat = Cfg.Bilinear && Cfg.Compat;
+
     const float params0[4] = { w, h, maxD, isBeat ? 1.0f : 0.0f };
-    const float params1[4] = { Cfg.Blend ? 1.0f : 0.0f, 0, 0, 0 };
+    const float params1[4] = { Cfg.Blend ? 1.0f : 0.0f, compat ? 1.0f : 0.0f, 0, 0 };
     bgfx::setUniform(Params0Unif, params0);
     bgfx::setUniform(Params1Unif, params1);
 
     m_bridge.Upload(m_lua);
 
-    const uint32_t inputFlags = Cfg.Bilinear
+    // Compat does its own integer texelFetch blend → bind POINT. Otherwise bilinear
+    // when enabled, else nearest.
+    const uint32_t inputFlags = (Cfg.Bilinear && !compat)
         ? UINT32_MAX
         : (BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
     bgfx::setTexture(0, InputUnif, Context.InputTexture, inputFlags);

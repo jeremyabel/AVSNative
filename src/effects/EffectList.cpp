@@ -8,6 +8,15 @@
 
 #include <algorithm>
 
+// Built-in names the eval blocks expose; ScanVarDecls must not treat them as
+// user-declared. enabled/beat/clear/alphain/alphaout are read/write; w/h read-only.
+static const std::vector<std::string> k_builtins = {
+    "enabled", "beat", "clear", "alphain", "alphaout", "w", "h", "getspec", "getosc"
+};
+
+// Lua truthiness matching the JS reference: |v| > 0.1 counts as true.
+static bool LuaTruthy(double v) { return v > 0.1 || v < -0.1; }
+
 
 void EffectList::Init()
 {
@@ -19,6 +28,40 @@ void EffectList::Init()
     SrcTexUniform      = bgfx::createUniform("s_src",           bgfx::UniformType::Sampler);
     MaskTexUniform     = bgfx::createUniform("s_mask",          bgfx::UniformType::Sampler);
     BlendParamsUniform = bgfx::createUniform("u_elBlendParams", bgfx::UniformType::Vec4);
+
+    // ── Lua evaluation override ───────────────────────────────────────────────
+    for (const auto& v : k_builtins)
+        m_lua.SeedVar(v);
+    RescanUserVars();
+    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
+    m_needInit = true;
+    m_inited   = true;
+}
+
+void EffectList::RescanUserVars()
+{
+    for (const auto& v : LuaRuntime::ScanVarDecls(Cfg.InitCode, k_builtins))
+        m_lua.SeedVar(v);
+}
+
+void EffectList::OnConfigChanged(const std::vector<std::string>& Changed)
+{
+    if (!m_inited) return;
+
+    for (const auto& k : Changed)
+    {
+        if (k == "initCode")
+        {
+            RescanUserVars();
+            m_lua.CompileBlock(Cfg.InitCode, "initCode", m_initRef);
+            m_needInit = true; // re-run Init on the next active eval frame
+        }
+        else if (k == "frameCode")
+        {
+            m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
+        }
+    }
 }
 
 void EffectList::EnsureInternalBuffers(const RenderContext& Context)
@@ -66,6 +109,21 @@ void EffectList::SubmitBlend(uint8_t ViewId,
     bgfx::submit(ViewId, BlendProgram);
 }
 
+void EffectList::RenderPassThrough(const RenderContext& Context)
+{
+    // Pass-through: allocate one view block and blit input → output.
+    const uint8_t passView = *Context.NextViewId;
+    *Context.NextViewId += 4;
+    bgfx::setViewFrameBuffer(passView, Context.OutputFBO);
+    bgfx::setViewClear(passView, BGFX_CLEAR_NONE, 0);
+    bgfx::setViewRect(passView, 0, 0, (uint16_t)Context.Width, (uint16_t)Context.Height);
+    bgfx::touch(passView);
+    SubmitBlend(passView,
+                Context.InputTexture, Context.InputTexture, BGFX_INVALID_HANDLE,
+                1, Cfg.BlendAmt, false, Context.QuadVB);
+    Context.FboManager->Swap();
+}
+
 void EffectList::Render(const RenderContext& Context)
 {
     // On-beat gating
@@ -77,17 +135,7 @@ void EffectList::Render(const RenderContext& Context)
 
     if (!Active)
     {
-        // Pass-through: allocate one view block and blit input → output.
-        const uint8_t passView = *Context.NextViewId;
-        *Context.NextViewId += 4;
-        bgfx::setViewFrameBuffer(passView, Context.OutputFBO);
-        bgfx::setViewClear(passView, BGFX_CLEAR_NONE, 0);
-        bgfx::setViewRect(passView, 0, 0, (uint16_t)Context.Width, (uint16_t)Context.Height);
-        bgfx::touch(passView);
-        SubmitBlend(passView,
-                    Context.InputTexture, Context.InputTexture, BGFX_INVALID_HANDLE,
-                    1, Cfg.BlendAmt, false, Context.QuadVB);
-        Context.FboManager->Swap();
+        RenderPassThrough(Context);
         return;
     }
 
@@ -96,9 +144,45 @@ void EffectList::Render(const RenderContext& Context)
     const uint16_t W = (uint16_t)Context.Width;
     const uint16_t H = (uint16_t)Context.Height;
 
+    // ── Step 0: evaluation override ───────────────────────────────────────────
+    // Runs before any rendering so the script can override per-frame state.
+    bool  clearThisFrame = Cfg.ClearFrame;
+    float alphaIn        = Cfg.BlendAmt;
+    float alphaOut       = Cfg.BlendAmt;
+    if (Cfg.UseEval)
+    {
+        m_lua.SetAudioData(Context.AudioData);
+        m_lua.SetEnvNumber("w",        (double)W);
+        m_lua.SetEnvNumber("h",        (double)H);
+        m_lua.SetEnvNumber("beat",     Context.IsBeat() ? 1.0 : 0.0);
+        m_lua.SetEnvNumber("enabled",  1.0);
+        m_lua.SetEnvNumber("clear",    clearThisFrame ? 1.0 : 0.0);
+        m_lua.SetEnvNumber("alphain",  alphaIn);
+        m_lua.SetEnvNumber("alphaout", alphaOut);
+
+        if (m_needInit)
+        {
+            m_lua.RunBlock(m_initRef, "initCode");
+            m_needInit = false;
+        }
+        m_lua.RunBlock(m_frameRef, "frameCode");
+
+        // Read back the writable built-ins.
+        Context.SetBeat(LuaTruthy(m_lua.GetEnvNumber("beat")));
+        clearThisFrame = LuaTruthy(m_lua.GetEnvNumber("clear"));
+        alphaIn  = (float)std::clamp(m_lua.GetEnvNumber("alphain"),  0.0, 1.0);
+        alphaOut = (float)std::clamp(m_lua.GetEnvNumber("alphaout"), 0.0, 1.0);
+
+        if (!LuaTruthy(m_lua.GetEnvNumber("enabled")))
+        {
+            RenderPassThrough(Context);
+            return;
+        }
+    }
+
     // ── Step 1: optionally clear internal buffer ──────────────────────────────
     // View grabbed from the shared counter so it executes before the output blend.
-    if (Cfg.ClearFrame)
+    if (clearThisFrame)
     {
         const uint8_t clearView = *Context.NextViewId;
         *Context.NextViewId += 4;
@@ -127,7 +211,7 @@ void EffectList::Render(const RenderContext& Context)
 
         SubmitBlend(blendView,
                     InnerFbos.GetCurrent().Texture, Context.InputTexture,
-                    MaskTex, Cfg.InBlend, Cfg.BlendAmt, Cfg.InBlendBufInvert, Context.QuadVB);
+                    MaskTex, Cfg.InBlend, alphaIn, Cfg.InBlendBufInvert, Context.QuadVB);
         InnerFbos.Swap();
     }
 
@@ -161,7 +245,7 @@ void EffectList::Render(const RenderContext& Context)
 
     SubmitBlend(outView,
                 Context.InputTexture, InnerFbos.GetCurrent().Texture,
-                OutMaskTex, Cfg.OutBlend, Cfg.BlendAmt, Cfg.OutBlendBufInvert, Context.QuadVB);
+                OutMaskTex, Cfg.OutBlend, alphaOut, Cfg.OutBlendBufInvert, Context.QuadVB);
 
     Context.FboManager->Swap();
 }

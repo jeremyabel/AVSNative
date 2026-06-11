@@ -2,6 +2,7 @@
 
 #include "engine/FBOManager.h"
 #include "engine/ShaderCompiler.h"
+#include "engine/ShaderSnippets.h"
 
 #include <bgfx/bgfx.h>
 
@@ -113,11 +114,11 @@ layout(location = 0) in  vec4 v_texcoord0;   // bgfx varyings are always vec4
 layout(location = 0) out vec4 bgfx_FragData0;
 
 layout(std140, binding = 1) uniform _FragParams {
-    vec4 u_params;  // x = time, y = wrap (bool), z = blend 50/50 (bool)
+    vec4 u_params;  // x = time, y = wrap, z = blend 50/50, w = bilinearCompat
 };
 
 layout(binding = 2) uniform sampler2D s_texColor;
-
+)" + std::string(avs::kBilinearCompatGlsl) + R"(
 void main() {
     const float PI = 3.14159265358979;
     vec2 Uv = v_texcoord0.xy;
@@ -139,12 +140,14 @@ void main() {
     else
         NewUv = clamp(NewUv, 0.0, 1.0);
 
-    vec4 Sampled = texture(s_texColor, NewUv);
+    vec3 Sampled = (u_params.w > 0.5)
+        ? bilinearCompat(s_texColor, NewUv, textureSize(s_texColor, 0))
+        : texture(s_texColor, NewUv).rgb;
 
     if (u_params.z > 0.5)
-        bgfx_FragData0 = mix(texture(s_texColor, Uv), Sampled, 0.5);
+        bgfx_FragData0 = vec4(mix(texture(s_texColor, Uv).rgb, Sampled, 0.5), 1.0);
     else
-        bgfx_FragData0 = Sampled;
+        bgfx_FragData0 = vec4(Sampled, 1.0);
 }
 )";
 }
@@ -294,15 +297,22 @@ void Movement::RenderPull(const RenderContext& Context)
     if (!bgfx::isValid(Program))
         return;
 
+    // compat = original AVS 8-bit integer bilinear (only meaningful when Bilinear).
+    const bool compat = Cfg.Bilinear && Cfg.Compat;
+
     float Params[4] = {
         (float)Context.Time,
         Cfg.Wrap  ? 1.0f : 0.0f,
         Cfg.Blend ? 1.0f : 0.0f,
-        0.0f
+        compat ? 1.0f : 0.0f
     };
     bgfx::setUniform(ParamsUniform, Params);
 
-    const uint32_t SamplerFlags = Cfg.Bilinear ? UINT32_MAX : (BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
+    // Compat does its own integer texelFetch blend → bind POINT. Otherwise bilinear
+    // when enabled, else nearest.
+    const uint32_t SamplerFlags = (Cfg.Bilinear && !compat)
+        ? UINT32_MAX
+        : (BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
     bgfx::setTexture(0, TexUniform, Context.InputTexture, SamplerFlags);
 
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);

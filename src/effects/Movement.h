@@ -10,6 +10,7 @@ struct MovementConfig
     std::string Code;
     bool Wrap         = false;
     bool Bilinear     = true;
+    bool Compat       = false;  // 8-bit integer bilinear matching win32 (needs Bilinear)
     bool Blend        = false;
     bool SourceMap    = false;
     bool OnBeatToggle = false;
@@ -40,6 +41,7 @@ protected:
             SelectS(&MovementConfig::Coordinates, "coordinates", "Coordinates", { "polar", "cartesian" }),
             Glsl(&MovementConfig::Code, "code", "GLSL Code"),
             Bool(&MovementConfig::Bilinear, "bilinear", "Bilinear"),
+            Bool(&MovementConfig::Compat, "bilinearCompat", "Bilinear (precise)"),
             Bool(&MovementConfig::Wrap, "wrap", "Wrap"),
             Bool(&MovementConfig::Blend, "blend", "Blend (50/50)"),
             Bool(&MovementConfig::SourceMap, "sourceMap", "Source Map"),

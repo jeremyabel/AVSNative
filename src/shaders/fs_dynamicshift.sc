@@ -1,11 +1,12 @@
 $input v_texcoord0
 
 #include <bgfx_shader.sh>
+#include "bilinear_compat.sh"
 
 SAMPLER2D(s_input, 0);
 
 uniform vec4 u_ds_params0;  // x=shiftX(px), y=shiftY(px), z=width, w=height
-uniform vec4 u_ds_params1;  // x=blend(0/1), y=alpha
+uniform vec4 u_ds_params1;  // x=blend(0/1), y=alpha, z=compat(0/1)
 
 void main()
 {
@@ -16,6 +17,7 @@ void main()
     float h  = u_ds_params0.w;
     float blend = u_ds_params1.x;
     float alpha = u_ds_params1.y;
+    bool  compat = u_ds_params1.z > 0.5;
 
     // Output at (u,v) reads from input shifted by (sx,sy) pixels.
     // Positive sx = content shifts right (border on left).
@@ -24,7 +26,11 @@ void main()
     bool inBounds = src_uv.x >= 0.0 && src_uv.x <= 1.0
                  && src_uv.y >= 0.0 && src_uv.y <= 1.0;
 
-    vec3 shifted = inBounds ? texture2D(s_input, src_uv).rgb : vec3(0.0, 0.0, 0.0);
+    vec3 shifted = vec3(0.0, 0.0, 0.0);
+    if (inBounds)
+        shifted = compat
+            ? bilinearCompat(s_input, src_uv, textureSize(s_input, 0))
+            : texture2D(s_input, src_uv).rgb;
 
     if (blend > 0.5) {
         vec3 orig   = texture2D(s_input, uv).rgb;

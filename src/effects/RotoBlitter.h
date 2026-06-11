@@ -8,7 +8,8 @@ struct RotoBlitterConfig
     int  ZoomScale2  = 31;    // beat zoom target
     int  RotDir      = 31;    // 0-64; 32 = no rotation, <32 one way, >32 other
     int  BeatchSpeed = 0;     // 0-8; rotation reversal smoothing
-    bool Subpixel    = true;
+    bool Subpixel    = true;  // hardware bilinear (vs nearest)
+    bool Compat      = false; // 8-bit integer bilinear matching the win32 original
     bool Blend       = false;
     bool Beatch      = false; // reverse rotation on beat
     bool BeatchScale = false; // snap zoom on beat
@@ -30,6 +31,7 @@ protected:
             RangeI(&RotoBlitterConfig::RotDir, "rot_dir", "Rotation", 0, 64),
             RangeI(&RotoBlitterConfig::BeatchSpeed, "beatch_speed", "Reversal Smoothing", 0, 8),
             Bool(&RotoBlitterConfig::Subpixel, "subpixel", "Subpixel"),
+            Bool(&RotoBlitterConfig::Compat, "bilinearCompat", "Bilinear (precise)"),
             Bool(&RotoBlitterConfig::Blend, "blend", "Blend"),
             Bool(&RotoBlitterConfig::Beatch, "beatch", "Reverse on Beat"),
             Bool(&RotoBlitterConfig::BeatchScale, "beatch_scale", "Zoom Snap on Beat"),

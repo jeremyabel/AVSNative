@@ -1,12 +1,13 @@
 $input v_texcoord0
 
 #include <bgfx_shader.sh>
+#include "bilinear_compat.sh"
 
 SAMPLER2D(s_texColor, 0);
 
 // x=cosTheta, y=sinTheta, z=zoom, w=blend(0/1)
 uniform vec4 u_rbTransform;
-// x=width, y=height
+// x=width, y=height, z=compat(0/1)
 uniform vec4 u_rbResolution;
 
 void main()
@@ -17,6 +18,7 @@ void main()
     float blend = u_rbTransform.w;
     float W     = u_rbResolution.x;
     float H     = u_rbResolution.y;
+    bool  compat = u_rbResolution.z > 0.5;
 
     float cx = W * 0.5;
     float cy = H * 0.5;
@@ -32,15 +34,18 @@ void main()
     // Tile via fract — matches original s %= (w-1) wrap behaviour
     vec2 src_uv = fract(vec2(src_px / W, src_py / H));
 
-    vec4 mapped = texture2D(s_texColor, src_uv);
+    // compat = original AVS 8-bit integer bilinear; else hardware filter.
+    vec3 mapped = compat
+        ? bilinearCompat(s_texColor, src_uv, textureSize(s_texColor, 0))
+        : texture2D(s_texColor, src_uv).rgb;
 
     if (blend > 0.5)
     {
-        vec4 orig = texture2D(s_texColor, v_texcoord0.xy);
-        gl_FragColor = vec4((orig.rgb + mapped.rgb) * 0.5, 1.0);
+        vec3 orig = texture2D(s_texColor, v_texcoord0.xy).rgb;
+        gl_FragColor = vec4((orig + mapped) * 0.5, 1.0);
     }
     else
     {
-        gl_FragColor = vec4(mapped.rgb, 1.0);
+        gl_FragColor = vec4(mapped, 1.0);
     }
 }

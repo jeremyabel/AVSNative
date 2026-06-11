@@ -61,11 +61,16 @@ void RotoBlitter::Render(const RenderContext& Context)
 
     // ── Submit ───────────────────────────────────────────────────────────────
     const float Transform[4] = { cosT, sinT, zoom, Cfg.Blend ? 1.0f : 0.0f };
-    const float Resolution[4] = { (float)Context.Width, (float)Context.Height, 0.0f, 0.0f };
+    const float Resolution[4] = { (float)Context.Width, (float)Context.Height,
+                                  Cfg.Compat ? 1.0f : 0.0f, 0.0f };
     bgfx::setUniform(TransformUniform, Transform);
     bgfx::setUniform(ResolutionUniform, Resolution);
 
-    const uint32_t SamplerFlags = Cfg.Subpixel ? UINT32_MAX : BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
+    // Compat does its own integer texelFetch blend, so bind POINT (the shader
+    // ignores the hardware filter). Otherwise: bilinear when Subpixel, else nearest.
+    const uint32_t PointFlags = BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT |
+                                BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP;
+    const uint32_t SamplerFlags = (Cfg.Subpixel && !Cfg.Compat) ? UINT32_MAX : PointFlags;
     bgfx::setTexture(0, TexUniform, Context.InputTexture, SamplerFlags);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);

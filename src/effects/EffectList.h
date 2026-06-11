@@ -3,6 +3,9 @@
 #include "engine/Reflect.h"
 #include "engine/EffectChain.h"
 #include "engine/FBOManager.h"
+#include "engine/LuaRuntime.h"
+
+#include <string>
 
 struct EffectListConfig
 {
@@ -16,6 +19,11 @@ struct EffectListConfig
     bool OutBlendBufInvert = false;
     bool OnBeat       = false;
     int  OnBeatFrames = 1;
+    // Lua evaluation override: per-frame Init/Frame blocks that can read/write
+    // enabled, beat, clear, alphain, alphaout (w/h read-only). Off by default.
+    bool        UseEval  = false;
+    std::string InitCode;
+    std::string FrameCode;
 };
 
 class EffectList : public ReflectedEffect<EffectListConfig>
@@ -30,6 +38,13 @@ public:
 
     EffectChain* GetInnerChain() override { return &Inner; }
     uint8_t ExpectedViewCount() const override;
+
+    void OnConfigChanged(const std::vector<std::string>& Changed) override;
+
+    std::string GetScriptError(const std::string& paramName) const override
+    {
+        return m_lua.GetError(paramName);
+    }
 
 protected:
     const std::vector<Field>& Fields() const override
@@ -52,6 +67,9 @@ protected:
             SelectI(&EffectListConfig::OutBlendBuf, "outBlendBuf", "Output Buffer", kSlotOpts),
             Bool(&EffectListConfig::OutBlendBufInvert, "outBlendBufInvert", "Invert Output Mask"),
             Range(&EffectListConfig::BlendAmt, "blendAmt", "Blend Amount", 0.0f, 1.0f, 0.01f),
+            Bool(&EffectListConfig::UseEval, "useCode", "Use evaluation override"),
+            Lua(&EffectListConfig::InitCode,  "initCode",  "Init"),
+            Lua(&EffectListConfig::FrameCode, "frameCode", "Frame"),
         };
         return f;
     }
@@ -66,6 +84,19 @@ private:
                      bgfx::VertexBufferHandle QuadVB);
 
     void EnsureInternalBuffers(const RenderContext& Context);
+
+    // Blit input → output unchanged (used when on-beat window expired or the eval
+    // override sets enabled=0). Allocates one 4-view block, like an inactive list.
+    void RenderPassThrough(const RenderContext& Context);
+
+    // Lua evaluation override
+    void RescanUserVars();
+
+    LuaRuntime m_lua;
+    int  m_initRef   = -1;
+    int  m_frameRef  = -1;
+    bool m_inited    = false;  // Init() has set up Lua + compiled blocks
+    bool m_needInit  = true;   // run the Init block on the next active eval frame
 
     // Sub-effect chain rendered in isolation
     EffectChain Inner;

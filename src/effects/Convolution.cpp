@@ -78,11 +78,13 @@ void Convolution::Render(const RenderContext& Ctx)
     for (int i = 0; i < 49; ++i)
         kernelData[i] = (float)Cfg.Kernel[i];
 
+    // Signed scale (sign handled in-shader); 0 is treated as 1 like the original.
     const float scale = (Cfg.Scale == 0) ? 1.0f : (float)Cfg.Scale;
 
-    // Bias scaled by 256/255 to match the original's fixed-point range.
+    // The shader works in integer pixel units (0..255), so bias enters as the
+    // original's 256*bias word value.
     float params[4] = {
-        (float)Cfg.Bias * 256.0f / 255.0f,
+        256.0f * (float)Cfg.Bias,
         scale,
         Cfg.Wrap     ? 1.0f : 0.0f,
         Cfg.Absolute ? 1.0f : 0.0f,

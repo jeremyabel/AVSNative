@@ -17,6 +17,7 @@ struct DynamicShiftConfig
     std::string BeatCode  = "d = d + 2.0";
     bool Blend    = false;  // false = black border; true = alpha-blend with original
     bool Subpixel = true;   // linear filtering on the input texture
+    bool Compat   = false;  // 8-bit integer bilinear matching win32 (needs Subpixel)
 };
 
 class DynamicShift : public ReflectedEffect<DynamicShiftConfig>
@@ -42,6 +43,7 @@ protected:
             Lua (&DynamicShiftConfig::BeatCode,  "beatCode",  "Beat"),
             ::Bool(&DynamicShiftConfig::Blend,    "blend",    "Blend"),
             ::Bool(&DynamicShiftConfig::Subpixel, "subpixel", "Subpixel"),
+            ::Bool(&DynamicShiftConfig::Compat, "bilinearCompat", "Bilinear (precise)"),
         };
         return f;
     }
