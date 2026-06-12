@@ -23,6 +23,9 @@
 [submodule "ref/AVSWeb"]
 	path = ref/AVSWeb
 	url = https://github.com/jeremyabel/AVSWeb.git
+[submodule "ref/vis-avs"]
+	path = ref/vis-avs
+	url = https://github.com/grandchild/vis_avs.git
 [submodule "lib/imgui_gradient"]
 	path = lib/imgui_gradient
 	url = https://github.com/Coollab-Art/imgui_gradient.git
