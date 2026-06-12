@@ -20,14 +20,23 @@ enum class Lang
     Lua,
 };
 
-// Renders a syntax-highlighted code editor identified by `id` (stable per editor).
-// `text` is read and written in place. Returns true if the text changed this frame.
-// If `text` is changed programmatically between frames (e.g. Movement swapping its
-// default code), the editor re-syncs to it.
+// Namespaces subsequent CodeEditor() calls to a specific effect instance so the
+// same editor id (e.g. "texer2.initCode") used by two effects — even of the same
+// type, shown in two panels at once — gets independent editor state. Call before
+// drawing an effect's body; pass nullptr to clear the scope.
+void SetEditorScope(const void* effect);
+
+// Renders a syntax-highlighted code editor identified by `id` (stable per editor,
+// within the current SetEditorScope). `text` is read and written in place. Returns
+// true if the text changed this frame. If `text` is changed programmatically between
+// frames (e.g. Movement swapping its default code), the editor re-syncs to it.
 bool CodeEditor(const char* id, std::string& text, Lang lang, float height = 150.0f);
 
-// Clears all editor instances. Call when the selected effect changes so stale
-// editors don't leak between effects.
+// Drops editor instances that weren't drawn this frame. Call once after all config
+// panels are rendered; bounds the editor map as effects are added/removed/unlocked.
+void EndFramePrune();
+
+// Clears all editor instances (e.g. on full chain clear).
 void ResetEditors();
 
 // uint8 RGB color picker. Returns true if changed.

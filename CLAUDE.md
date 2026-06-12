@@ -151,11 +151,25 @@ nanovg's fontstash needs an external `stb_truetype` implementation (it used to c
 - View 254: engine blit → output window framebuffer (`Engine::SetOutputFrameBuffer()`)
 - View 255: ImGui → editor window backbuffer (`BGFX_INVALID_HANDLE`)
 
-**ChainPanel** — effect list with enable checkbox, selectable name, drag-drop reorder, remove button, and an Add combo. Effect names come from `Registry::Names()`.
+**ChainPanel** — effect list with enable checkbox, selectable name, drag-drop reorder, an amber **"L"
+lock toggle** + red **"x"** remove button per row, and an Add combo. Effect names come from
+`Registry::Names()`. Lock toggles `EffectEntry::Locked` (assigning `EffectEntry::Id` on first lock).
 
-**ConfigPanel** — thin host: window chrome, then looks up the selected effect's name in the
-`ConfigUiRegistry` and calls its draw function (falling back to `DrawDefault` if none registered).
-It resets the shared code editors (`ConfigUi::ResetEditors()`) when the selected effect changes.
+**Lockable property panels** — `EffectEntry` (in `EffectChain.h`) carries `bool Locked` + `uint32_t Id`
+(0 = unassigned) alongside `Enabled`; both are serialized in the preset (item level, beside `enabled`)
+and travel with the effect through reorder/drag. New effects get an id via `AllocEffectId()` in
+`EffectChain::Insert`; the load path keeps the serialized id (`NoteEffectId` bumps the allocator past
+it). A locked effect gets its own dockable panel (`ConfigPanel::RenderLockedPanels`, walked recursively
+over the tree) titled `"<Name>###avsprop<id>"` — the stable id lets imgui.ini reattach its dock
+position across reloads (the user chose: locks travel in the preset, dock positions stay machine-local).
+Closing a locked panel's window untoggles its lock. This lets several effects be edited at once.
+
+**ConfigPanel** — thin host. `Render(engine, EffectEntry* selected)` draws the shared **Properties**
+window: the selected effect's name + its `ConfigUiRegistry` draw function ("No UI registered." if
+missing), unless that effect is locked (then it shows a hint, so the same effect's editors are never
+drawn twice in one frame). `RenderLockedPanels` draws the per-locked-effect panels. Both route through
+a `DrawBody(Effect*)` that calls `ConfigUi::SetEditorScope(effect)` first so code editors are
+per-instance. `App::RenderUI` calls `Render`, then `RenderLockedPanels`, then `ConfigUi::EndFramePrune()`.
 
 **ConfigUiRegistry** (`src/ui/ConfigUiRegistry.h/.cpp`) — maps an effect's display name → a
 `void(Effect*)` draw function. `RegisterAllEffectUis()` explicitly calls each effect's
@@ -173,9 +187,13 @@ here. When a param has a side-effect, the UI calls the effect's public method di
 
 **ConfigUi** (`src/ui/ConfigUi.h/.cpp`) — small shared helpers: `CodeEditor(id, text, lang)` owns the
 persistent `TextEditor` (ImGuiColorTextEdit) instances and re-syncs when `text` changes programmatically
-(always bind it to the effect's member string, never a copy); `ColorEdit` converts uint8 RGB ↔ ImGui
-float[3]; `ColorsEdit` edits a color list (add/remove, keeps ≥1 entry); `ResetEditors()` clears editor
-state; `PickImageInto(effect, key)` opens a file dialog and hands raw bytes to `ApplyAsset`.
+(always bind it to the effect's member string, never a copy). Editor state is **namespaced per effect
+instance** via `SetEditorScope(effect)` (called by `ConfigPanel::DrawBody` before each panel) so two
+panels showing different effects — even of the same type — don't share editors; `EndFramePrune()` (once
+per frame, after all panels) drops editors not drawn that frame. `ColorEdit` converts uint8 RGB ↔ ImGui
+float[3]; `ColorsEdit` edits a color list (add/remove, keeps ≥1 entry); `ResetEditors()` clears all
+editor state (full chain clear); `PickImageInto(effect, key)` opens a file dialog and hands raw bytes to
+`ApplyAsset`.
 
 **ImGuiColorTextEdit** (`future` branch) is at `lib/ImGuiColorTextEdit/`. Sources are added directly to the `avs_ui` CMake target (no sub-CMakeLists). Include path: `${BGFX_3RDPARTY}/dear-imgui` (for `imgui.h`) and `lib/ImGuiColorTextEdit`. API: `ed.SetLanguage(TextEditor::Language::Lua())`, `ed.SetText(...)`, `ed.GetText()`, `ed.Render("##id", size)`. The editor instances are owned by `ConfigUi.cpp`.
 

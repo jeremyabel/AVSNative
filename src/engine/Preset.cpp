@@ -107,8 +107,17 @@ static void LoadChain(EffectChain& Chain,
 
         Chain.Add(std::move(Effect));
 
+        EffectEntry& Added = Chain.GetEntry(Chain.Count() - 1);
         if (!Enabled)
-            Chain.GetEntry(Chain.Count() - 1).Enabled = false;
+            Added.Enabled = false;
+        Added.Locked = Item.value("locked", false);
+        // Restore the stable id (so a locked panel's docked position reattaches);
+        // an absent id stays 0 and is assigned lazily when the effect is locked.
+        if (Item.contains("id") && Item["id"].is_number_unsigned())
+        {
+            Added.Id = Item["id"].get<uint32_t>();
+            NoteEffectId(Added.Id);
+        }
     }
 }
 
@@ -200,6 +209,10 @@ static nlohmann::json SerialiseChain(EffectChain& Chain,
         nlohmann::json item;
         item["type"]    = Entry.Effect->Name();
         item["enabled"] = Entry.Enabled;
+        if (Entry.Locked)
+            item["locked"] = true;
+        if (Entry.Id != 0)
+            item["id"] = Entry.Id;
 
         nlohmann::json cfg = Entry.Effect->Serialize();
 

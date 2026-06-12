@@ -24,24 +24,38 @@ struct EditorState
 {
     TextEditor  Editor;
     std::string LastText; // last text we synced with the config field
+    bool        Seen = false; // drawn this frame? (for EndFramePrune)
 };
 
 std::unordered_map<std::string, EditorState> s_editors;
+std::string                                  s_scope; // current effect scope (see SetEditorScope)
 } // namespace
 
 namespace ConfigUi
 {
+void SetEditorScope(const void* effect)
+{
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%p|", effect);
+    s_scope = buf;
+}
+
 bool CodeEditor(const char* id, std::string& text, Lang lang, float height)
 {
-    auto it = s_editors.find(id);
+    // Namespace the persistent editor by the current effect scope, but keep the
+    // bare `id` as the ImGui widget id (ImGui ids are window-scoped, so two panels
+    // showing different same-type effects don't clash).
+    const std::string key = s_scope + id;
+
+    auto it = s_editors.find(key);
     if (it == s_editors.end())
     {
-        EditorState& st = s_editors[id];
+        EditorState& st = s_editors[key];
         st.Editor.SetLanguage(lang == Lang::Glsl ? TextEditor::Language::Glsl()
                                                  : TextEditor::Language::Lua());
         st.Editor.SetText(text);
         st.LastText = text;
-        it = s_editors.find(id);
+        it = s_editors.find(key);
     }
     else if (text != it->second.LastText)
     {
@@ -51,6 +65,7 @@ bool CodeEditor(const char* id, std::string& text, Lang lang, float height)
     }
 
     EditorState& st = it->second;
+    st.Seen = true;
     st.Editor.Render(id, ImVec2(-1.0f, height));
 
     std::string newText = st.Editor.GetText();
@@ -61,6 +76,20 @@ bool CodeEditor(const char* id, std::string& text, Lang lang, float height)
         return true;
     }
     return false;
+}
+
+void EndFramePrune()
+{
+    for (auto it = s_editors.begin(); it != s_editors.end(); )
+    {
+        if (!it->second.Seen)
+            it = s_editors.erase(it);
+        else
+        {
+            it->second.Seen = false;
+            ++it;
+        }
+    }
 }
 
 void ResetEditors()

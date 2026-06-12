@@ -8,6 +8,7 @@
 #include "engine/Preset.h"
 #include "ui/ChainPanel.h"
 #include "ui/ConfigPanel.h"
+#include "ui/ConfigUi.h"
 #include "ui/FileDialog.h"
 
 // Self-hosted Dear ImGui (docking) + our own backends.
@@ -524,12 +525,16 @@ void App::RenderUI()
 
     ChainPanel::Render(m_engine, m_engine.GetChain(), m_selectedChain, m_selectedEffect);
 
-    Effect* Selected = nullptr;
+    EffectEntry* Selected = nullptr;
     if (m_selectedChain && m_selectedEffect >= 0 &&
         m_selectedEffect < m_selectedChain->Count())
-        Selected = m_selectedChain->GetEntry(m_selectedEffect).Effect.get();
+        Selected = &m_selectedChain->GetEntry(m_selectedEffect);
 
     ConfigPanel::Render(m_engine, Selected);
+    ConfigPanel::RenderLockedPanels(m_engine, m_engine.GetChain());
+
+    // Drop editor state for any effect that wasn't drawn this frame.
+    ConfigUi::EndFramePrune();
 
     // Submit all ImGui draw data to bgfx view 255.
     ImGui::Render();

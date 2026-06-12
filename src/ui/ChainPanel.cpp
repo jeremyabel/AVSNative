@@ -144,7 +144,29 @@ static bool RenderChainItems(EffectChain& chain,
 {
     const float btnW    = ImGui::CalcTextSize("x").x
                           + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float lockW   = ImGui::CalcTextSize("L").x
+                          + ImGui::GetStyle().FramePadding.x * 2.0f;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    // Width reserved at the right edge for the two row buttons (L then x) plus the
+    // gap between them.
+    const float btnsW   = lockW + spacing + btnW;
+
+    // Draws the amber "L" lock toggle. Flips entry.Locked (assigning an id on first
+    // lock). Pure UI state — no structural change, so callers don't early-return.
+    auto LockButton = [](EffectEntry& e)
+    {
+        const bool on = e.Locked;
+        if (on)
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.6f, 0.1f, 1.0f));
+        if (ImGui::SmallButton("L"))
+        {
+            e.Locked = !e.Locked;
+            if (e.Locked && e.Id == 0)
+                e.Id = AllocEffectId();
+        }
+        if (on)
+            ImGui::PopStyleColor();
+    };
 
     // Insertion gap above the first item (targets index 0 of this chain).
     if (RenderGap(chain, 0, selectedChain, selectedIdx))
@@ -227,9 +249,11 @@ static bool RenderChainItems(EffectChain& chain,
                 ImGui::EndDragDropTarget();
             }
 
-            // "x" button overlaid at the right edge of the header row.
+            // "L" lock toggle + "x" remove, overlaid at the right edge of the header.
             ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - btnW);
+            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - btnsW);
+            LockButton(entry);
+            ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
             doRemove = ImGui::SmallButton("x");
             ImGui::PopStyleColor();
@@ -245,7 +269,7 @@ static bool RenderChainItems(EffectChain& chain,
         else
         {
             // ── Selectable for leaf effects ───────────────────────────────────
-            const float labelW = ImGui::GetContentRegionAvail().x - btnW - spacing;
+            const float labelW = ImGui::GetContentRegionAvail().x - btnsW - spacing;
             if (ImGui::Selectable(name.c_str(), selected,
                                   ImGuiSelectableFlags_None,
                                   ImVec2(labelW, 0.0f)))
@@ -264,7 +288,9 @@ static bool RenderChainItems(EffectChain& chain,
                 ImGui::EndDragDropSource();
             }
 
-            // "x" button.
+            // "L" lock toggle + "x" remove.
+            ImGui::SameLine();
+            LockButton(entry);
             ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
             doRemove = ImGui::SmallButton("x");

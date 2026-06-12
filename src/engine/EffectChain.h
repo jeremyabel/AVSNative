@@ -2,6 +2,7 @@
 
 #include "Effect.h"
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -9,7 +10,20 @@ struct EffectEntry
 {
     std::unique_ptr<Effect> Effect;
     bool Enabled = true;
+    // Open the effect's properties in a dedicated dockable panel that stays up
+    // regardless of selection (see ConfigPanel::RenderLockedPanels). Serialized.
+    bool Locked = false;
+    // Stable per-effect identity (0 = unassigned). Travels with the effect through
+    // reorder/drag because it lives on the entry, and is serialized so a locked
+    // panel's docked position (keyed by this id in imgui.ini) survives reloads.
+    uint32_t Id = 0;
 };
+
+// Allocate a fresh, process-unique effect id (always non-zero). Used when a new
+// effect is inserted or first locked.
+uint32_t AllocEffectId();
+// Ensure the allocator never re-issues a loaded id (call on preset load).
+void NoteEffectId(uint32_t id);
 
 class EffectChain
 {

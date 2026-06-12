@@ -2,6 +2,20 @@
 
 #include "FBOManager.h"
 
+// Monotonic effect-id source. Starts at 1 so 0 always means "unassigned".
+static uint32_t g_nextEffectId = 1;
+
+uint32_t AllocEffectId()
+{
+    return g_nextEffectId++;
+}
+
+void NoteEffectId(uint32_t id)
+{
+    if (id >= g_nextEffectId)
+        g_nextEffectId = id + 1;
+}
+
 void EffectChain::Render(RenderContext Context)
 {
     for (auto& Entry : Entries)
@@ -77,6 +91,9 @@ void EffectChain::Add(std::unique_ptr<Effect> Effect)
 
 void EffectChain::Insert(int32_t Index, EffectEntry Entry)
 {
+    // Assign an id to freshly created effects; cross-chain moves carry a nonzero id.
+    if (Entry.Id == 0)
+        Entry.Id = AllocEffectId();
     Index = std::max(0, std::min(Index, (int32_t)Entries.size()));
     Entries.insert(Entries.begin() + Index, std::move(Entry));
 }
