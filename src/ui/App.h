@@ -6,6 +6,7 @@
 #include <vector>
 
 struct SDL_Window;
+struct ImGuiStyle;
 class Engine;
 class EffectChain;
 
@@ -22,7 +23,6 @@ private:
     void Shutdown();
     void ProcessEvents();
     void RenderUI();
-    void ResizeOutput(int32_t Width, int32_t Height);
 
     Engine&      m_engine;
 
@@ -43,6 +43,21 @@ private:
 
     bool     m_buildDefaultLayout = false;  // build the dock layout on first frame (no imgui.ini)
     bool     m_showSliders        = true;   // Sliders panel visibility (View menu toggle)
+
+    // UI (DPI) content scale. 0 = Auto (native HiDPI already handles density, so
+    // Auto = 1.0); otherwise a manual percentage (100/125/150/200). Applied to the
+    // ImGui style (font + spacing) at the top of RenderUI when dirty.
+    int          m_uiScalePct   = 0;
+    bool         m_uiScaleDirty = true;
+    ImGuiStyle*  m_baseStyle    = nullptr;  // pristine style snapshot (heap, to keep App.h light)
+
+    // Output render resolution as a percentage of the output window's pixel size.
+    // The window stays the same size; only the internal render resolution changes
+    // (lower = cheaper/softer, higher = supersampled). Blit scales it to fill.
+    int      m_outputRenderPct   = 100;
+    int32_t  m_outputPixelW      = 0;  // output window size in PIXELS (HiDPI aware)
+    int32_t  m_outputPixelH      = 0;
+    bool     m_outputSizingDirty = false; // apply ApplyOutputSizing() before next Tick
 
     uint32_t m_lastKey = 0;   // most recent key seen by KeyInput (shown in the status bar)
 
@@ -67,4 +82,10 @@ private:
     void RenderOptionsWindow();
     void RenderStatusBar();
     void BuildDefaultDockLayout(unsigned int dockId);
+
+    // DPI / sizing helpers.
+    void ApplyEditorSizing();   // editor window pixel size -> bgfx reset + view 255
+    void ApplyOutputSizing();   // output window pixel size + render% -> FBO + engine
+    void ApplyUiScale();        // (re)apply m_uiScalePct to the ImGui style
+    float AutoUiScale() const;  // content scale for "Auto" (1.0; density handled natively)
 };

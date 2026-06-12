@@ -193,7 +193,10 @@ void ImGui_ImplBgfx_RenderDrawData(ImDrawData* drawData)
         const float h = drawData->DisplaySize.y;
         bx::mtxOrtho(ortho, x, x + w, y + h, y, 0.0f, 1000.0f, 0.0f, caps->homogeneousDepth);
         bgfx::setViewTransform(viewId, nullptr, ortho);
-        bgfx::setViewRect(viewId, 0, 0, (uint16_t)w, (uint16_t)h);
+        // Viewport is the framebuffer in PIXELS (DisplaySize * FramebufferScale); the
+        // ortho stays in points, so on a HiDPI display the UI fills the high-density
+        // backbuffer and renders crisply. clipScale below converts scissors to pixels.
+        bgfx::setViewRect(viewId, 0, 0, (uint16_t)fbWidth, (uint16_t)fbHeight);
     }
 
     const ImVec2 clipPos   = drawData->DisplayPos;

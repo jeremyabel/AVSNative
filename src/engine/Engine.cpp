@@ -220,8 +220,13 @@ void Engine::Tick()
 
     Chain.Render(Context);
 
-    // Blit final FBO to the output framebuffer on view 254.
-    bgfx::setViewRect(254, 0, 0, (uint16_t)Width, (uint16_t)Height);
+    // Blit final FBO to the output framebuffer on view 254. The viewport is the
+    // output window's pixel size (OutputView*), which may differ from the internal
+    // render size (Width/Height) — the blit's fullscreen quad samples the render
+    // texture and the GPU scales it to fill the window.
+    const uint16_t blitW = (uint16_t)(OutputViewW > 0 ? OutputViewW : Width);
+    const uint16_t blitH = (uint16_t)(OutputViewH > 0 ? OutputViewH : Height);
+    bgfx::setViewRect(254, 0, 0, blitW, blitH);
     bgfx::setViewFrameBuffer(254, OutputFbo);
     SubmitBlit(254);
 }
@@ -237,6 +242,12 @@ void Engine::Resize(int Width, int Height)
 void Engine::SetOutputFrameBuffer(bgfx::FrameBufferHandle Fbo)
 {
     OutputFbo = Fbo;
+}
+
+void Engine::SetOutputViewport(int Width, int Height)
+{
+    OutputViewW = Width;
+    OutputViewH = Height;
 }
 
 EffectChain& Engine::GetChain()

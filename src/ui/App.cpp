@@ -123,6 +123,14 @@ void App::Run(const char* PresetPath)
             }
         }
 
+        // Apply a deferred output-resize (from the render-scale slider) before Tick,
+        // outside any submitted frame, so bgfx resources aren't recreated mid-frame.
+        if (m_outputSizingDirty)
+        {
+            m_outputSizingDirty = false;
+            ApplyOutputSizing();
+        }
+
         m_engine.Tick();
         RenderUI();
         bgfx::frame();
@@ -149,9 +157,11 @@ void App::Init(const char* PresetPath)
     }
 
     // Editor window — hosts ImGui panels; this is the bgfx primary surface.
+    // HIGH_PIXEL_DENSITY requests a native-resolution backing on HiDPI displays
+    // (Retina etc.) so the UI renders crisply rather than being upscaled by the OS.
     m_editorWin = SDL_CreateWindow("AVS Editor",
                                    m_editorWidth, m_editorHeight,
-                                   SDL_WINDOW_RESIZABLE);
+                                   SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!m_editorWin)
     {
         fprintf(stderr, "SDL_CreateWindow (editor) failed: %s\n", SDL_GetError());
@@ -162,7 +172,7 @@ void App::Init(const char* PresetPath)
     // Output window — shows the AVS renderer output.
     m_outputWin = SDL_CreateWindow("AVS Output",
                                    m_outputWidth, m_outputHeight,
-                                   SDL_WINDOW_RESIZABLE);
+                                   SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!m_outputWin)
     {
         fprintf(stderr, "SDL_CreateWindow (output) failed: %s\n", SDL_GetError());
@@ -183,6 +193,10 @@ void App::Init(const char* PresetPath)
     // drives the render internally in single-threaded mode.
     bgfx::renderFrame();
 #endif
+    // Track the editor backbuffer in PIXELS (HiDPI-aware), not points: bgfx renders
+    // to the native-resolution swapchain. SDL window/event sizes are in points.
+    SDL_GetWindowSizeInPixels(m_editorWin, &m_editorWidth, &m_editorHeight);
+
     bgfx::Init GfxInit;
     GfxInit.type                   = bgfx::RendererType::Vulkan;
     GfxInit.platformData.nwh       = NativeWindowHandle(m_editorWin);
@@ -229,11 +243,9 @@ void App::Init(const char* PresetPath)
         return;
     }
 
-    // Create a bgfx framebuffer backed by the output window's native handle.
-    m_outputFB = bgfx::createFrameBuffer(NativeWindowHandle(m_outputWin),
-                                         (uint16_t)m_outputWidth,
-                                         (uint16_t)m_outputHeight);
-    m_engine.SetOutputFrameBuffer(m_outputFB);
+    // Create the output framebuffer (window pixel size) and set the engine's render
+    // resolution from the render-percentage. Both are HiDPI-aware.
+    ApplyOutputSizing();
 
     if (PresetPath)
     {
@@ -257,6 +269,11 @@ void App::Init(const char* PresetPath)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     ImGui::StyleColorsDark();
 
+    // Snapshot the pristine style so UI-scale changes always derive from a clean base
+    // (ScaleAllSizes is cumulative). Then apply the initial scale.
+    m_baseStyle = new ImGuiStyle(ImGui::GetStyle());
+    ApplyUiScale();
+
     // Build the default dock layout only if there's no saved imgui.ini yet.
     m_buildDefaultLayout = !std::filesystem::exists("imgui.ini");
 
@@ -279,6 +296,8 @@ void App::Shutdown()
     ImGui_ImplBgfx_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
+    delete m_baseStyle;
+    m_baseStyle = nullptr;
 
     m_engine.Shutdown();
 
@@ -315,19 +334,52 @@ void App::ClearPreset()
 
 // ─── Resize helpers ───────────────────────────────────────────────────────────
 
-void App::ResizeOutput(int32_t Width, int32_t Height)
+void App::ApplyEditorSizing()
 {
-    m_outputWidth  = Width;
-    m_outputHeight = Height;
+    SDL_GetWindowSizeInPixels(m_editorWin, &m_editorWidth, &m_editorHeight);
+    bgfx::reset((uint32_t)m_editorWidth, (uint32_t)m_editorHeight, BGFX_RESET_VSYNC);
+}
 
-    // Recreate the output framebuffer at the new size.
+void App::ApplyOutputSizing()
+{
+    // Output framebuffer matches the window's pixel size (HiDPI-aware); the engine's
+    // internal render resolution is that scaled by the render percentage. The window
+    // size is unchanged — the blit upscales/downscales to fill it.
+    SDL_GetWindowSizeInPixels(m_outputWin, &m_outputPixelW, &m_outputPixelH);
+    m_outputPixelW = std::max(1, m_outputPixelW);
+    m_outputPixelH = std::max(1, m_outputPixelH);
+
     if (bgfx::isValid(m_outputFB))
         bgfx::destroy(m_outputFB);
-
     m_outputFB = bgfx::createFrameBuffer(NativeWindowHandle(m_outputWin),
-                                         (uint16_t)Width, (uint16_t)Height);
+                                         (uint16_t)m_outputPixelW,
+                                         (uint16_t)m_outputPixelH);
     m_engine.SetOutputFrameBuffer(m_outputFB);
-    m_engine.Resize(Width, Height);
+    m_engine.SetOutputViewport(m_outputPixelW, m_outputPixelH);
+
+    const int rw = std::max(1, m_outputPixelW * m_outputRenderPct / 100);
+    const int rh = std::max(1, m_outputPixelH * m_outputRenderPct / 100);
+    m_engine.Resize(rw, rh);
+}
+
+float App::AutoUiScale() const
+{
+    // Native HiDPI already renders at the monitor's pixel density and lays the UI out
+    // in points, so the content is correctly sized at 1.0 — no extra zoom needed.
+    return 1.0f;
+}
+
+void App::ApplyUiScale()
+{
+    if (!m_baseStyle)
+        return;
+    const float scale = (m_uiScalePct == 0) ? AutoUiScale()
+                                            : (float)m_uiScalePct / 100.0f;
+    ImGuiStyle s = *m_baseStyle;
+    s.ScaleAllSizes(scale);        // spacing/padding/rounding (not fonts)
+    s.FontScaleMain = scale;       // 1.92 dynamic fonts → crisp at any scale
+    ImGui::GetStyle() = s;
+    m_uiScaleDirty = false;
 }
 
 // ─── ProcessEvents ────────────────────────────────────────────────────────────
@@ -362,17 +414,22 @@ void App::ProcessEvents()
             break;
 
         case SDL_EVENT_WINDOW_RESIZED:
+            // RESIZED carries the window size in POINTS — used only to display the
+            // output window's logical size. The framebuffer is sized from the PIXEL
+            // event below (authoritative on HiDPI, and fires when moving between
+            // monitors of differing density without a points change).
+            if (event.window.windowID == outputID)
+            {
+                m_outputWidth  = event.window.data1;
+                m_outputHeight = event.window.data2;
+            }
+            break;
+
+        case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             if (event.window.windowID == editorID)
-            {
-                m_editorWidth  = event.window.data1;
-                m_editorHeight = event.window.data2;
-                bgfx::reset((uint32_t)m_editorWidth, (uint32_t)m_editorHeight,
-                             BGFX_RESET_VSYNC);
-            }
+                ApplyEditorSizing();
             else if (event.window.windowID == outputID)
-            {
-                ResizeOutput(event.window.data1, event.window.data2);
-            }
+                ApplyOutputSizing();
             break;
 
         case SDL_EVENT_KEY_DOWN:
@@ -432,6 +489,10 @@ void App::ProcessEvents()
 
 void App::RenderUI()
 {
+    // Apply a pending UI-scale change before any window is drawn this frame.
+    if (m_uiScaleDirty)
+        ApplyUiScale();
+
     bgfx::setViewClear(255, BGFX_CLEAR_COLOR, 0x252526ff);
     bgfx::setViewFrameBuffer(255, BGFX_INVALID_HANDLE);
     bgfx::setViewRect(255, 0, 0, (uint16_t)m_editorWidth, (uint16_t)m_editorHeight);
@@ -475,6 +536,28 @@ void App::RenderUI()
         if (ImGui::BeginMenu("View"))
         {
             ImGui::MenuItem("Sliders", nullptr, &m_showSliders);
+
+            if (ImGui::BeginMenu("UI Scale"))
+            {
+                if (ImGui::MenuItem("Auto", nullptr, m_uiScalePct == 0))
+                {
+                    m_uiScalePct = 0;
+                    m_uiScaleDirty = true;
+                }
+                ImGui::Separator();
+                static const int kScales[] = { 100, 125, 150, 200 };
+                for (int pct : kScales)
+                {
+                    char label[16];
+                    std::snprintf(label, sizeof(label), "%d%%", pct);
+                    if (ImGui::MenuItem(label, nullptr, m_uiScalePct == pct))
+                    {
+                        m_uiScalePct = pct;
+                        m_uiScaleDirty = true;
+                    }
+                }
+                ImGui::EndMenu();
+            }
             ImGui::EndMenu();
         }
 
@@ -759,6 +842,24 @@ void App::RenderOptionsWindow()
 
     ImGui::SameLine();
     ImGui::TextDisabled("(current: %d x %d)", m_outputWidth, m_outputHeight);
+
+    // ── Output render scale ───────────────────────────────────────────────────
+    // Internal render resolution as a % of the output window's pixel size. The
+    // window size is unchanged; lower = cheaper/softer, higher = supersampled.
+    ImGui::Spacing();
+    ImGui::SeparatorText("Output Render Scale");
+    ImGui::SetNextItemWidth(200.0f);
+    if (ImGui::SliderInt("##renderpct", &m_outputRenderPct, 25, 200, "%d%%"))
+    {
+        m_outputRenderPct = std::max(1, m_outputRenderPct);
+        // Defer: recreating the output FBO / resizing engine FBOs mid-frame (after
+        // Tick already submitted draws referencing them) crashes. Apply before Tick.
+        m_outputSizingDirty = true;
+    }
+    const int rw = std::max(1, m_outputPixelW * m_outputRenderPct / 100);
+    const int rh = std::max(1, m_outputPixelH * m_outputRenderPct / 100);
+    ImGui::SameLine();
+    ImGui::TextDisabled("(render: %d x %d)", rw, rh);
 
     ImGui::End();
 }

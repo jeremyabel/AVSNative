@@ -34,6 +34,12 @@ public:
     // Pass BGFX_INVALID_HANDLE to blit to the bgfx backbuffer (primary window).
     void SetOutputFrameBuffer(bgfx::FrameBufferHandle Fbo);
 
+    // Size (in pixels) of the output framebuffer the final blit fills. This is the
+    // output window's pixel size, kept SEPARATE from the internal render resolution
+    // (Resize) so the engine can render at a fraction/multiple of the window and the
+    // blit scales it to fill. Defaults to the render size until set.
+    void SetOutputViewport(int32_t Width, int32_t Height);
+
     EffectChain& GetChain();
     FBOManager& GetFBOManager();
     Registry& GetRegistry();
@@ -61,6 +67,8 @@ private:
     bgfx::RendererType::Enum RendererType = bgfx::RendererType::Count;
     int32_t Width = 0;
     int32_t Height = 0;
+    int32_t OutputViewW = 0;  // output framebuffer (window) pixel size for the final blit
+    int32_t OutputViewH = 0;  // 0 = fall back to the internal render size
     int32_t Frame = 0;
     double Time = 0.0;
     bool Initialized = false;
