@@ -78,7 +78,7 @@ void main()
     }
 
     vec3 mapped = (u_ddm_params1.y > 0.5)
-        ? bilinearCompat(s_input, src_uv, textureSize(s_input, 0))
+        ? BILINEAR_COMPAT(s_input, src_uv, textureSize(s_input, 0))
         : texture(s_input, src_uv).rgb;
     if (u_ddm_params1.x > 0.5) {
         vec3 orig = texture(s_input, uv).rgb;

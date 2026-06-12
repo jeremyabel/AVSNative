@@ -170,6 +170,16 @@ void App::Init(const char* PresetPath)
     }
 
     // bgfx initialises against the editor window (primary swapchain).
+#if defined(__APPLE__)
+    // Force bgfx into single-threaded mode (render on this, the main thread).
+    // Calling renderFrame() once before init() disables the separate render
+    // thread. On macOS that thread is fatal: bgfx creates the swapchain's
+    // CAMetalLayer by mutating the NSWindow's content view, which Cocoa only
+    // permits on the main thread — off-thread it fails silently and both
+    // windows stay blank white. The loop still only calls bgfx::frame(), which
+    // drives the render internally in single-threaded mode.
+    bgfx::renderFrame();
+#endif
     bgfx::Init GfxInit;
     GfxInit.type                   = bgfx::RendererType::Vulkan;
     GfxInit.platformData.nwh       = NativeWindowHandle(m_editorWin);
@@ -180,6 +190,22 @@ void App::Init(const char* PresetPath)
     if (!bgfx::init(GfxInit))
     {
         fprintf(stderr, "bgfx::init failed\n");
+        SDL_DestroyWindow(m_outputWin);  m_outputWin  = nullptr;
+        SDL_DestroyWindow(m_editorWin);  m_editorWin  = nullptr;
+        SDL_Quit();
+        return;
+    }
+
+    // Our shader blobs are SPIRV-only. If bgfx fell back to another backend
+    // (e.g. Metal because MoltenVK was unavailable), every shader create would
+    // fail with an opaque fatal — bail out with an actionable message instead.
+    if (bgfx::getRendererType() != bgfx::RendererType::Vulkan)
+    {
+        fprintf(stderr,
+                "bgfx selected the %s renderer, but only Vulkan/SPIRV shaders are "
+                "built. Install MoltenVK (`brew install molten-vk`) for Vulkan on macOS.\n",
+                bgfx::getRendererName(bgfx::getRendererType()));
+        bgfx::shutdown();
         SDL_DestroyWindow(m_outputWin);  m_outputWin  = nullptr;
         SDL_DestroyWindow(m_editorWin);  m_editorWin  = nullptr;
         SDL_Quit();

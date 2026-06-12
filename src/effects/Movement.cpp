@@ -142,7 +142,7 @@ void main() {
         NewUv = clamp(NewUv, 0.0, 1.0);
 
     vec3 Sampled = (u_params.w > 0.5)
-        ? bilinearCompat(s_texColor, NewUv, textureSize(s_texColor, 0))
+        ? BILINEAR_COMPAT(s_texColor, NewUv, textureSize(s_texColor, 0))
         : texture(s_texColor, NewUv).rgb;
 
     if (u_params.z > 0.5)

@@ -189,7 +189,7 @@ void main() {
 
     vec2 final_uv = _wrap ? fract(src_uv) : clamp(src_uv, 0.0, 1.0);
     vec3 sampled = _biCompat
-        ? bilinearCompat(uSource, final_uv, textureSize(uSource, 0))
+        ? BILINEAR_COMPAT(uSource, final_uv, textureSize(uSource, 0))
         : texture(uSource, final_uv).rgb;
 
     bgfx_FragData0 = _blend
@@ -300,7 +300,7 @@ void main() {
 
     vec2 final_uv = _wrap ? fract(v_srcUV) : clamp(v_srcUV, 0.0, 1.0);
     vec3 sampled = _biCompat
-        ? bilinearCompat(uSource, final_uv, textureSize(uSource, 0))
+        ? BILINEAR_COMPAT(uSource, final_uv, textureSize(uSource, 0))
         : texture(uSource, final_uv).rgb;
 
     bgfx_FragData0 = _blend

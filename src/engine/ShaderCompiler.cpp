@@ -16,6 +16,8 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <regex>
+#include <string>
 
 // bgfx shader magic bytes: [type, 'S', 'H', BGFX_SHADER_BIN_VERSION=0x0b]
 // Type byte: 'F'=0x46 (fragment), 'V'=0x56 (vertex)
@@ -76,12 +78,61 @@ void ShaderCompiler::Shutdown()
     glslang::FinalizeProcess();
 }
 
+// bgfx's Vulkan pipeline layout declares every sampler as TWO separate
+// descriptors — a sampled image at `binding` and a sampler at `binding + 16`
+// (kSpirvSamplerShift) — because bgfx's own shaderc emits separated
+// texture/sampler. Our runtime GLSL writes combined `sampler2D`, producing a
+// single COMBINED_IMAGE_SAMPLER descriptor at `binding`. Desktop Vulkan drivers
+// tolerate that mismatch, but MoltenVK does not: with Metal argument buffers the
+// combined sampler claims two adjacent slots and overlaps the next sampler
+// (SPIR-V→MSL conversion returns null); without them the pipeline layout no
+// longer matches the shader and a null pipeline is bound (SIGSEGV in submit).
+//
+// Rewrite each `layout(binding = N) uniform sampler2D NAME;` into bgfx's
+// separated form + a macro so call sites (`texture(NAME, …)`,
+// `textureSize(NAME, …)`, `bilinearCompat(NAME, …)`) are unchanged:
+//     layout(binding = N)    uniform texture2D _NAME_t;
+//     layout(binding = N+16) uniform sampler   _NAME_s;
+//     #define NAME sampler2D(_NAME_t, _NAME_s)
+// Centralised here so every runtime-GLSL effect is fixed in one place.
+static std::string SeparateCombinedSamplers(const std::string& Glsl)
+{
+    static const std::regex kRe(
+        R"(layout\s*\(\s*binding\s*=\s*(\d+)\s*\)\s*uniform\s+sampler2D\s+(\w+)\s*;)");
+
+    std::string Out;
+    Out.reserve(Glsl.size() + 256);
+
+    auto Begin = std::sregex_iterator(Glsl.begin(), Glsl.end(), kRe);
+    auto End   = std::sregex_iterator();
+    size_t Last = 0;
+    for (auto It = Begin; It != End; ++It)
+    {
+        const std::smatch& M = *It;
+        Out.append(Glsl, Last, (size_t)M.position() - Last);
+
+        const int  binding = std::stoi(M[1].str());
+        const std::string name = M[2].str();
+        Out += "layout(binding = " + std::to_string(binding) +
+               ") uniform texture2D _" + name + "_t;\n";
+        Out += "layout(binding = " + std::to_string(binding + 16) +
+               ") uniform sampler _" + name + "_s;\n";
+        Out += "#define " + name + " sampler2D(_" + name + "_t, _" + name + "_s)";
+
+        Last = (size_t)(M.position() + M.length());
+    }
+    Out.append(Glsl, Last, std::string::npos);
+    return Out;
+}
+
 bool ShaderCompiler::GlslToSpirv(const std::string& Glsl, bool IsFragment, std::vector<uint32_t>& OutSpirv, std::string& ErrorOut)
 {
     EShLanguage Stage = IsFragment ? EShLangFragment : EShLangVertex;
 
+    const std::string Transformed = SeparateCombinedSamplers(Glsl);
+
     glslang::TShader Shader(Stage);
-    const char* Src = Glsl.c_str();
+    const char* Src = Transformed.c_str();
     Shader.setStrings(&Src, 1);
 
     Shader.setEnvInput(glslang::EShSourceGlsl, Stage, glslang::EShClientVulkan, 100);

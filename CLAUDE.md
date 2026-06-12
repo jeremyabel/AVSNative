@@ -17,6 +17,34 @@ Run with a preset path as the first argument:
 avs_editor.exe presets/test_movement_feedback.json
 ```
 
+### macOS
+
+The renderer is Vulkan/SPIRV on every platform (all shader blobs are SPIRV-only,
+and the runtime GLSL→SPIRV effects need a SPIRV backend). On macOS Vulkan runs
+through **MoltenVK**, which is a required dependency:
+
+```
+brew install molten-vk
+```
+
+Two macOS-only gotchas are handled in code (Apple-guarded, so the Windows path is
+untouched). Don't remove these:
+
+- **MoltenVK on the dylib path** — bgfx's Vulkan backend `dlopen`s the bare name
+  `libMoltenVK.dylib`, but Homebrew installs it to `/opt/homebrew/lib`, which is
+  *not* on dyld's default search path. `src/main.cpp` (`EnsureMoltenVKOnDyldPath`)
+  finds the dylib and re-exec's once with `DYLD_LIBRARY_PATH` set (a sentinel env
+  var prevents a loop; `DYLD_*` is only read at launch, so runtime `setenv` /
+  preload-`dlopen` does not work). If MoltenVK is missing, bgfx silently falls
+  back to the **Metal** renderer, which can't load SPIRV blobs → fatal "Failed to
+  create Vertex shader"; `App` guards against this and prints the `brew` hint.
+- **Single-threaded mode** — bgfx defaults to multithreaded
+  (`BGFX_CONFIG_MULTITHREADED=1`), but its render thread can't attach the
+  swapchain's `CAMetalLayer` to the NSWindow's content view (Cocoa requires the
+  main thread) — it fails silently and both windows render solid white. `App`
+  calls `bgfx::renderFrame()` once before `bgfx::init()` to force single-threaded
+  mode; the loop still only calls `bgfx::frame()` (see bgfx conventions below).
+
 ## Project layout
 
 ```
@@ -94,7 +122,8 @@ There are two paths for shaders:
 **Shared shader code (both paths):**
 - Static `.sc` shaders can `#include "foo.sh"` from `src/shaders/` — that dir is on the shaderc include path via `INCLUDE_DIRS` in the `bgfx_compile_shaders(FRAGMENT …)` call. `texelFetch`/`textureSize` and a `sampler2D` function parameter are valid in the spirv profile (native GLSL types).
 - Runtime-GLSL effects can't include a file; they concatenate snippets from `src/engine/ShaderSnippets.h` (C++ `inline constexpr const char*` strings) into their generated source.
-- **Bilinear-compat** is the canonical example: the original AVS used an 8-bit integer 2×2 blend (`blend_bilinear_2x2`), not hardware bilinear. `bilinearCompat(tex, uv, sz)` reproduces it bit-exactly. Two synced copies: `src/shaders/bilinear_compat.sh` (static) and `avs::kBilinearCompatGlsl` in `ShaderSnippets.h` (dynamic). Warp/displacement effects expose a "Bilinear (precise)" toggle that selects it: when on, bind the source `BGFX_SAMPLER_*_POINT` (the function does its own nearest `texelFetch`) and pass a compat flag uniform. Wired into Movement, Dynamic Movement, Dynamic Distance Modifier, Dynamic Shift, RotoBlitter, Blit. Edit one `.sh`/snippet pair to change the math everywhere.
+- **Samplers in runtime GLSL: just write `layout(binding = N) uniform sampler2D NAME;`** — but know it's auto-rewritten. bgfx's Vulkan pipeline layout declares every sampler as a *separate* `SAMPLED_IMAGE` (binding N) + `SAMPLER` (binding N+16, `kSpirvSamplerShift`), matching shaderc's output. A combined `sampler2D` (one COMBINED_IMAGE_SAMPLER) mismatches that layout; desktop Vulkan tolerates it but **MoltenVK crashes** (SPIR-V→MSL null, or a null pipeline bound in submit). So `ShaderCompiler::SeparateCombinedSamplers()` (top of `GlslToSpirv`) rewrites each combined declaration into `texture2D _NAME_t` (N) + `sampler _NAME_s` (N+16) + `#define NAME sampler2D(_NAME_t, _NAME_s)`. `texture()`/`textureSize()`/`texelFetch()` calls are unchanged (point-of-use). **Caveat:** GLSL forbids passing a constructed combined sampler through a function parameter, so a helper that takes a sampler (e.g. `bilinearCompat`) must take separate `texture2D, sampler` and be invoked via the `BILINEAR_COMPAT(name, …)` macro (token-pastes to `_name_t`/`_name_s`). Static `.sc` shaders are unaffected (shaderc has its own sampler-struct mechanism).
+- **Bilinear-compat** is the canonical example: the original AVS used an 8-bit integer 2×2 blend (`blend_bilinear_2x2`), not hardware bilinear. `bilinearCompat(tex, uv, sz)` reproduces it bit-exactly. Two synced copies: `src/shaders/bilinear_compat.sh` (static) and `avs::kBilinearCompatGlsl` in `ShaderSnippets.h` (dynamic). Warp/displacement effects expose a "Bilinear (precise)" toggle that selects it: when on, bind the source `BGFX_SAMPLER_*_POINT` (the function does its own nearest `texelFetch`) and pass a compat flag uniform. Wired into Movement, Dynamic Movement, Dynamic Distance Modifier, Dynamic Shift, RotoBlitter, Blit. Edit one `.sh`/snippet pair to change the math everywhere (the two copies share the *blend math* but have different signatures now: the static `.sh` takes a `sampler2D`; the runtime `kBilinearCompatGlsl` takes separate `texture2D, sampler` and is called via the `BILINEAR_COMPAT` macro — see the sampler note above).
 
 ## Editor UI
 
@@ -198,7 +227,7 @@ live in the member initializers). Runtime-only state stays private. There is no 
 
 ## bgfx conventions
 
-- **Never call `bgfx::renderFrame()` explicitly.** In single-threaded mode, `bgfx::frame()` handles it internally. Calling `renderFrame()` again re-processes the command buffer and crashes.
+- **Never call `bgfx::renderFrame()` explicitly *in the loop*.** In single-threaded mode, `bgfx::frame()` handles it internally; calling `renderFrame()` again re-processes the command buffer and crashes. The one exception is the single pre-`init` call on macOS that *selects* single-threaded mode (see Build → macOS) — that's a one-shot before any `frame()`, not a per-frame call.
 - Effects read from `Context.InputTexture`, draw into `Context.ViewId` (which is bound to `Context.OutputFBO`), then call `Context.FboManager->Swap()`.
 - Sampler uniforms: `bgfx::createUniform("s_name", bgfx::UniformType::Sampler)`, then `bgfx::setTexture(slot, handle, texture)`.
 - Vec4 uniforms: `bgfx::createUniform("u_name", bgfx::UniformType::Vec4)`, then `bgfx::setUniform(handle, float[4])`.
