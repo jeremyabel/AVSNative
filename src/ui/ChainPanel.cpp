@@ -218,6 +218,9 @@ static bool RenderChainItems(EffectChain& chain,
                         }
                     }
                     ImGui::EndDragDropTarget();
+                    // TreeNodeEx pushed the tree stack when open — balance it
+                    // before the early return or the ImGui stack desyncs/crashes.
+                    if (open) ImGui::TreePop();
                     ImGui::PopID();
                     return true;
                 }
