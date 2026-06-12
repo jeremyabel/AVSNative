@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <bgfx/bgfx.h>
 
@@ -10,38 +10,29 @@
 struct NVGcontext;
 struct NVGLUframebuffer;
 
-struct RingConfig
+class Ring : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::vector<std::array<uint8_t,3>> Colors = {{ {255, 255, 255} }};
     int Size         = 8;   // 1..64  — radius fraction: Size/32 of min(W,H)
     int AudioSource  = 0;   // 0=Waveform, 1=Spectrum
     int AudioChannel = 2;   // 0=Left, 1=Right, 2=Center
     int Position     = 2;   // 0=Left, 1=Right, 2=Center
-};
 
-class Ring : public ReflectedEffect<RingConfig>
-{
-public:
+    static constexpr const char* kColors       = "colors";
+    static constexpr const char* kSize         = "size";
+    static constexpr const char* kAudioSource  = "audioSource";
+    static constexpr const char* kAudioChannel = "audioChannel";
+    static constexpr const char* kPosition     = "position";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Colors  (&RingConfig::Colors,       "colors",       "Colors"),
-            RangeI  (&RingConfig::Size,          "size",         "Size",          1, 64),
-            SelectI (&RingConfig::AudioSource,   "audioSource",  "Audio Source",
-                     {"Waveform", "Spectrum"}),
-            SelectI (&RingConfig::AudioChannel,  "audioChannel", "Audio Channel",
-                     {"Left", "Right", "Center"}),
-            SelectI (&RingConfig::Position,      "position",     "Position",
-                     {"Left", "Right", "Center"}),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Ring"; }
+    std::string Name() const override { return "Ring"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     void EnsureOverlay(int W, int H);

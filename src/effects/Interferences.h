@@ -1,56 +1,49 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct InterferencesConfig
+class Interferences : public Effect
 {
-    int   NPoints      = 2;
-    float Distance     = 10.0f;
-    float Alpha        = 128.0f;
-    float Rotation     = 0.0f;   // initial rotation; advanced at runtime in Render
-    float RotationInc  = 0.0f;
-    float Distance2    = 32.0f;
-    float Alpha2       = 192.0f;
-    float RotationInc2 = 25.0f;
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    int   NPoints      = 2;      // 0–8
+    float Distance     = 10.0f;  // 1–64
+    float Alpha        = 128.0f; // 1–255
+    float Rotation     = 0.0f;   // 0–255; initial rotation; advanced at runtime in Render
+    float RotationInc  = 0.0f;   // -32–32
+    float Distance2    = 32.0f;  // 1–64
+    float Alpha2       = 192.0f; // 1–255
+    float RotationInc2 = 25.0f;  // -32–32
     bool  RGB          = true;
     int   OutBlend     = 0;
     bool  OnBeat       = true;
-    float Speed        = 0.2f;
+    float Speed        = 0.2f;   // 0.01–1.28
     // When true (default), the vertical sampling offset is negated so the
     // rotation direction matches the win32 original. When false it matches the
     // AVSWeb JS reference (whose rotation is mirrored from win32).
     bool  ReverseRotation = true;
-};
 
-class Interferences : public ReflectedEffect<InterferencesConfig>
-{
-public:
+    static constexpr const char* kNPoints         = "nPoints";
+    static constexpr const char* kAlpha           = "alpha";
+    static constexpr const char* kDistance        = "distance";
+    static constexpr const char* kRotationInc     = "rotationinc";
+    static constexpr const char* kAlpha2          = "alpha2";
+    static constexpr const char* kDistance2       = "distance2";
+    static constexpr const char* kRotationInc2    = "rotationinc2";
+    static constexpr const char* kRotation        = "rotation";
+    static constexpr const char* kSpeed           = "speed";
+    static constexpr const char* kOnBeat          = "onbeat";
+    static constexpr const char* kRGB             = "rgb";
+    static constexpr const char* kReverseRotation = "reverseRotation";
+    static constexpr const char* kOutBlend        = "outBlend";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            RangeI(&InterferencesConfig::NPoints, "nPoints", "Num Points", 0, 8),
-            Range(&InterferencesConfig::Alpha, "alpha", "Alpha", 1.0f, 255.0f, 1.0f),
-            Range(&InterferencesConfig::Distance, "distance", "Distance", 1.0f, 64.0f, 1.0f),
-            Range(&InterferencesConfig::RotationInc, "rotationinc", "Rotation Speed", -32.0f, 32.0f, 1.0f),
-            Range(&InterferencesConfig::Alpha2, "alpha2", "Alpha (On Beat)", 1.0f, 255.0f, 1.0f),
-            Range(&InterferencesConfig::Distance2, "distance2", "Distance (On Beat)", 1.0f, 64.0f, 1.0f),
-            Range(&InterferencesConfig::RotationInc2, "rotationinc2", "Rot Speed (On Beat)", -32.0f, 32.0f, 1.0f),
-            Range(&InterferencesConfig::Rotation, "rotation", "Initial Rotation", 0.0f, 255.0f, 1.0f),
-            Range(&InterferencesConfig::Speed, "speed", "Beat Speed", 0.01f, 1.28f, 0.01f),
-            Bool(&InterferencesConfig::OnBeat, "onbeat", "On Beat"),
-            Bool(&InterferencesConfig::RGB, "rgb", "RGB Separation"),
-            Bool(&InterferencesConfig::ReverseRotation, "reverseRotation", "Reverse Rotation"),
-            SelectI(&InterferencesConfig::OutBlend, "outBlend", "Output Blend",
-                    { "Replace", "Additive", "Average" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Interferences"; }
+    std::string Name() const override { return "Interferences"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     // Runtime state

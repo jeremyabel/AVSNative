@@ -1,12 +1,14 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <string>
 
-struct MovementConfig
+class Movement : public Effect
 {
-    std::string Coordinates = "polar";
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    std::string Coordinates = "polar";  // "polar" or "cartesian"
     std::string Code;
     bool Wrap         = false;
     bool Bilinear     = true;
@@ -14,55 +16,40 @@ struct MovementConfig
     bool Blend        = false;
     bool SourceMap    = false;
     bool OnBeatToggle = false;
-};
 
-class Movement : public ReflectedEffect<MovementConfig>
-{
-public:
+    static constexpr const char* kCoordinates  = "coordinates";
+    static constexpr const char* kCode         = "code";
+    static constexpr const char* kBilinear     = "bilinear";
+    static constexpr const char* kCompat       = "bilinearCompat";
+    static constexpr const char* kWrap         = "wrap";
+    static constexpr const char* kBlend        = "blend";
+    static constexpr const char* kSourceMap    = "sourceMap";
+    static constexpr const char* kOnBeatToggle = "onBeatToggle";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
+
+    std::string Name() const override { return "Movement"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
     const std::string& GetCompileError() const { return CompileError; }
 
     std::string GetScriptError(const std::string& paramName) const override
     {
-        return paramName == "code" ? CompileError : std::string{};
+        return paramName == kCode ? CompileError : std::string{};
     }
 
     // Switches coordinate system, swapping the built-in default code if the user
     // hasn't customized it, then recompiles. Used by the bespoke UI.
     void SetCoordinateSystem(const std::string& coord);
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            SelectS(&MovementConfig::Coordinates, "coordinates", "Coordinates", { "polar", "cartesian" }),
-            Glsl(&MovementConfig::Code, "code", "GLSL Code"),
-            Bool(&MovementConfig::Bilinear, "bilinear", "Bilinear"),
-            Bool(&MovementConfig::Compat, "bilinearCompat", "Bilinear (precise)"),
-            Bool(&MovementConfig::Wrap, "wrap", "Wrap"),
-            Bool(&MovementConfig::Blend, "blend", "Blend (50/50)"),
-            Bool(&MovementConfig::SourceMap, "sourceMap", "Source Map"),
-            Bool(&MovementConfig::OnBeatToggle, "onBeatToggle", "On-Beat Toggle"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Movement"; }
-
-    void OnConfigChanged(const std::vector<std::string>& changed) override
-    {
-        for (const std::string& k : changed)
-            if (k == "code" || k == "coordinates")
-            {
-                Compile();
-                break;
-            }
-    }
+    // Recompiles the pull/scatter shaders from Code. Called after Deserialize and
+    // by the UI when the code editor changes.
+    void Compile();
 
 private:
-    void Compile();
     std::string BuildPullFragGlsl() const;
     std::string BuildScatterVertGlsl() const;
     void RenderPull(const RenderContext& Context);

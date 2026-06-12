@@ -2,6 +2,7 @@
 
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_simple.sc.bin.h"
@@ -62,7 +63,7 @@ void Ring::Destroy()
 
 void Ring::Render(const RenderContext& Context)
 {
-    if (Cfg.Colors.empty()) return;
+    if (Colors.empty()) return;
 
     const int W = Context.Width;
     const int H = Context.Height;
@@ -71,12 +72,12 @@ void Ring::Render(const RenderContext& Context)
     if (!m_overlayFbo) return;
 
     // Color cycling
-    const int n = (int)Cfg.Colors.size();
+    const int n = (int)Colors.size();
     m_colorPos = (m_colorPos + 1) % (n * 64);
     const int frac = m_colorPos & 63;
     const int seg  = m_colorPos / 64;
-    const auto& c1 = Cfg.Colors[seg % n];
-    const auto& c2 = Cfg.Colors[(seg + 1) % n];
+    const auto& c1 = Colors[seg % n];
+    const auto& c2 = Colors[(seg + 1) % n];
     const float cr = (float)((c1[0] * (63 - frac) + c2[0] * frac) / 64) / 255.0f;
     const float cg = (float)((c1[1] * (63 - frac) + c2[1] * frac) / 64) / 255.0f;
     const float cb = (float)((c1[2] * (63 - frac) + c2[2] * frac) / 64) / 255.0f;
@@ -86,9 +87,9 @@ void Ring::Render(const RenderContext& Context)
     if (Context.AudioData)
     {
         const VisData& vis = *Context.AudioData;
-        if (Cfg.AudioChannel == 2)
+        if (AudioChannel == 2)
         {
-            if (Cfg.AudioSource == 0)
+            if (AudioSource == 0)
             {
                 // center waveform: signed int8 average → uint8 encoding
                 for (int i = 0; i < kAudioBins; i++)
@@ -107,9 +108,9 @@ void Ring::Render(const RenderContext& Context)
         }
         else
         {
-            const float* src = (Cfg.AudioSource == 0)
-                             ? vis.osc[Cfg.AudioChannel]
-                             : vis.spec[Cfg.AudioChannel];
+            const float* src = (AudioSource == 0)
+                             ? vis.osc[AudioChannel]
+                             : vis.spec[AudioChannel];
             for (int i = 0; i < kAudioBins; i++)
                 faData[i] = src[i];
         }
@@ -123,7 +124,7 @@ void Ring::Render(const RenderContext& Context)
     // Waveform: XOR 128 maps silence→0, amplitude (both signs)→nonzero, making ring expand with loudness.
     // Spectrum: average two adjacent bins.
     auto getRadius = [&](int idx) -> float {
-        if (Cfg.AudioSource == 0)
+        if (AudioSource == 0)
             return 0.1f + ((int(faData[idx]) ^ 128) / 255.0f) * 0.9f;
         else
         {
@@ -133,12 +134,12 @@ void Ring::Render(const RenderContext& Context)
     };
 
     // Screen geometry
-    const float fsize  = Cfg.Size / 32.0f;
+    const float fsize  = Size / 32.0f;
     const float sizePx = std::min(H * fsize, W * fsize);
     const float cy     = (float)(H / 2);
     float cx;
-    if      (Cfg.Position == 0) cx = (float)(W / 4);
-    else if (Cfg.Position == 1) cx = (float)(W / 2 + W / 4);
+    if      (Position == 0) cx = (float)(W / 4);
+    else if (Position == 1) cx = (float)(W / 2 + W / 4);
     else                        cx = (float)(W / 2);
 
     // ── NanoVG overlay pass ───────────────────────────────────────────────────
@@ -199,4 +200,24 @@ void Ring::Render(const RenderContext& Context)
     bgfx::submit(compView, m_program);
 
     Context.FboManager->Swap();
+}
+
+nlohmann::json Ring::Serialize() const
+{
+    return {
+        { kColors,       JsonUtil::ColorsToJson(Colors) },
+        { kSize,         Size         },
+        { kAudioSource,  AudioSource  },
+        { kAudioChannel, AudioChannel },
+        { kPosition,     Position     },
+    };
+}
+
+void Ring::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColors(j, kColors,       Colors);
+    JsonUtil::ReadInt   (j, kSize,         Size);
+    JsonUtil::ReadInt   (j, kAudioSource,  AudioSource);
+    JsonUtil::ReadInt   (j, kAudioChannel, AudioChannel);
+    JsonUtil::ReadInt   (j, kPosition,     Position);
 }

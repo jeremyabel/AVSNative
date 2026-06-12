@@ -1,43 +1,35 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <cstdint>
 #include <vector>
 
-struct WaterBumpConfig
-{
-    int  Fluidity      = 6;
-    int  Depth         = 600;
-    bool Random        = false;
-    int  DropPositionX = 1;  // 0=left  1=center  2=right
-    int  DropPositionY = 1;  // 0=top   1=center  2=bottom
-    int  DropRadius    = 40;
-};
-
-class WaterBump : public ReflectedEffect<WaterBumpConfig>
+class WaterBump : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    int  Fluidity      = 6;    // 2–10
+    int  Depth         = 600;  // 100–2000
+    bool Random        = false;
+    int  DropPositionX = 1;    // 0=left  1=center  2=right
+    int  DropPositionY = 1;    // 0=top   1=center  2=bottom
+    int  DropRadius    = 40;   // 10–100
+
+    static constexpr const char* kFluidity      = "fluidity";
+    static constexpr const char* kDepth         = "depth";
+    static constexpr const char* kRandom        = "random";
+    static constexpr const char* kDropPositionX = "dropPositionX";
+    static constexpr const char* kDropPositionY = "dropPositionY";
+    static constexpr const char* kDropRadius    = "dropRadius";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            RangeI(&WaterBumpConfig::Fluidity,      "fluidity",      "Fluidity",    2,   10),
-            RangeI(&WaterBumpConfig::Depth,          "depth",         "Depth",       100, 2000),
-            Bool  (&WaterBumpConfig::Random,         "random",        "Random Drop"),
-            SelectI(&WaterBumpConfig::DropPositionX, "dropPositionX", "Drop X",
-                    { "Left", "Center", "Right" }),
-            SelectI(&WaterBumpConfig::DropPositionY, "dropPositionY", "Drop Y",
-                    { "Top",  "Center", "Bottom" }),
-            RangeI(&WaterBumpConfig::DropRadius,     "dropRadius",    "Drop Radius", 10,  100),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Water Bump"; }
+    std::string Name() const override { return "Water Bump"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     void EnsureBuffers(uint16_t W, uint16_t H);

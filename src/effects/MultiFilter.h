@@ -1,31 +1,24 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct MultiFilterConfig
-{
-    int  EffectMode   = 0;
-    bool ToggleOnBeat = false;
-};
-
-class MultiFilter : public ReflectedEffect<MultiFilterConfig>
+class MultiFilter : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    int  EffectMode   = 0;
+    bool ToggleOnBeat = false;
+
+    static constexpr const char* kEffectMode   = "effect";
+    static constexpr const char* kToggleOnBeat = "toggleOnBeat";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            SelectI(&MultiFilterConfig::EffectMode, "effect", "Effect",
-                    { "Chrome", "Double Chrome", "Triple Chrome", "Infroot + Border Convolution" }),
-            Bool(&MultiFilterConfig::ToggleOnBeat, "toggleOnBeat", "Toggle On Beat"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Multi Filter"; }
+    std::string Name() const override { return "Multi Filter"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     // Runtime toggle state; starts active

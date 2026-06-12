@@ -1,48 +1,38 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <array>
 #include <bgfx/bgfx.h>
 
-struct ConvolutionConfig
+class Convolution : public Effect
 {
-    bool Wrap     = false;
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    bool Wrap     = false;  // mutually exclusive with Absolute (UI enforces)
     bool Absolute = false;
     bool TwoPass  = false;
     int  Bias     = 0;
     int  Scale    = 1;
-    // 7x7 kernel; managed manually (not reflected). Identity = centre cell.
+    // 7x7 kernel. Identity = centre cell.
     std::array<int, 49> Kernel{};
 
-    ConvolutionConfig() { Kernel[24] = 1; }
-};
+    static constexpr const char* kWrap     = "wrap";
+    static constexpr const char* kAbsolute = "absolute";
+    static constexpr const char* kTwoPass  = "twoPass";
+    static constexpr const char* kBias     = "bias";
+    static constexpr const char* kScale    = "scale";
+    static constexpr const char* kKernel   = "kernel";
 
-class Convolution : public ReflectedEffect<ConvolutionConfig>
-{
-public:
+    Convolution() { Kernel[24] = 1; }
+
     void Init() override;
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 
-    // Augment reflected JSON with the 49-element kernel array.
-    nlohmann::json GetConfig() const override;
-    void           SetConfig(const nlohmann::json& cfg) override;
-
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> kFields = {
-            ::Bool(&ConvolutionConfig::Wrap,     "wrap",     "Wrap"),
-            ::Bool(&ConvolutionConfig::Absolute, "absolute", "Absolute"),
-            ::Bool(&ConvolutionConfig::TwoPass,  "twoPass",  "Two Pass"),
-            NumberI(&ConvolutionConfig::Bias,  "bias",  "Bias",  -100000, 100000),
-            NumberI(&ConvolutionConfig::Scale, "scale", "Scale", -100000, 100000),
-        };
-        return kFields;
-    }
-    std::string EffectName() const override { return "Convolution Filter"; }
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
+    std::string Name() const override { return "Convolution Filter"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     bgfx::ProgramHandle m_prog        = BGFX_INVALID_HANDLE;

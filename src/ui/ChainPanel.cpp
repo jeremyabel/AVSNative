@@ -155,7 +155,7 @@ static bool RenderChainItems(EffectChain& chain,
         EffectEntry& entry      = chain.GetEntry(i);
         const bool   isContainer = (entry.Effect->GetInnerChain() != nullptr);
         const bool   selected    = (selectedChain == &chain && selectedIdx == i);
-        const std::string name   = entry.Effect->GetDescriptor().Name;
+        const std::string name   = entry.Effect->Name();
 
         ImGui::PushID(entry.Effect.get());
 

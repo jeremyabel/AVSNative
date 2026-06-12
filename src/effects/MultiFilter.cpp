@@ -1,6 +1,7 @@
 #include "MultiFilter.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_multifilter.sc.bin.h"
@@ -17,7 +18,7 @@ void MultiFilter::Init()
 
 void MultiFilter::Render(const RenderContext& Context)
 {
-    if (Cfg.ToggleOnBeat && Context.IsBeat())
+    if (ToggleOnBeat && Context.IsBeat())
     {
         ToggleState = !ToggleState;
     }
@@ -27,7 +28,7 @@ void MultiFilter::Render(const RenderContext& Context)
         return;
     }
 
-    const float Params[4] = { float(Cfg.EffectMode), 1.0f / float(Context.Width), 1.0f / float(Context.Height), 0.0f };
+    const float Params[4] = { float(EffectMode), 1.0f / float(Context.Width), 1.0f / float(Context.Height), 0.0f };
 
     bgfx::setUniform(ParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
@@ -52,4 +53,18 @@ void MultiFilter::Destroy()
     ParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json MultiFilter::Serialize() const
+{
+    return {
+        { kEffectMode,   EffectMode   },
+        { kToggleOnBeat, ToggleOnBeat },
+    };
+}
+
+void MultiFilter::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt (j, kEffectMode,   EffectMode);
+    JsonUtil::ReadBool(j, kToggleOnBeat, ToggleOnBeat);
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/LuaRuntime.h"
 
 #include <bgfx/bgfx.h>
@@ -25,8 +25,10 @@
 // Built-ins for the Pixel block: d, r, x, y, w, h, b (beat 0/1), alpha,
 // getspec()/getosc() (audio). See ref/AVSWeb/src/effects/dynamic-movement.js.
 
-struct DynamicMovementConfig
+class DynamicMovement : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::string PixelCode;
     std::string FrameCode;
     std::string BeatCode;
@@ -43,46 +45,41 @@ struct DynamicMovementConfig
     int  BufferN        = 0;      // 0 = current frame, 1..8 = scratch buffer
 
     bool UseGrid        = true;
-    int  GridW          = 16;
-    int  GridH          = 16;
-};
+    int  GridW          = 16;     // 1–256
+    int  GridH          = 16;     // 1–256
 
-class DynamicMovement : public ReflectedEffect<DynamicMovementConfig>
-{
-public:
+    static constexpr const char* kPixelCode      = "pixelCode";
+    static constexpr const char* kFrameCode      = "frameCode";
+    static constexpr const char* kBeatCode       = "beatCode";
+    static constexpr const char* kInitCode       = "initCode";
+    static constexpr const char* kRectCoords     = "rectCoords";
+    static constexpr const char* kWrap           = "wrap";
+    static constexpr const char* kBlend          = "blend";
+    static constexpr const char* kBilinear       = "bilinear";
+    static constexpr const char* kBilinearCompat = "bilinearCompat";
+    static constexpr const char* kNoMove         = "noMove";
+    static constexpr const char* kShowUV         = "showUV";
+    static constexpr const char* kUseGrid        = "useGrid";
+    static constexpr const char* kGridW          = "gridW";
+    static constexpr const char* kGridH          = "gridH";
+    static constexpr const char* kBufferN        = "bufferN";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
+    std::string Name() const override { return "Dynamic Movement"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
+
     std::string GetScriptError(const std::string& paramName) const override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Glsl(&DynamicMovementConfig::PixelCode, "pixelCode", "Pixel"),
-            Lua (&DynamicMovementConfig::FrameCode, "frameCode", "Frame"),
-            Lua (&DynamicMovementConfig::BeatCode,  "beatCode",  "Beat"),
-            Lua (&DynamicMovementConfig::InitCode,  "initCode",  "Init"),
-            Bool(&DynamicMovementConfig::RectCoords,     "rectCoords",     "Cartesian Coords"),
-            Bool(&DynamicMovementConfig::Wrap,           "wrap",           "Wrap"),
-            Bool(&DynamicMovementConfig::Blend,          "blend",          "Blend"),
-            Bool(&DynamicMovementConfig::Bilinear,       "bilinear",       "Bilinear"),
-            Bool(&DynamicMovementConfig::BilinearCompat, "bilinearCompat", "Bilinear (precise)"),
-            Bool(&DynamicMovementConfig::NoMove,         "noMove",         "No Movement"),
-            Bool(&DynamicMovementConfig::ShowUV,         "showUV",         "Show UV (debug)"),
-            Bool(&DynamicMovementConfig::UseGrid,        "useGrid",        "Use Grid"),
-            RangeI(&DynamicMovementConfig::GridW, "gridW", "Grid Width",  1, 256),
-            RangeI(&DynamicMovementConfig::GridH, "gridH", "Grid Height", 1, 256),
-            SelectI(&DynamicMovementConfig::BufferN, "bufferN", "Source Buffer",
-                    { "Current", "Buffer 1", "Buffer 2", "Buffer 3", "Buffer 4",
-                      "Buffer 5", "Buffer 6", "Buffer 7", "Buffer 8" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Dynamic Movement"; }
-
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
+    // Recompile entry points. Called after Deserialize and by the UI when the
+    // matching code editor changes.
+    void ApplyPixelCodeChange();   // rescan bridged/local vars + rebuild shaders
+    void ApplyInitCodeChange();    // rebuild shaders + recompile all Lua + rerun init
+    void ApplyFrameCodeChange();
+    void ApplyBeatCodeChange();
 
 private:
     // Max bridged variables = kDynVec4 * 4 (one float each, packed into vec4s).

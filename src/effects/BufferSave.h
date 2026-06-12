@@ -1,39 +1,28 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct BufferSaveConfig
+class BufferSave : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     int   Mode      = 0;     // 0=Save, 1=Restore, 2=Alt Save/Restore, 3=Alt Restore/Save
     int   Slot      = 0;     // scratch buffer index 0–7
     int   BlendMode = 0;     // 0=Replace … 11=XOR (matches shader constants)
     float BlendAmt  = 0.5f;  // for BlendMode==6 (Adjustable)
-};
 
-class BufferSave : public ReflectedEffect<BufferSaveConfig>
-{
-public:
+    static constexpr const char* kMode      = "mode";
+    static constexpr const char* kSlot      = "slot";
+    static constexpr const char* kBlendMode = "blendMode";
+    static constexpr const char* kBlendAmt  = "blendAmt";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            SelectI(&BufferSaveConfig::Mode, "mode", "Mode",
-                    { "Save", "Restore", "Alternate Save/Restore", "Alternate Restore/Save" }),
-            SelectI(&BufferSaveConfig::Slot, "slot", "Buffer Slot",
-                    { "0", "1", "2", "3", "4", "5", "6", "7" }),
-            SelectI(&BufferSaveConfig::BlendMode, "blendMode", "Blend",
-                    { "Replace", "Additive", "Maximum", "50/50", "Multiply",
-                      "Subtractive 1", "Adjustable", "Minimum",
-                      "Every Other Pixel", "Every Other Line", "Subtractive 2", "XOR" }),
-            Range(&BufferSaveConfig::BlendAmt, "blendAmt", "Blend Amount", 0.0f, 1.0f, 0.01f),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Buffer Save"; }
+    std::string Name() const override { return "Buffer Save"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     void DoSave(const RenderContext& Context);

@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class Effect;
 
@@ -30,6 +31,11 @@ void ResetEditors();
 
 // uint8 RGB color picker. Returns true if changed.
 bool ColorEdit(const char* label, std::array<uint8_t, 3>& c);
+
+// Editable color list: one compact ColorEdit per entry plus remove ("x", guarded
+// so at least one color always remains) and add ("+") buttons. Returns true if
+// any color or the list itself changed.
+bool ColorsEdit(const char* id, std::vector<std::array<uint8_t, 3>>& colors);
 
 // Opens an image file picker; on selection reads the raw bytes and hands them to
 // the effect via Effect::ApplyAsset(configKey, basename, bytes) — no base64. The

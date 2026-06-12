@@ -1,25 +1,17 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct WaterConfig
-{
-};
-
-class Water : public ReflectedEffect<WaterConfig>
+class Water : public Effect
 {
 public:
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {};
-        return f;
-    }
-    std::string EffectName() const override { return "Water"; }
+    std::string Name() const override { return "Water"; }
+    nlohmann::json Serialize() const override { return nlohmann::json::object(); }
+    void Deserialize(const nlohmann::json& /*j*/) override {}
 
 private:
     void EnsurePrev(uint16_t W, uint16_t H);

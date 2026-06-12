@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/LuaRuntime.h"
 
 #include <bgfx/bgfx.h>
@@ -13,8 +13,10 @@
 // of the loaded image. Particles accumulate into a CPU overlay buffer, which is uploaded
 // to a texture and composited onto the input via the global line blend mode.
 // See ref/AVSWeb/src/effects/texer2.js.
-struct Texer2Config
+class Texer2 : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::string ImageData  = "";         // bundle asset ref/name; empty = built-in soft-dot
     std::string InitCode   = "n=300";
     std::string FrameCode  = "";
@@ -23,17 +25,23 @@ struct Texer2Config
     bool Resize   = false;   // scale sprites by sizex/sizey (bilinear)
     bool Wrap     = false;   // wrap-around stamping at buffer edges
     bool Colorize = true;    // multiply image by red/green/blue
-};
 
-class Texer2 : public ReflectedEffect<Texer2Config>
-{
-public:
+    static constexpr const char* kImageData = "imageData";
+    static constexpr const char* kInitCode  = "initCode";
+    static constexpr const char* kFrameCode = "frameCode";
+    static constexpr const char* kBeatCode  = "beatCode";
+    static constexpr const char* kPointCode = "pointCode";
+    static constexpr const char* kResize    = "resize";
+    static constexpr const char* kWrap      = "wrap";
+    static constexpr const char* kColorize  = "colorize";
+
     void Init() override;
-    void Destroy()                               override;
-    void Render(const RenderContext& Context)    override;
+    void Destroy() override;
+    void Render(const RenderContext& Context) override;
 
-    nlohmann::json GetConfig() const override;
-    void           SetConfig(const nlohmann::json& cfg) override;
+    std::string Name() const override { return "Texer II"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
     std::vector<PresetAsset> CollectAssets() const override;
     void ApplyAsset(const std::string& key, const std::string& name,
@@ -44,27 +52,17 @@ public:
         return m_lua.GetError(paramName);
     }
 
+    // Recompile entry points. Called after Deserialize and by the UI when the
+    // matching code editor changes.
+    void RecompileInitCode();   // rescans user vars, recompiles all blocks, reruns init
+    void RecompileFrameCode();
+    void RecompileBeatCode();
+    void RecompilePointCode();
+
     int GetImageW() const { return m_imgW; }
     int GetImageH() const { return m_imgH; }
     // Number of animation frames (>1 for an animated GIF, 0 for a static image).
     int GetFrameCount() const { return (int)m_frames.size(); }
-
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> kFields = {
-            ::Bool(&Texer2Config::Resize,    "resize",    "Resizing"),
-            ::Bool(&Texer2Config::Wrap,      "wrap",      "Wrap Around"),
-            ::Bool(&Texer2Config::Colorize,  "colorize",  "Color Filtering"),
-            Lua  (&Texer2Config::InitCode,   "initCode",  "Init"),
-            Lua  (&Texer2Config::FrameCode,  "frameCode", "Frame"),
-            Lua  (&Texer2Config::BeatCode,   "beatCode",  "Beat"),
-            Lua  (&Texer2Config::PointCode,  "pointCode", "Point"),
-        };
-        return kFields;
-    }
-    std::string EffectName() const override { return "Texer II"; }
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
     void BuildFromRaw(const std::vector<uint8_t>& raw);

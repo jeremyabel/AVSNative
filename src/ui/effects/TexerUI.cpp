@@ -25,10 +25,16 @@ static void DrawTexerUI(Effect* effect)
         ImGui::TextUnformatted("No image loaded");
 
     if (ImGui::Button("Load Image..."))
-        ConfigUi::PickImageInto(effect, "imageData");
+        ConfigUi::PickImageInto(effect, Texer::kImageData);
 
     ImGui::Spacing();
-    DrawDefault(effect);
+
+    ImGui::Checkbox("Add to Input", &tex->AddToInput);
+    ImGui::Checkbox("Colorize", &tex->Colorize);
+
+    ImGui::TextUnformatted("Particles");
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::SliderInt("##numParticles", &tex->NumParticles, 1, 1024);
 }
 
 void RegisterTexerUI(ConfigUiRegistry& reg)

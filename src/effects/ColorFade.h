@@ -1,45 +1,40 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct ColorFadeConfig
+class ColorFade : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     int  Faders[3]     = { 8, -8, -8 }; // -32..32, 0 = no change
     int  BeatFaders[3] = { 8, -8, -8 };
     bool Gradual       = false;
     bool RandomBeat    = false;
-};
 
-class ColorFade : public ReflectedEffect<ColorFadeConfig>
-{
-public:
+    static constexpr const char* kFader0     = "fader0";
+    static constexpr const char* kFader1     = "fader1";
+    static constexpr const char* kFader2     = "fader2";
+    static constexpr const char* kBeatFader0 = "beat_fader0";
+    static constexpr const char* kBeatFader1 = "beat_fader1";
+    static constexpr const char* kBeatFader2 = "beat_fader2";
+    static constexpr const char* kGradual    = "gradual";
+    static constexpr const char* kRandomBeat = "random_beat";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            RangeIArr(&ColorFadeConfig::Faders, 0, "fader0", "Fader 1", -32, 32),
-            RangeIArr(&ColorFadeConfig::Faders, 1, "fader1", "Fader 2", -32, 32),
-            RangeIArr(&ColorFadeConfig::Faders, 2, "fader2", "Fader 3", -32, 32),
-            RangeIArr(&ColorFadeConfig::BeatFaders, 0, "beat_fader0", "Beat Fader 1", -32, 32),
-            RangeIArr(&ColorFadeConfig::BeatFaders, 1, "beat_fader1", "Beat Fader 2", -32, 32),
-            RangeIArr(&ColorFadeConfig::BeatFaders, 2, "beat_fader2", "Beat Fader 3", -32, 32),
-            Bool(&ColorFadeConfig::Gradual, "gradual", "Gradual"),
-            Bool(&ColorFadeConfig::RandomBeat, "random_beat", "Random on Beat"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Colorfade"; }
+    std::string Name() const override { return "Colorfade"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
-    void OnConfigChanged(const std::vector<std::string>& /*changed*/) override
+    // Snaps the interpolated fader positions to the current Faders. Called after
+    // Deserialize and by the UI when a fader slider changes.
+    void ResetFaderPos()
     {
-        // Reset interpolated positions to match new config.
-        m_fp[0] = (float)Cfg.Faders[0];
-        m_fp[1] = (float)Cfg.Faders[1];
-        m_fp[2] = (float)Cfg.Faders[2];
+        m_fp[0] = (float)Faders[0];
+        m_fp[1] = (float)Faders[1];
+        m_fp[2] = (float)Faders[2];
     }
 
 private:

@@ -1,6 +1,7 @@
 #include "ColorClip.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_colorclip.sc.bin.h"
@@ -17,7 +18,7 @@ void ColorClip::Init()
 
 void ColorClip::Render(const RenderContext& Context)
 {
-    const float Clip[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, 0.f };
+    const float Clip[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
     
     bgfx::setUniform(ColorUniform, Clip);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
@@ -42,4 +43,16 @@ void ColorClip::Destroy()
     ColorUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json ColorClip::Serialize() const
+{
+    return {
+        { kColor, JsonUtil::ColorToJson(Color) },
+    };
+}
+
+void ColorClip::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColor(j, kColor, Color);
 }

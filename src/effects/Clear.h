@@ -1,28 +1,24 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct ClearConfig
-{
-    std::array<uint8_t, 3> Color = { 0, 0, 0 };
-};
+#include <array>
 
-class Clear : public ReflectedEffect<ClearConfig>
+class Clear : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    std::array<uint8_t, 3> Color = { 0, 0, 0 };
+
+    static constexpr const char* kColor = "color";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Color(&ClearConfig::Color, "color", "Color"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Clear"; }
+    std::string Name() const override { return "Clear"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     bgfx::ProgramHandle Program      = BGFX_INVALID_HANDLE;

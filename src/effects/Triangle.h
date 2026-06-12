@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/LuaRuntime.h"
 
 #include <bgfx/bgfx.h>
@@ -11,15 +11,6 @@
 struct NVGcontext;
 struct NVGLUframebuffer;
 
-struct TriangleConfig
-{
-    std::string InitCode;
-    std::string FrameCode;
-    std::string BeatCode;
-    std::string TriangleCode;
-    bool        AntialiasingEnabled = true;
-};
-
 // Triangle — scriptable effect that draws filled triangles via NanoVG.
 //
 // Four Lua blocks (Init / Frame / Beat / Triangle) run like SuperScope's. The Triangle
@@ -27,35 +18,40 @@ struct TriangleConfig
 // x1,y1 / x2,y2 / x3,y3 and fill colour red1,green1,blue1 (vertices 2/3 colours are
 // ignored, matching the original). When `zbuf` is non-zero, triangles are painter-sorted
 // back-to-front by `z1` (an approximation of the original per-pixel depth buffer).
-class Triangle : public ReflectedEffect<TriangleConfig>
+class Triangle : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    std::string InitCode;
+    std::string FrameCode;
+    std::string BeatCode;
+    std::string TriangleCode;
+    bool        AntialiasingEnabled = true;
+
+    static constexpr const char* kInitCode     = "initCode";
+    static constexpr const char* kFrameCode    = "frameCode";
+    static constexpr const char* kBeatCode     = "beatCode";
+    static constexpr const char* kTriangleCode = "triangleCode";
+    static constexpr const char* kAntialiasing = "antialiasing";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
+
+    std::string Name() const override { return "Triangle"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
+
     std::string GetScriptError(const std::string& paramName) const override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Lua(&TriangleConfig::InitCode,     "initCode",     "Init"),
-            Lua(&TriangleConfig::FrameCode,    "frameCode",    "Frame"),
-            Lua(&TriangleConfig::BeatCode,     "beatCode",     "Beat"),
-            Lua(&TriangleConfig::TriangleCode, "triangleCode", "Triangle"),
-            Bool(&TriangleConfig::AntialiasingEnabled, "antialiasing", "Antialiasing"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Triangle"; }
-
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
+    // Recompiles all four Lua blocks and reruns init. Called after Deserialize and
+    // by the UI when any code editor changes.
+    void RecompileAll();
 
 private:
     void SeedBuiltins();
     void SeedUserVars();
     void ResetPerFrameVars();
-    void RecompileAll();
 
     LuaRuntime m_lua;
     int m_initRef     = -1;

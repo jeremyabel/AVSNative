@@ -1,9 +1,13 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct MovingParticleConfig
+#include <array>
+
+class MovingParticle : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     // Defaults match original AVS
     std::array<uint8_t, 3> Color           = { 255, 255, 255 };
     int  Distance         = 16;   // 1..32
@@ -11,30 +15,21 @@ struct MovingParticleConfig
     bool OnBeatSizeChange = false;
     int  OnBeatSize       = 8;    // 1..128
     int  BlendMode        = 1;    // 0=Replace 1=Additive 2=50/50 3=Default
-};
 
-class MovingParticle : public ReflectedEffect<MovingParticleConfig>
-{
-public:
+    static constexpr const char* kColor            = "color";
+    static constexpr const char* kDistance         = "distance";
+    static constexpr const char* kSize             = "size";
+    static constexpr const char* kOnBeatSizeChange = "onBeatSizeChange";
+    static constexpr const char* kOnBeatSize       = "onBeatSize";
+    static constexpr const char* kBlendMode        = "blendMode";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Color(&MovingParticleConfig::Color, "color", "Color"),
-            RangeI(&MovingParticleConfig::Distance, "distance", "Distance", 1, 32),
-            RangeI(&MovingParticleConfig::Size, "size", "Size", 1, 128),
-            Bool(&MovingParticleConfig::OnBeatSizeChange, "onBeatSizeChange", "On Beat Size Change"),
-            RangeI(&MovingParticleConfig::OnBeatSize, "onBeatSize", "On Beat Size", 1, 128),
-            SelectI(&MovingParticleConfig::BlendMode, "blendMode", "Blend Mode",
-                    { "Replace", "Additive", "50/50", "Default" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "MovingParticle"; }
+    std::string Name() const override { return "MovingParticle"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     // Physics state — exact initial values from AVS_Remake

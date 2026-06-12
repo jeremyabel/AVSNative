@@ -77,6 +77,41 @@ bool ColorEdit(const char* label, std::array<uint8_t, 3>& c)
     return false;
 }
 
+bool ColorsEdit(const char* id, std::vector<std::array<uint8_t, 3>>& colors)
+{
+    bool changed = false;
+    ImGui::PushID(id);
+    for (int i = 0; i < (int)colors.size(); ++i)
+    {
+        ImGui::PushID(i);
+        float col[3] = { colors[i][0] / 255.0f, colors[i][1] / 255.0f, colors[i][2] / 255.0f };
+        if (ImGui::ColorEdit3("##c", col,
+                              ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs))
+        {
+            colors[i] = { (uint8_t)(col[0] * 255.0f + 0.5f),
+                          (uint8_t)(col[1] * 255.0f + 0.5f),
+                          (uint8_t)(col[2] * 255.0f + 0.5f) };
+            changed = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x") && colors.size() > 1)
+        {
+            colors.erase(colors.begin() + i);
+            changed = true;
+            ImGui::PopID();
+            break;
+        }
+        ImGui::PopID();
+    }
+    if (ImGui::SmallButton("+"))
+    {
+        colors.push_back({ 255, 255, 255 });
+        changed = true;
+    }
+    ImGui::PopID();
+    return changed;
+}
+
 bool PickImageInto(Effect* effect, const char* configKey)
 {
     static const SDL_DialogFileFilter kImgFilters[] = {

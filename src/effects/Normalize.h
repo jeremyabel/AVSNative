@@ -1,29 +1,23 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/ShaderCompiler.h"
 
 #include <vector>
 
-struct NormalizeConfig {};
-
-class Normalize : public ReflectedEffect<NormalizeConfig>
+class Normalize : public Effect
 {
 public:
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
+    std::string Name() const override { return "Normalize"; }
+    nlohmann::json Serialize() const override { return nlohmann::json::object(); }
+    void Deserialize(const nlohmann::json& /*j*/) override {}
+
     // Multi-pass: init + reduce chain + apply. 20 covers any resolution up to ~4K.
     uint8_t ExpectedViewCount() const override { return 20; }
-
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f;
-        return f;
-    }
-    std::string EffectName() const override { return "Normalize"; }
 
 private:
     struct Level {

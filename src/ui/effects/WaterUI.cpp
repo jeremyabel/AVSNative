@@ -1,7 +1,13 @@
 #include "ui/ConfigUiRegistry.h"
 
+#include <imgui.h>
+
+static void DrawWaterUI(Effect* /*base*/)
+{
+    ImGui::TextDisabled("No parameters.");
+}
+
 void RegisterWaterUI(ConfigUiRegistry& reg)
 {
-    // Water has no parameters
-    reg.Register("Water", &DrawDefault);
+    reg.Register("Water", &DrawWaterUI);
 }

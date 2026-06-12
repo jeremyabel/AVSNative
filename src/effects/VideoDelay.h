@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <vector>
 
@@ -12,33 +12,30 @@
 // the write path copies the input with bgfx::blit, the read path samples through the
 // fullscreen blit shader. Ring size is capped at MAX_RING_SLOTS to bound VRAM.
 
-struct VideoDelayConfig
-{
-    bool Enabled  = true;
-    bool UseBeats = false;
-    int  Delay    = 10;   // frames (UseBeats off) or beat multiplier (UseBeats on)
-};
-
-class VideoDelay : public ReflectedEffect<VideoDelayConfig>
+class VideoDelay : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    bool Enabled  = true;
+    bool UseBeats = false;
+    int  Delay    = 10;   // frames (UseBeats off, 0–200) or beat multiplier (UseBeats on, 0–16)
+
+    static constexpr const char* kEnabled  = "enabled";
+    static constexpr const char* kUseBeats = "usebeats";
+    static constexpr const char* kDelay    = "delay";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Bool(&VideoDelayConfig::Enabled,  "enabled",  "Enabled"),
-            Bool(&VideoDelayConfig::UseBeats, "usebeats", "Use Beats"),
-            RangeI(&VideoDelayConfig::Delay,  "delay",    "Delay", 0, 200),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Video Delay"; }
+    std::string Name() const override { return "Video Delay"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
+    // Re-derives the runtime frame delay after UseBeats/Delay change (beats mode
+    // multiplies the delay per beat, so it uses a tighter cap). Called after
+    // Deserialize and by the UI.
+    void ApplyDelayChange();
 
 private:
     void FreeRing();

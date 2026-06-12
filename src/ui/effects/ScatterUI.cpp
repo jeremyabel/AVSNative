@@ -1,7 +1,13 @@
 #include "ui/ConfigUiRegistry.h"
 
+#include <imgui.h>
+
+static void DrawScatterUI(Effect* /*base*/)
+{
+    ImGui::TextDisabled("No parameters.");
+}
+
 void RegisterScatterUI(ConfigUiRegistry& reg)
 {
-    // Scatter has no parameters
-    reg.Register("Scatter", &DrawDefault);
+    reg.Register("Scatter", &DrawScatterUI);
 }

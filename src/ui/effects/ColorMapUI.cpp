@@ -150,15 +150,14 @@ static bool LoadClm(ColorMapEntry& map)
 static void DrawColorMapUI(Effect* effect)
 {
     auto* cm = static_cast<ColorMap*>(effect);
-    ColorMapConfig& cfg = cm->ConfigRef();
     ColorMapUiState& st = g_states[effect];
 
     // Resync gradient widgets if the config changed externally (e.g. preset load).
     if (st.LastVersion != cm->ConfigVersion())
     {
         for (int i = 0; i < ColorMap::kNumMaps; ++i)
-            st.Widgets[i] = BuildWidget(cfg.Maps[i]);
-        st.Selected    = std::clamp(cfg.CurrentMap, 0, ColorMap::kNumMaps - 1);
+            st.Widgets[i] = BuildWidget(cm->Maps[i]);
+        st.Selected    = std::clamp(cm->CurrentMap, 0, ColorMap::kNumMaps - 1);
         st.LastVersion = cm->ConfigVersion();
     }
 
@@ -167,9 +166,9 @@ static void DrawColorMapUI(Effect* effect)
     for (int i = 0; i < ColorMap::kNumMaps; ++i)
     {
         ImGui::PushID(i);
-        bool en = cfg.Maps[i].Enabled;
+        bool en = cm->Maps[i].Enabled;
         if (ImGui::Checkbox("##en", &en))
-            cfg.Maps[i].Enabled = en;
+            cm->Maps[i].Enabled = en;
         ImGui::SameLine();
         char lbl[16];
         snprintf(lbl, sizeof(lbl), "Map %d", i + 1);
@@ -183,8 +182,8 @@ static void DrawColorMapUI(Effect* effect)
     const int sel = std::clamp(st.Selected, 0, ColorMap::kNumMaps - 1);
 
     // When not cycling, display the map being edited.
-    if (cfg.MapCycleMode == 0)
-        cfg.CurrentMap = sel;
+    if (cm->MapCycleMode == 0)
+        cm->CurrentMap = sel;
 
     // ── Gradient editor for the selected map ──
     ImGui::SeparatorText("Gradient");
@@ -193,35 +192,35 @@ static void DrawColorMapUI(Effect* effect)
     settings.gradient_height = 32.0f;
     if (st.Widgets[sel].widget("##gradient", settings))
     {
-        WidgetToStops(st.Widgets[sel], cfg.Maps[sel]);
+        WidgetToStops(st.Widgets[sel], cm->Maps[sel]);
         cm->BakeMap(sel);
     }
 
     // ── Per-map actions ──
     if (ImGui::Button("Flip"))
     {
-        auto& stops = cfg.Maps[sel].Stops;
+        auto& stops = cm->Maps[sel].Stops;
         for (ColorMapStop& s : stops) s.Position = 255 - s.Position;
         std::reverse(stops.begin(), stops.end());
-        st.Widgets[sel] = BuildWidget(cfg.Maps[sel]);
+        st.Widgets[sel] = BuildWidget(cm->Maps[sel]);
         cm->BakeMap(sel);
     }
     ImGui::SameLine();
     if (ImGui::Button("Clear"))
     {
-        cfg.Maps[sel].Stops = { { 0, { 0, 0, 0 } }, { 255, { 255, 255, 255 } } };
-        st.Widgets[sel] = BuildWidget(cfg.Maps[sel]);
+        cm->Maps[sel].Stops = { { 0, { 0, 0, 0 } }, { 255, { 255, 255, 255 } } };
+        st.Widgets[sel] = BuildWidget(cm->Maps[sel]);
         cm->BakeMap(sel);
     }
     ImGui::SameLine();
     if (ImGui::Button("Save .clm"))
-        SaveClm(cfg.Maps[sel], sel);
+        SaveClm(cm->Maps[sel], sel);
     ImGui::SameLine();
     if (ImGui::Button("Load .clm"))
     {
-        if (LoadClm(cfg.Maps[sel]))
+        if (LoadClm(cm->Maps[sel]))
         {
-            st.Widgets[sel] = BuildWidget(cfg.Maps[sel]);
+            st.Widgets[sel] = BuildWidget(cm->Maps[sel]);
             cm->BakeMap(sel);
         }
     }
@@ -233,10 +232,10 @@ static void DrawColorMapUI(Effect* effect)
                               "(R+G+B)/2", "Maximal Channel", "(R+G+B)/3" };
     ImGui::TextUnformatted("Key");
     ImGui::SetNextItemWidth(-1.0f);
-    if (ImGui::BeginCombo("##key", keyOpts[std::clamp(cfg.ColorKey, 0, 5)]))
+    if (ImGui::BeginCombo("##key", keyOpts[std::clamp(cm->ColorKey, 0, 5)]))
     {
         for (int i = 0; i < 6; ++i)
-            if (ImGui::Selectable(keyOpts[i], cfg.ColorKey == i)) cfg.ColorKey = i;
+            if (ImGui::Selectable(keyOpts[i], cm->ColorKey == i)) cm->ColorKey = i;
         ImGui::EndCombo();
     }
 
@@ -244,36 +243,36 @@ static void DrawColorMapUI(Effect* effect)
                                 "Subtractive 1", "Subtractive 2", "Multiply", "XOR", "Adjustable" };
     ImGui::TextUnformatted("Blend Mode");
     ImGui::SetNextItemWidth(-1.0f);
-    if (ImGui::BeginCombo("##blend", blendOpts[std::clamp(cfg.BlendMode, 0, 9)]))
+    if (ImGui::BeginCombo("##blend", blendOpts[std::clamp(cm->BlendMode, 0, 9)]))
     {
         for (int i = 0; i < 10; ++i)
-            if (ImGui::Selectable(blendOpts[i], cfg.BlendMode == i)) cfg.BlendMode = i;
+            if (ImGui::Selectable(blendOpts[i], cm->BlendMode == i)) cm->BlendMode = i;
         ImGui::EndCombo();
     }
 
-    if (cfg.BlendMode == 9)   // Adjustable
+    if (cm->BlendMode == 9)   // Adjustable
     {
         ImGui::TextUnformatted("Alpha");
         ImGui::SetNextItemWidth(-1.0f);
-        ImGui::SliderInt("##alpha", &cfg.AdjustableAlpha, 0, 255);
+        ImGui::SliderInt("##alpha", &cm->AdjustableAlpha, 0, 255);
     }
 
     const char* cycleOpts[] = { "None (single map)", "On-beat random", "On-beat sequential" };
     ImGui::TextUnformatted("Cycling");
     ImGui::SetNextItemWidth(-1.0f);
-    if (ImGui::BeginCombo("##cycle", cycleOpts[std::clamp(cfg.MapCycleMode, 0, 2)]))
+    if (ImGui::BeginCombo("##cycle", cycleOpts[std::clamp(cm->MapCycleMode, 0, 2)]))
     {
         for (int i = 0; i < 3; ++i)
-            if (ImGui::Selectable(cycleOpts[i], cfg.MapCycleMode == i)) cfg.MapCycleMode = i;
+            if (ImGui::Selectable(cycleOpts[i], cm->MapCycleMode == i)) cm->MapCycleMode = i;
         ImGui::EndCombo();
     }
 
-    if (cfg.MapCycleMode != 0)
+    if (cm->MapCycleMode != 0)
     {
         ImGui::TextUnformatted("Cycle Speed");
         ImGui::SetNextItemWidth(-1.0f);
-        ImGui::SliderInt("##speed", &cfg.MapCycleSpeed, 1, 64);
-        ImGui::Checkbox("Don't Skip Fast Beats", &cfg.DontSkipFastBeats);
+        ImGui::SliderInt("##speed", &cm->MapCycleSpeed, 1, 64);
+        ImGui::Checkbox("Don't Skip Fast Beats", &cm->DontSkipFastBeats);
     }
 }
 

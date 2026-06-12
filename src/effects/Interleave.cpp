@@ -1,6 +1,7 @@
 #include "Interleave.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_interleave.sc.bin.h"
@@ -22,24 +23,24 @@ void Interleave::Init()
 void Interleave::Render(const RenderContext& Context)
 {
     // Exponential decay toward base x/y — sc1 = (beatdur + 448) / 512
-    const float sc1 = float(Cfg.BeatDur + 448) / 512.0f;
-    CurX = CurX * sc1 + Cfg.X * (1.0f - sc1);
-    CurY = CurY * sc1 + Cfg.Y * (1.0f - sc1);
+    const float sc1 = float(BeatDur + 448) / 512.0f;
+    CurX = CurX * sc1 + X * (1.0f - sc1);
+    CurY = CurY * sc1 + Y * (1.0f - sc1);
 
     // Beat snap applied after interpolation (matches original order)
-    if (Context.IsBeat() && Cfg.OnBeat)
+    if (Context.IsBeat() && OnBeat)
     {
-        CurX = Cfg.X2;
-        CurY = Cfg.Y2;
+        CurX = X2;
+        CurY = Y2;
     }
 
     const int Tx = std::max(0, int(std::round(CurX)));
     const int Ty = std::max(0, int(std::round(CurY)));
 
-    const float Color[4] = { Cfg.Color[0] / 255.0f, Cfg.Color[1] / 255.0f, Cfg.Color[2] / 255.0f, float(Cfg.OutBlend) };
+    const float FillColor[4] = { Color[0] / 255.0f, Color[1] / 255.0f, Color[2] / 255.0f, float(OutBlend) };
     const float Grid[4] = { float(Tx), float(Ty), float(Context.Width), float(Context.Height) };
 
-    bgfx::setUniform(ColorUniform, Color);
+    bgfx::setUniform(ColorUniform, FillColor);
     bgfx::setUniform(GridUniform, Grid);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
@@ -67,4 +68,32 @@ void Interleave::Destroy()
     ColorUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json Interleave::Serialize() const
+{
+    return {
+        { kX,        X        },
+        { kY,        Y        },
+        { kX2,       X2       },
+        { kY2,       Y2       },
+        { kBeatDur,  BeatDur  },
+        { kColor,    JsonUtil::ColorToJson(Color) },
+        { kOnBeat,   OnBeat   },
+        { kOutBlend, OutBlend },
+    };
+}
+
+void Interleave::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadFloat(j, kX,        X);
+    JsonUtil::ReadFloat(j, kY,        Y);
+    JsonUtil::ReadFloat(j, kX2,       X2);
+    JsonUtil::ReadFloat(j, kY2,       Y2);
+    JsonUtil::ReadInt  (j, kBeatDur,  BeatDur);
+    JsonUtil::ReadColor(j, kColor,    Color);
+    JsonUtil::ReadBool (j, kOnBeat,   OnBeat);
+    JsonUtil::ReadInt  (j, kOutBlend, OutBlend);
+
+    ResetAnim();
 }

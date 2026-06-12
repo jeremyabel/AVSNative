@@ -1,5 +1,7 @@
 #include "Text.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -154,7 +156,7 @@ void Text::Render(const RenderContext& Context)
     // ── Word-cycling state machine (ported from the AVSWeb reference). ───────────
     std::vector<std::string> words;
     {
-        const std::string& t = Cfg.Text;
+        const std::string& t = TextString;
         size_t start = 0;
         while (true)
         {
@@ -166,42 +168,42 @@ void Text::Render(const RenderContext& Context)
     }
     const int numWords = (int)words.size();
 
-    const bool shouldAdvance = (!Cfg.OnBeat && m_nf >= Cfg.NormSpeed)
-                            || (Cfg.OnBeat && isBeat && m_nb == 0);
+    const bool shouldAdvance = (!OnBeat && m_nf >= NormSpeed)
+                            || (OnBeat && isBeat && m_nb == 0);
 
     if (shouldAdvance)
     {
-        if (!(Cfg.InsertBlank && m_oddEven % 2 == 0))
+        if (!(InsertBlank && m_oddEven % 2 == 0))
         {
-            m_curWord = Cfg.RandomWord ? (std::rand() % numWords)
+            m_curWord = RandomWord ? (std::rand() % numWords)
                                        : (m_curWord + 1) % numWords;
         }
         m_oddEven = (m_oddEven + 1) % 2;
     }
 
-    if (Cfg.OnBeat && isBeat && m_nb == 0)
-        m_nb = Cfg.OnBeatSpeed;
+    if (OnBeat && isBeat && m_nb == 0)
+        m_nb = OnBeatSpeed;
 
     if (shouldAdvance)
     {
         m_nf = 0;
-        if (Cfg.RandomPos)
+        if (RandomPos)
         {
             m_effHAlign = 0;
             m_effVAlign = 0;
             // Measure the word width to keep it on-screen.
-            const int fontId = ResolveFontId(Cfg.FontFamily, Cfg.Bold, Cfg.Italic);
+            const int fontId = ResolveFontId(FontFamily, Bold, Italic);
             float tw = 0.0f;
             if (fontId >= 0)
             {
                 nvgFontFaceId(m_nvg, fontId);
-                nvgFontSize(m_nvg, (float)Cfg.FontSize);
+                nvgFontSize(m_nvg, (float)FontSize);
                 const std::string& word = words[m_curWord];
                 float bounds[4] = { 0, 0, 0, 0 };
                 nvgTextBounds(m_nvg, 0, 0, word.c_str(), nullptr, bounds);
                 tw = bounds[2] - bounds[0];
             }
-            const float th = (float)Cfg.FontSize;
+            const float th = (float)FontSize;
             const float rx = (float)std::rand() / (float)RAND_MAX;
             const float ry = (float)std::rand() / (float)RAND_MAX;
             m_effXShift = (tw < w) ? rx * ((w - tw) / w * 100.0f) : 0.0f;
@@ -209,19 +211,19 @@ void Text::Render(const RenderContext& Context)
         }
         else
         {
-            m_effHAlign = Cfg.HAlign;
-            m_effVAlign = Cfg.VAlign;
-            m_effXShift = (float)Cfg.XShift;
-            m_effYShift = (float)Cfg.YShift;
+            m_effHAlign = HAlign;
+            m_effVAlign = VAlign;
+            m_effXShift = (float)XShift;
+            m_effYShift = (float)YShift;
         }
     }
 
-    const bool blank = (Cfg.InsertBlank && m_oddEven == 0);
+    const bool blank = (InsertBlank && m_oddEven == 0);
     const std::string displayText = blank ? std::string() : words[m_curWord];
-    const bool visible = !(Cfg.OnBeat && m_nb == 0);
+    const bool visible = !(OnBeat && m_nb == 0);
 
-    if (!Cfg.OnBeat) m_nf++;
-    if (Cfg.OnBeat && m_nb > 0) m_nb--;
+    if (!OnBeat) m_nf++;
+    if (OnBeat && m_nb > 0) m_nb--;
 
     if (!visible) return;   // pass-through (no swap)
 
@@ -233,11 +235,11 @@ void Text::Render(const RenderContext& Context)
     nvgluBindFramebuffer(m_overlayFbo);
     nvgBeginFrame(m_nvg, (float)w, (float)h, 1.0f);
 
-    const int fontId = ResolveFontId(Cfg.FontFamily, Cfg.Bold, Cfg.Italic);
+    const int fontId = ResolveFontId(FontFamily, Bold, Italic);
     if (fontId >= 0 && !displayText.empty())
     {
         nvgFontFaceId(m_nvg, fontId);
-        nvgFontSize(m_nvg, (float)Cfg.FontSize);
+        nvgFontSize(m_nvg, (float)FontSize);
 
         const int hflag = m_effHAlign == 0 ? NVG_ALIGN_LEFT : m_effHAlign == 1 ? NVG_ALIGN_CENTER : NVG_ALIGN_RIGHT;
         const int vflag = m_effVAlign == 0 ? NVG_ALIGN_TOP  : m_effVAlign == 1 ? NVG_ALIGN_MIDDLE : NVG_ALIGN_BOTTOM;
@@ -249,11 +251,11 @@ void Text::Render(const RenderContext& Context)
         const float ay = m_effVAlign == 0 ? dy : m_effVAlign == 1 ? h / 2.0f + dy : h + dy;
 
         const char* str = displayText.c_str();
-        const NVGcolor mainCol = nvgRGB(Cfg.Color[0], Cfg.Color[1], Cfg.Color[2]);
-        const NVGcolor outCol  = nvgRGB(Cfg.OutlineColor[0], Cfg.OutlineColor[1], Cfg.OutlineColor[2]);
-        const float os = (float)Cfg.OutlineSize;
+        const NVGcolor mainCol = nvgRGB(Color[0], Color[1], Color[2]);
+        const NVGcolor outCol  = nvgRGB(OutlineColor[0], OutlineColor[1], OutlineColor[2]);
+        const float os = (float)OutlineSize;
 
-        if (Cfg.Outline)
+        if (Outline)
         {
             // NanoVG has no text stroke; both outline styles use the legacy 8-offset fill.
             static const int off[8][2] = { {-1,-1},{0,-1},{1,-1},{1,0},{1,1},{0,1},{-1,1},{-1,0} };
@@ -261,7 +263,7 @@ void Text::Render(const RenderContext& Context)
             for (auto& o : off)
                 nvgText(m_nvg, ax + o[0] * os, ay + o[1] * os, str, nullptr);
         }
-        else if (Cfg.Shadow)
+        else if (Shadow)
         {
             nvgFillColor(m_nvg, outCol);
             nvgText(m_nvg, ax + os, ay + os, str, nullptr);
@@ -276,7 +278,7 @@ void Text::Render(const RenderContext& Context)
 
     // ── Composite overlay → input (blend then alpha-mix, via fs_simple). ─────────
     // Text blend {0 replace, 1 additive, 2 50/50} → fs_simple modes {0, 1, 3}.
-    const float mode = (Cfg.Blend == 1) ? 1.0f : (Cfg.Blend == 2) ? 3.0f : 0.0f;
+    const float mode = (Blend == 1) ? 1.0f : (Blend == 2) ? 3.0f : 0.0f;
 
     const uint8_t compView = Context.ViewId + 1;
     bgfx::setViewFrameBuffer(compView, Context.OutputFBO);
@@ -294,19 +296,58 @@ void Text::Render(const RenderContext& Context)
     Context.FboManager->Swap();
 }
 
-// ── Serialization (text / fontFamily strings on top of the reflected config). ──
+// ── Serialization ─────────────────────────────────────────────────────────────
 
-nlohmann::json Text::GetConfig() const
+nlohmann::json Text::Serialize() const
 {
-    nlohmann::json j = ReflectedEffect::GetConfig();
-    j["text"]       = Cfg.Text;
-    j["fontFamily"] = Cfg.FontFamily;
-    return j;
+    return {
+        { kText,          TextString },
+        { kFontFamily,    FontFamily },
+        { kFontSize,      FontSize   },
+        { kBold,          Bold       },
+        { kItalic,        Italic     },
+        { kColor,         JsonUtil::ColorToJson(Color)        },
+        { kOutlineColor,  JsonUtil::ColorToJson(OutlineColor) },
+        { kOutline,       Outline       },
+        { kLegacyOutline, LegacyOutline },
+        { kShadow,        Shadow        },
+        { kOutlineSize,   OutlineSize   },
+        { kBlend,         Blend         },
+        { kHAlign,        HAlign        },
+        { kVAlign,        VAlign        },
+        { kXShift,        XShift        },
+        { kYShift,        YShift        },
+        { kRandomPos,     RandomPos     },
+        { kOnBeat,        OnBeat        },
+        { kNormSpeed,     NormSpeed     },
+        { kOnBeatSpeed,   OnBeatSpeed   },
+        { kInsertBlank,   InsertBlank   },
+        { kRandomWord,    RandomWord    },
+    };
 }
 
-void Text::SetConfig(const nlohmann::json& j)
+void Text::Deserialize(const nlohmann::json& j)
 {
-    ReflectedEffect::SetConfig(j);
-    if (j.contains("text")       && j["text"].is_string())       Cfg.Text       = j["text"].get<std::string>();
-    if (j.contains("fontFamily") && j["fontFamily"].is_string()) Cfg.FontFamily = j["fontFamily"].get<std::string>();
+    JsonUtil::ReadString(j, kText,          TextString);
+    JsonUtil::ReadString(j, kFontFamily,    FontFamily);
+    JsonUtil::ReadInt   (j, kFontSize,      FontSize);
+    JsonUtil::ReadBool  (j, kBold,          Bold);
+    JsonUtil::ReadBool  (j, kItalic,        Italic);
+    JsonUtil::ReadColor (j, kColor,         Color);
+    JsonUtil::ReadColor (j, kOutlineColor,  OutlineColor);
+    JsonUtil::ReadBool  (j, kOutline,       Outline);
+    JsonUtil::ReadBool  (j, kLegacyOutline, LegacyOutline);
+    JsonUtil::ReadBool  (j, kShadow,        Shadow);
+    JsonUtil::ReadInt   (j, kOutlineSize,   OutlineSize);
+    JsonUtil::ReadInt   (j, kBlend,         Blend);
+    JsonUtil::ReadInt   (j, kHAlign,        HAlign);
+    JsonUtil::ReadInt   (j, kVAlign,        VAlign);
+    JsonUtil::ReadInt   (j, kXShift,        XShift);
+    JsonUtil::ReadInt   (j, kYShift,        YShift);
+    JsonUtil::ReadBool  (j, kRandomPos,     RandomPos);
+    JsonUtil::ReadBool  (j, kOnBeat,        OnBeat);
+    JsonUtil::ReadInt   (j, kNormSpeed,     NormSpeed);
+    JsonUtil::ReadInt   (j, kOnBeatSpeed,   OnBeatSpeed);
+    JsonUtil::ReadBool  (j, kInsertBlank,   InsertBlank);
+    JsonUtil::ReadBool  (j, kRandomWord,    RandomWord);
 }

@@ -1,6 +1,7 @@
 #include "Brightness.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_brightness.sc.bin.h"
@@ -25,9 +26,9 @@ void Brightness::Init()
 
 void Brightness::Render(const RenderContext& Context)
 {
-    const float Params[4] = { (float)Cfg.Blend, Cfg.Exclude ? 1.f : 0.f, Cfg.Distance / 255.f, 0.f };
-    const float MultColor[4] = { ChannelMult(Cfg.Red), ChannelMult(Cfg.Green), ChannelMult(Cfg.Blue), 0.f };
-    const float ExcludeColor[4] = { Cfg.ExcludeColor[0] / 255.f, Cfg.ExcludeColor[1] / 255.f, Cfg.ExcludeColor[2] / 255.f, 0.f };
+    const float Params[4] = { (float)Blend, Exclude ? 1.f : 0.f, Distance / 255.f, 0.f };
+    const float MultColor[4] = { ChannelMult(Red), ChannelMult(Green), ChannelMult(Blue), 0.f };
+    const float ExcludeColor[4] = { ExcludeColor[0] / 255.f, ExcludeColor[1] / 255.f, ExcludeColor[2] / 255.f, 0.f };
 
     bgfx::setUniform(m_uMult, MultColor);
     bgfx::setUniform(m_uParams, Params);
@@ -62,4 +63,29 @@ void Brightness::Destroy()
     m_uMult = BGFX_INVALID_HANDLE;
     m_uInput = BGFX_INVALID_HANDLE;
     m_program = BGFX_INVALID_HANDLE;
+}
+nlohmann::json Brightness::Serialize() const
+{
+    return {
+        { kBlend,        Blend    },
+        { kRed,          Red      },
+        { kGreen,        Green    },
+        { kBlue,         Blue     },
+        { kSeparate,     Separate },
+        { kExclude,      Exclude  },
+        { kExcludeColor, JsonUtil::ColorToJson(ExcludeColor) },
+        { kDistance,     Distance },
+    };
+}
+
+void Brightness::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt  (j, kBlend,        Blend);
+    JsonUtil::ReadInt  (j, kRed,          Red);
+    JsonUtil::ReadInt  (j, kGreen,        Green);
+    JsonUtil::ReadInt  (j, kBlue,         Blue);
+    JsonUtil::ReadBool (j, kSeparate,     Separate);
+    JsonUtil::ReadBool (j, kExclude,      Exclude);
+    JsonUtil::ReadColor(j, kExcludeColor, ExcludeColor);
+    JsonUtil::ReadInt  (j, kDistance,     Distance);
 }

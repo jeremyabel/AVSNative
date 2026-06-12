@@ -1,6 +1,7 @@
 #include "BufferSave.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_blit.sc.bin.h"
@@ -31,7 +32,7 @@ void BufferSave::SubmitBlit(uint8_t ViewId, bgfx::TextureHandle Tex, bgfx::Verte
 
 void BufferSave::SubmitBlend(uint8_t ViewId, bgfx::TextureHandle Base, bgfx::TextureHandle Src, bgfx::VertexBufferHandle QuadVB)
 {
-    const float Params[4] = { (float)Cfg.BlendMode, Cfg.BlendAmt, 0.f, 0.f };
+    const float Params[4] = { (float)BlendMode, BlendAmt, 0.f, 0.f };
     bgfx::setUniform(BlendParamsUniform, Params);
     bgfx::setTexture(0, BaseTexUniform, Base);
     bgfx::setTexture(1, SrcTexUniform, Src);
@@ -42,11 +43,11 @@ void BufferSave::SubmitBlend(uint8_t ViewId, bgfx::TextureHandle Base, bgfx::Tex
 
 void BufferSave::DoSave(const RenderContext& Context)
 {
-    const FBOSlot& Scratch = Context.FboManager->GetScratch(Cfg.Slot);
+    const FBOSlot& Scratch = Context.FboManager->GetScratch(Slot);
     const uint16_t Width = Context.FboManager->GetWidth();
     const uint16_t Height = Context.FboManager->GetHeight();
 
-    if (Cfg.BlendMode == 0)
+    if (BlendMode == 0)
     {
         // Replace: blit input → scratch (aux view executes after main, but both read from unmodified InputTexture so order doesn't matter)
         const uint8_t AuxViewId = Context.ViewId + 1;
@@ -91,7 +92,7 @@ void BufferSave::DoSave(const RenderContext& Context)
 
 void BufferSave::DoRestore(const RenderContext& Context)
 {
-    const FBOSlot& Scratch = Context.FboManager->GetScratch(Cfg.Slot);
+    const FBOSlot& Scratch = Context.FboManager->GetScratch(Slot);
     
     // blend(base=current frame, src=saved scratch) → output
     SubmitBlend(Context.ViewId, Context.InputTexture, Scratch.Texture, Context.QuadVB);
@@ -101,15 +102,15 @@ void BufferSave::DoRestore(const RenderContext& Context)
 void BufferSave::Render(const RenderContext& Context)
 {
     bool bDoSave = false;
-    if (Cfg.Mode <= 1)
+    if (Mode <= 1)
     {
-        bDoSave = (Cfg.Mode == 0);
+        bDoSave = (Mode == 0);
     }
     else
     {
         // Mode 2: Alternate Save/Restore — starts with Save (altPhase=false → doSave=true)
         // Mode 3: Alternate Restore/Save — starts with Restore (altPhase=false → doSave=false)
-        bool saveFirst = (Cfg.Mode == 2);
+        bool saveFirst = (Mode == 2);
         bDoSave = saveFirst ? !AltPhase : AltPhase;
         AltPhase = !AltPhase;
     }
@@ -150,4 +151,22 @@ void BufferSave::Destroy()
     BlitTexUniform = BGFX_INVALID_HANDLE;
     BlendProgram = BGFX_INVALID_HANDLE;
     BlitProgram = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json BufferSave::Serialize() const
+{
+    return {
+        { kMode,      Mode      },
+        { kSlot,      Slot      },
+        { kBlendMode, BlendMode },
+        { kBlendAmt,  BlendAmt  },
+    };
+}
+
+void BufferSave::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt  (j, kMode,      Mode);
+    JsonUtil::ReadInt  (j, kSlot,      Slot);
+    JsonUtil::ReadInt  (j, kBlendMode, BlendMode);
+    JsonUtil::ReadFloat(j, kBlendAmt,  BlendAmt);
 }

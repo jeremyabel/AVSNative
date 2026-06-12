@@ -2,6 +2,7 @@
 
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_simple.sc.bin.h"
@@ -73,7 +74,7 @@ void RotatingStars::Destroy()
 
 void RotatingStars::Render(const RenderContext& Context)
 {
-    if (Cfg.Colors.empty()) return;
+    if (Colors.empty()) return;
 
     const int W = Context.Width;
     const int H = Context.Height;
@@ -84,12 +85,12 @@ void RotatingStars::Render(const RenderContext& Context)
     // Color cycling: linear interpolation between adjacent color entries.
     // Each segment spans 64 frames; frac ∈ [0,63].
     // Integer truncation matches the JS reference (Math.trunc on integer arithmetic).
-    const int n = (int)Cfg.Colors.size();
+    const int n = (int)Colors.size();
     m_colorPos = (m_colorPos + 1) % (n * 64);
     const int frac = m_colorPos & 63;
     const int seg  = m_colorPos / 64;
-    const auto& c1 = Cfg.Colors[seg % n];
-    const auto& c2 = Cfg.Colors[(seg + 1) % n];
+    const auto& c1 = Colors[seg % n];
+    const auto& c2 = Colors[(seg + 1) % n];
     const float cr = (float)((c1[0] * (63 - frac) + c2[0] * frac) / 64) / 255.0f;
     const float cg = (float)((c1[1] * (63 - frac) + c2[1] * frac) / 64) / 255.0f;
     const float cb = (float)((c1[2] * (63 - frac) + c2[2] * frac) / 64) / 255.0f;
@@ -184,4 +185,16 @@ void RotatingStars::Render(const RenderContext& Context)
     bgfx::submit(compView, m_program);
 
     Context.FboManager->Swap();
+}
+
+nlohmann::json RotatingStars::Serialize() const
+{
+    return {
+        { kColors, JsonUtil::ColorsToJson(Colors) },
+    };
+}
+
+void RotatingStars::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColors(j, kColors, Colors);
 }

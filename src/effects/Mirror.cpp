@@ -1,6 +1,7 @@
 #include "Mirror.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_mirror.sc.bin.h"
@@ -17,20 +18,20 @@ void Mirror::Init()
 
 void Mirror::Render(const RenderContext& Context)
 {
-    if (Cfg.OnBeat && Context.IsBeat())
+    if (OnBeat && Context.IsBeat())
     {
         IsBeatActive = !IsBeatActive;
     }
 
-    bool FlipX = Cfg.FlipX;
-    bool FlipY = Cfg.FlipY;
-    if (Cfg.OnBeat && IsBeatActive)
+    bool DoFlipX = FlipX;
+    bool DoFlipY = FlipY;
+    if (OnBeat && IsBeatActive)
     {
-        FlipX = !FlipX;
-        FlipY = !FlipY;
+        DoFlipX = !DoFlipX;
+        DoFlipY = !DoFlipY;
     }
 
-    const int Mode = (FlipX ? 1 : 0) | (FlipY ? 2 : 0);
+    const int Mode = (DoFlipX ? 1 : 0) | (DoFlipY ? 2 : 0);
     const float Params[4] = { (float)Mode, 0.f, 0.f, 0.f };
     
     bgfx::setUniform(ParamsUniform, Params);
@@ -40,6 +41,22 @@ void Mirror::Render(const RenderContext& Context)
     bgfx::submit(Context.ViewId, Program);
 
     Context.FboManager->Swap();
+}
+
+nlohmann::json Mirror::Serialize() const
+{
+    return {
+        { kFlipX,  FlipX  },
+        { kFlipY,  FlipY  },
+        { kOnBeat, OnBeat },
+    };
+}
+
+void Mirror::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadBool(j, kFlipX,  FlipX);
+    JsonUtil::ReadBool(j, kFlipY,  FlipY);
+    JsonUtil::ReadBool(j, kOnBeat, OnBeat);
 }
 
 void Mirror::Destroy()

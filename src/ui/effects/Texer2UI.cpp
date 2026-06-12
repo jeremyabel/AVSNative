@@ -5,6 +5,14 @@
 
 #include <imgui.h>
 
+#include <string>
+
+static void ScriptError(Effect* fx, const char* param)
+{
+    if (std::string err = fx->GetScriptError(param); !err.empty())
+        ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
+}
+
 // ── Bespoke UI ────────────────────────────────────────────────────────────────
 
 static void DrawTexer2UI(Effect* effect)
@@ -25,10 +33,33 @@ static void DrawTexer2UI(Effect* effect)
         ImGui::TextUnformatted("No image loaded");
 
     if (ImGui::Button("Load Image..."))
-        ConfigUi::PickImageInto(effect, "imageData");
+        ConfigUi::PickImageInto(effect, Texer2::kImageData);
 
     ImGui::Spacing();
-    DrawDefault(effect);
+
+    ImGui::Checkbox("Resizing", &tex->Resize);
+    ImGui::Checkbox("Wrap Around", &tex->Wrap);
+    ImGui::Checkbox("Color Filtering", &tex->Colorize);
+
+    ImGui::TextUnformatted("Init");
+    if (ConfigUi::CodeEditor("texer2.initCode", tex->InitCode, ConfigUi::Lang::Lua))
+        tex->RecompileInitCode();
+    ScriptError(tex, Texer2::kInitCode);
+
+    ImGui::TextUnformatted("Frame");
+    if (ConfigUi::CodeEditor("texer2.frameCode", tex->FrameCode, ConfigUi::Lang::Lua))
+        tex->RecompileFrameCode();
+    ScriptError(tex, Texer2::kFrameCode);
+
+    ImGui::TextUnformatted("Beat");
+    if (ConfigUi::CodeEditor("texer2.beatCode", tex->BeatCode, ConfigUi::Lang::Lua))
+        tex->RecompileBeatCode();
+    ScriptError(tex, Texer2::kBeatCode);
+
+    ImGui::TextUnformatted("Point");
+    if (ConfigUi::CodeEditor("texer2.pointCode", tex->PointCode, ConfigUi::Lang::Lua))
+        tex->RecompilePointCode();
+    ScriptError(tex, Texer2::kPointCode);
 }
 
 void RegisterTexer2UI(ConfigUiRegistry& reg)

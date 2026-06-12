@@ -2,6 +2,7 @@
 
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_timescope.sc.bin.h"
@@ -60,28 +61,28 @@ void Timescope::Render(const RenderContext& Context)
     // Build this frame's scope column from the spectrum.
     for (int i = 0; i < h; i++)
     {
-        int bin = (i * Cfg.Bands) / h;          // integer indexing, exactly as the original
+        int bin = (i * Bands) / h;          // integer indexing, exactly as the original
         bin = std::clamp(bin, 0, kAudioBins - 1);
 
         int val;
-        if (Cfg.Channel == 2)                    // Center = (L/2 + R/2)
+        if (Channel == 2)                    // Center = (L/2 + R/2)
             val = (vd ? (int)vd->spec[0][bin] / 2 + (int)vd->spec[1][bin] / 2 : 0);
         else
-            val = (vd ? (int)vd->spec[std::clamp(Cfg.Channel, 0, 1)][bin] : 0);
+            val = (vd ? (int)vd->spec[std::clamp(Channel, 0, 1)][bin] : 0);
         val &= 0xFF;
 
         // color × magnitude / 256 (original fixed-point scaling).
         const size_t o = (size_t)i * 4;
-        m_column[o]     = (uint8_t)((Cfg.Color[0] * val) / 256);
-        m_column[o + 1] = (uint8_t)((Cfg.Color[1] * val) / 256);
-        m_column[o + 2] = (uint8_t)((Cfg.Color[2] * val) / 256);
+        m_column[o]     = (uint8_t)((Color[0] * val) / 256);
+        m_column[o + 1] = (uint8_t)((Color[1] * val) / 256);
+        m_column[o + 2] = (uint8_t)((Color[2] * val) / 256);
         m_column[o + 3] = 255;
     }
 
     bgfx::updateTexture2D(m_columnTex, 0, 0, 0, 0, 1, (uint16_t)h,
                           bgfx::copy(m_column.data(), (uint32_t)m_column.size()));
 
-    const float params[4] = { (float)m_position, (float)w, (float)Cfg.Blend, 0.0f };
+    const float params[4] = { (float)m_position, (float)w, (float)Blend, 0.0f };
     bgfx::setUniform(m_uParams, params);
     bgfx::setTexture(0, m_uInput,  Context.InputTexture);
     bgfx::setTexture(1, m_uColumn, m_columnTex);
@@ -90,4 +91,22 @@ void Timescope::Render(const RenderContext& Context)
     bgfx::submit(Context.ViewId, m_program);
 
     Context.FboManager->Swap();
+}
+
+nlohmann::json Timescope::Serialize() const
+{
+    return {
+        { kChannel, Channel },
+        { kColor,   JsonUtil::ColorToJson(Color) },
+        { kBlend,   Blend   },
+        { kBands,   Bands   },
+    };
+}
+
+void Timescope::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt  (j, kChannel, Channel);
+    JsonUtil::ReadColor(j, kColor,   Color);
+    JsonUtil::ReadInt  (j, kBlend,   Blend);
+    JsonUtil::ReadInt  (j, kBands,   Bands);
 }

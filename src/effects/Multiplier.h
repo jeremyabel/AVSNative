@@ -1,30 +1,22 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct MultiplierConfig
-{
-    int Mode = 3;  // default: ×2
-};
-
-class Multiplier : public ReflectedEffect<MultiplierConfig>
+class Multiplier : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    int Mode = 3;  // default: ×2
+
+    static constexpr const char* kMode = "mode";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            SelectI(&MultiplierConfig::Mode, "mode", "Mode",
-                    { "Inv (non-black to white)", "x8", "x4", "x2",
-                      "x1/2", "x1/4", "x1/8", "XS (white only)" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Multiplier"; }
+    std::string Name() const override { return "Multiplier"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     bgfx::ProgramHandle Program       = BGFX_INVALID_HANDLE;

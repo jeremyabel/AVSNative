@@ -1,6 +1,7 @@
 #include "UniqueTone.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_uniquetone.sc.bin.h"
@@ -18,10 +19,10 @@ void UniqueTone::Init()
 
 void UniqueTone::Render(const RenderContext& Context)
 {
-    const float Color[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, 0.f };
-    const float Params[4] = { Cfg.Invert ? 1.f : 0.f, (float)Cfg.OutBlend, 0.f, 0.f };
+    const float ToneColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
+    const float Params[4] = { Invert ? 1.f : 0.f, (float)OutBlend, 0.f, 0.f };
 
-    bgfx::setUniform(ColorUniform, Color);
+    bgfx::setUniform(ColorUniform, ToneColor);
     bgfx::setUniform(ParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
@@ -49,4 +50,20 @@ void UniqueTone::Destroy()
     ColorUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json UniqueTone::Serialize() const
+{
+    return {
+        { kColor,    JsonUtil::ColorToJson(Color) },
+        { kInvert,   Invert   },
+        { kOutBlend, OutBlend },
+    };
+}
+
+void UniqueTone::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColor(j, kColor,    Color);
+    JsonUtil::ReadBool (j, kInvert,   Invert);
+    JsonUtil::ReadInt  (j, kOutBlend, OutBlend);
 }

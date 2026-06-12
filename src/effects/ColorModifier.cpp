@@ -1,5 +1,7 @@
 #include "ColorModifier.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 
 #include <algorithm>
@@ -23,7 +25,7 @@ void main() {
 }
 )";
 
-static std::string ConcatCode(const ColorModifierConfig& c)
+static std::string ConcatCode(const ColorModifier& c)
 {
     return c.InitCode + "\n" + c.FrameCode + "\n" + c.BeatCode;
 }
@@ -52,7 +54,7 @@ std::string ColorModifier::BuildFragGlsl() const
              + "        float red = c." + ch + ", green = c." + ch + ", blue = c." + ch + ";\n"
              + preamble
              + "        // ---- pixel code ----\n"
-             + Cfg.PixelCode + "\n"
+             + PixelCode + "\n"
              + "        // ---- end pixel code ----\n"
              + "        " + out + " = clamp(" + var + ", 0.0, 1.0);\n"
              + "    }\n";
@@ -91,11 +93,11 @@ void ColorModifier::Init()
 
     for (const auto& v : k_builtins) m_lua.SeedVar(v);
 
-    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
 
-    m_bridge.Rescan(m_lua, ConcatCode(Cfg), k_builtins);
+    m_bridge.Rescan(m_lua, ConcatCode(*this), k_builtins);
     Recompile();   // builds the program and creates the bridge uniform
 
     m_lua.SetEnvNumber("beat", 0.0);
@@ -160,31 +162,50 @@ void ColorModifier::Recompile()
     }
 }
 
-void ColorModifier::OnConfigChanged(const std::vector<std::string>& Changed)
+// PixelCode/InitCode change → rebuild GLSL (InitCode can add/remove user var uniforms).
+void ColorModifier::RecompileMain()
 {
     if (!m_inited) return;
 
-    bool initChanged = false, pixelChanged = false;
-    bool frameChanged = false, beatChanged = false;
-    for (const auto& k : Changed)
-    {
-        if (k == "initCode")  initChanged  = true;
-        if (k == "pixelCode") pixelChanged = true;
-        if (k == "frameCode") frameChanged = true;
-        if (k == "beatCode")  beatChanged  = true;
-    }
+    m_lua.CompileBlock(InitCode, "initCode", m_initRef);
+    m_bridge.Rescan(m_lua, ConcatCode(*this), k_builtins);
+    Recompile();
+    m_lua.SetEnvNumber("beat", 0.0);
+    m_lua.RunBlock(m_initRef, "initCode");
+}
 
-    // pixelCode or initCode change → rebuild GLSL (initCode can add/remove user var uniforms).
-    if (pixelChanged || initChanged)
-    {
-        m_lua.CompileBlock(Cfg.InitCode, "initCode", m_initRef);
-        m_bridge.Rescan(m_lua, ConcatCode(Cfg), k_builtins);
-        Recompile();
-        m_lua.SetEnvNumber("beat", 0.0);
-        m_lua.RunBlock(m_initRef, "initCode");
-    }
-    if (frameChanged) m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    if (beatChanged)  m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
+void ColorModifier::RecompileFrameCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+}
+
+void ColorModifier::RecompileBeatCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(BeatCode, "beatCode", m_beatRef);
+}
+
+nlohmann::json ColorModifier::Serialize() const
+{
+    return {
+        { kPixelCode, PixelCode },
+        { kInitCode,  InitCode  },
+        { kFrameCode, FrameCode },
+        { kBeatCode,  BeatCode  },
+    };
+}
+
+void ColorModifier::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadString(j, kPixelCode, PixelCode);
+    JsonUtil::ReadString(j, kInitCode,  InitCode);
+    JsonUtil::ReadString(j, kFrameCode, FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,  BeatCode);
+
+    RecompileMain();
+    RecompileFrameCode();
+    RecompileBeatCode();
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────

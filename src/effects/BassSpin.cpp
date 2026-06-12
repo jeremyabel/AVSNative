@@ -3,6 +3,7 @@
 
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_simple.sc.bin.h"
@@ -76,12 +77,12 @@ void BassSpin::Render(const RenderContext& Context)
         {
             // tri=0: left-of-center, CW,  spec L, colorLeft,  gated by EnabledRight
             // tri=1: right-of-center, CCW, spec R, colorRight, gated by EnabledLeft
-            const bool enabled = (tri == 0) ? Cfg.EnabledRight : Cfg.EnabledLeft;
+            const bool enabled = (tri == 0) ? EnabledRight : EnabledLeft;
             if (!enabled)
                 continue;
 
             const float* specData = vis.spec[tri];
-            const std::array<uint8_t, 3>& col = (tri == 0) ? Cfg.ColorLeft : Cfg.ColorRight;
+            const std::array<uint8_t, 3>& col = (tri == 0) ? ColorLeft : ColorRight;
             const float cx        = float((tri == 0) ? (W / 2 - screenSize / 2)
                                                       : (W / 2 + screenSize / 2));
 
@@ -109,7 +110,7 @@ void BassSpin::Render(const RenderContext& Context)
 
             const NVGcolor nvgCol = nvgRGBf(col[0] / 255.0f, col[1] / 255.0f, col[2] / 255.0f);
 
-            if (Cfg.Mode == 0)
+            if (Mode == 0)
             {
                 // Outline: two spokes from center + trailing arc between frames
                 nvgStrokeColor(m_nvg, nvgCol);
@@ -210,4 +211,24 @@ void BassSpin::Destroy()
     m_overlaySampler = BGFX_INVALID_HANDLE;
     m_inputSampler   = BGFX_INVALID_HANDLE;
     m_program        = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json BassSpin::Serialize() const
+{
+    return {
+        { kEnabledLeft,  EnabledLeft  },
+        { kEnabledRight, EnabledRight },
+        { kColorLeft,    JsonUtil::ColorToJson(ColorLeft)  },
+        { kColorRight,   JsonUtil::ColorToJson(ColorRight) },
+        { kMode,         Mode },
+    };
+}
+
+void BassSpin::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadBool (j, kEnabledLeft,  EnabledLeft);
+    JsonUtil::ReadBool (j, kEnabledRight, EnabledRight);
+    JsonUtil::ReadColor(j, kColorLeft,    ColorLeft);
+    JsonUtil::ReadColor(j, kColorRight,   ColorRight);
+    JsonUtil::ReadInt  (j, kMode,         Mode);
 }

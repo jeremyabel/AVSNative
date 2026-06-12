@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <bgfx/bgfx.h>
 
@@ -10,27 +10,21 @@
 struct NVGcontext;
 struct NVGLUframebuffer;
 
-struct RotatingStarsConfig
-{
-    std::vector<std::array<uint8_t,3>> Colors = {{ {255, 255, 255} }};
-};
-
-class RotatingStars : public ReflectedEffect<RotatingStarsConfig>
+class RotatingStars : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    std::vector<std::array<uint8_t,3>> Colors = {{ {255, 255, 255} }};
+
+    static constexpr const char* kColors = "colors";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Colors(&RotatingStarsConfig::Colors, "colors", "Colors"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Rotating Stars"; }
+    std::string Name() const override { return "Rotating Stars"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     void EnsureOverlay(int W, int H);

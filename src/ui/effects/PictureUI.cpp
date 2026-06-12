@@ -19,12 +19,25 @@ static void DrawPictureUI(Effect* effect)
         ImGui::TextUnformatted("No image loaded");
 
     if (ImGui::Button("Load Image..."))
-        ConfigUi::PickImageInto(effect, "imageData");
+        ConfigUi::PickImageInto(effect, Picture::kImageData);
 
     ImGui::Spacing();
 
-    // Reflected params (BlendMode, OnBeatAdditive, OnBeatDuration, Fit)
-    DrawDefault(effect);
+    static const char* kBlends[] = { "Replace", "Additive", "50/50" };
+    ImGui::TextUnformatted("Blend Mode");
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::Combo("##blendMode", &pic->BlendMode, kBlends, IM_ARRAYSIZE(kBlends));
+
+    ImGui::Checkbox("On-Beat Additive", &pic->OnBeatAdditive);
+
+    ImGui::TextUnformatted("On-Beat Duration");
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::SliderInt("##onBeatDuration", &pic->OnBeatDuration, 0, 32);
+
+    static const char* kFits[] = { "Stretch", "Fit Width", "Fit Height" };
+    ImGui::TextUnformatted("Image Fit");
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::Combo("##fit", &pic->Fit, kFits, IM_ARRAYSIZE(kFits));
 }
 
 void RegisterPictureUI(ConfigUiRegistry& reg)

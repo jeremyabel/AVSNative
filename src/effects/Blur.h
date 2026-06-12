@@ -1,29 +1,22 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct BlurConfig
-{
-    int Intensity = 1; // index into {Light, Medium, Heavy}
-};
-
-class Blur : public ReflectedEffect<BlurConfig>
+class Blur : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    int Intensity = 1; // index into {Light, Medium, Heavy}
+
+    static constexpr const char* kIntensity = "intensity";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            SelectI(&BlurConfig::Intensity, "intensity", "Intensity",
-                    { "Light", "Medium", "Heavy" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Blur"; }
+    std::string Name() const override { return "Blur"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     void EnsureScratch(uint16_t Width, uint16_t Height);

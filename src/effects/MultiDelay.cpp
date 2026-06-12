@@ -1,6 +1,7 @@
 #include "MultiDelay.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_blit.sc.bin.h"
@@ -168,12 +169,12 @@ void MultiDelay::Render(const RenderContext& Context)
     }
 
     // ── This instance's action ────────────────────────────────────────────────────
-    const int ab = std::clamp(Cfg.ActiveBuffer, 0, 5);
+    const int ab = std::clamp(ActiveBuffer, 0, 5);
     RingSlot& slot = S.Slots[ab];
-    if (Cfg.Mode == 0 || S.FrameDelays[ab] <= 1 || slot.Size == 0)
+    if (Mode == 0 || S.FrameDelays[ab] <= 1 || slot.Size == 0)
         return;   // disabled / no delay / unallocated → pass-through (no swap)
 
-    if (Cfg.Mode == 1)
+    if (Mode == 1)
     {
         // Write: copy the current frame into the ring at InIdx. The pipeline image is
         // unchanged (no swap), so downstream effects still see the input. EffectChain
@@ -228,37 +229,62 @@ void MultiDelay::Destroy()
     }
 }
 
-// ── Serialization (shared per-buffer settings layered on the generic config) ─────
+// ── Shared per-buffer setting accessors (used by the UI) ─────────────────────────
 
-nlohmann::json MultiDelay::GetConfig() const
+bool MultiDelay::GetBufferUseBeats(int i)
 {
-    nlohmann::json j = ReflectedEffect::GetConfig();
-    const MultiDelayShared& S = Shared();
+    return (i >= 0 && i < 6) ? Shared().UseBeats[i] : false;
+}
+
+void MultiDelay::SetBufferUseBeats(int i, bool useBeats)
+{
+    if (i < 0 || i >= 6) return;
+    Shared().UseBeats[i] = useBeats;
+}
+
+int MultiDelay::GetBufferDelay(int i)
+{
+    return (i >= 0 && i < 6) ? Shared().Delays[i] : 0;
+}
+
+void MultiDelay::SetBufferDelay(int i, int delay)
+{
+    if (i < 0 || i >= 6) return;
+    MultiDelayShared& S = Shared();
+    S.Delays[i] = std::max(0, delay);
+    // Frame mode: apply immediately. Beat mode waits for the next beat.
+    if (!S.UseBeats[i])
+        S.FrameDelays[i] = S.Delays[i] + 1;
+}
+
+// ── Serialization (shared per-buffer settings layered on the per-instance config) ─
+
+nlohmann::json MultiDelay::Serialize() const
+{
+    nlohmann::json j = {
+        { kMode,         Mode         },
+        { kActiveBuffer, ActiveBuffer },
+    };
     for (int i = 0; i < 6; i++)
     {
-        j["usebeats" + std::to_string(i)] = S.UseBeats[i] ? 1 : 0;
-        j["delay"    + std::to_string(i)] = S.Delays[i];
+        j[kUseBeatsPrefix + std::to_string(i)] = GetBufferUseBeats(i) ? 1 : 0;
+        j[kDelayPrefix    + std::to_string(i)] = GetBufferDelay(i);
     }
     return j;
 }
 
-void MultiDelay::SetConfig(const nlohmann::json& j)
+void MultiDelay::Deserialize(const nlohmann::json& j)
 {
-    ReflectedEffect::SetConfig(j);   // mode / activebuffer (+ clamping)
+    JsonUtil::ReadInt(j, kMode,         Mode);
+    JsonUtil::ReadInt(j, kActiveBuffer, ActiveBuffer);
 
-    MultiDelayShared& S = Shared();
     for (int i = 0; i < 6; i++)
     {
-        const std::string ubKey = "usebeats" + std::to_string(i);
-        const std::string dKey  = "delay"    + std::to_string(i);
-        if (j.contains(ubKey))
-            S.UseBeats[i] = j.at(ubKey).get<int>() != 0;
-        if (j.contains(dKey))
-        {
-            S.Delays[i] = std::max(0, j.at(dKey).get<int>());
-            // Frame mode: apply immediately. Beat mode waits for the next beat.
-            if (!S.UseBeats[i])
-                S.FrameDelays[i] = S.Delays[i] + 1;
-        }
+        const std::string ubKey = kUseBeatsPrefix + std::to_string(i);
+        const std::string dKey  = kDelayPrefix    + std::to_string(i);
+        if (j.contains(ubKey) && j.at(ubKey).is_number())
+            SetBufferUseBeats(i, j.at(ubKey).get<int>() != 0);
+        if (j.contains(dKey) && j.at(dKey).is_number())
+            SetBufferDelay(i, j.at(dKey).get<int>());
     }
 }

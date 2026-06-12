@@ -131,55 +131,67 @@ It resets the shared code editors (`ConfigUi::ResetEditors()`) when the selected
 **ConfigUiRegistry** (`src/ui/ConfigUiRegistry.h/.cpp`) — maps an effect's display name → a
 `void(Effect*)` draw function. `RegisterAllEffectUis()` explicitly calls each effect's
 `Register<Effect>UI(reg)` (mirroring the explicit effect registration in `Engine.cpp` — do NOT rely
-on static-initializer self-registration, it gets stripped from the static lib). `DrawDefault(effect)`
-is the descriptor-driven auto-generator (the old `ConfigPanel` switch): it reads
-`GetDescriptor()` + `GetConfig()`/`SetConfig()` and works for any reflected effect with no custom UI.
+on static-initializer self-registration, it gets stripped from the static lib). Every effect has a
+bespoke UI; there is no auto-generated fallback (ConfigPanel shows "No UI registered." if a name is
+missing from the registry).
 
-**Per-effect UI** — one file per effect in `src/ui/effects/<Effect>UI.cpp`. Most just register
-`&DrawDefault`. Bespoke ones (e.g. `MovementUI.cpp`) `static_cast` the `Effect*` to the concrete type,
-draw plain ImGui against `effect->ConfigRef()` (the typed `Config` struct), and call
-`effect->NotifyConfigChanged({keys})` so side-effects (shader/Lua recompiles) fire. This keeps bespoke
-UIs close to idiomatic ImGui — free to use `BeginDisabled`, conditional hiding, `SeparatorText`, etc.
+**Per-effect UI** — one file per effect in `src/ui/effects/<Effect>UI.cpp`, all bespoke.
+Each `static_cast`s the `Effect*` to the concrete type and binds plain ImGui widgets directly to the
+effect's public config members (e.g. `&fx->Amount`). Slider/combo ranges and option labels live only
+here. When a param has a side-effect, the UI calls the effect's public method directly (e.g.
+`fx->Compile()` after a code edit, `fx->ResetZoomAnim()` after a zoom change). Free to use
+`BeginDisabled`, conditional hiding, `SeparatorText`, etc.
 
 **ConfigUi** (`src/ui/ConfigUi.h/.cpp`) — small shared helpers: `CodeEditor(id, text, lang)` owns the
-persistent `TextEditor` (ImGuiColorTextEdit) instances and re-syncs when `text` changes programmatically;
-`ColorEdit` converts uint8 RGB ↔ ImGui float[3]; `ResetEditors()` clears editor state.
+persistent `TextEditor` (ImGuiColorTextEdit) instances and re-syncs when `text` changes programmatically
+(always bind it to the effect's member string, never a copy); `ColorEdit` converts uint8 RGB ↔ ImGui
+float[3]; `ColorsEdit` edits a color list (add/remove, keeps ≥1 entry); `ResetEditors()` clears editor
+state; `PickImageInto(effect, key)` opens a file dialog and hands raw bytes to `ApplyAsset`.
 
 **ImGuiColorTextEdit** (`future` branch) is at `lib/ImGuiColorTextEdit/`. Sources are added directly to the `avs_ui` CMake target (no sub-CMakeLists). Include path: `${BGFX_3RDPARTY}/dear-imgui` (for `imgui.h`) and `lib/ImGuiColorTextEdit`. API: `ed.SetLanguage(TextEditor::Language::Lua())`, `ed.SetText(...)`, `ed.GetText()`, `ed.Render("##id", size)`. The editor instances are owned by `ConfigUi.cpp`.
 
 **EffectChain** — `Remove()` calls `effect->Destroy()` before erasing. `Clear()` destroys all effects and is called by `Engine::Shutdown()` before `bgfx::shutdown()` to ensure bgfx handles are released while the API is still live.
 
-## Effect parameters (reflection)
+## Effect parameters (direct members + per-effect serialization)
 
-Parameters are declared **once** per effect, eliminating the old 3-way duplication between
-`GetDescriptor`/`GetConfig`/`SetConfig`. The machinery is in `src/engine/Reflect.h`:
+Each effect inherits `Effect` directly and stores its parameters as **public members** on the class
+(use `std::array<uint8_t,3>` for colors, `std::vector<std::array<uint8_t,3>>` for color lists; defaults
+live in the member initializers). Runtime-only state stays private. There is no reflection layer.
 
-- Each effect declares a plain `struct <Effect>Config { ... };` — one member per serializable param
-  (use `std::array<uint8_t,3>` for colors, `std::vector<std::array<uint8_t,3>>` for color lists).
-- The effect inherits `ReflectedEffect<Config>` (not `Effect` directly) and accesses its config via the
-  inherited `Cfg` member (e.g. `Cfg.Amount`).
-- It implements `Fields()` returning a `static const std::vector<Field>` built with typed factories that
-  bind a pointer-to-member to a JSON key + UI metadata: `Range`, `RangeI`, `RangeIArr` (int[] element),
-  `NumberI`, `Bool`, `SelectI` (int index), `SelectS` (string value), `Color`, `Colors`, `Glsl`, `Lua`.
-- `ReflectedEffect` implements `GetDescriptor`/`GetConfig`/`SetConfig` generically from that table.
-  Range/Number factories clamp on load automatically.
-- **Side-effects** (recompiling a shader/Lua block when a field changes) go in an overridden
-  `OnConfigChanged(changedKeys)` — called by `SetConfig` and by the UI's `NotifyConfigChanged`. See
-  `Movement` (GLSL recompile), `SuperScope` (Lua recompile), `RotoBlitter`/`Interleave`/`ColorFade`
-  (animation-state resets).
-- Non-serialized runtime state stays as ordinary private members, not in `Config`.
-- Two effects override `GetConfig`/`SetConfig` on top of the generic ones: `EffectList` (appends its
-  inner-chain `effects` array) and `DotGrid` (legacy `color` alias for `colors[0]`).
+- JSON key names are `static constexpr const char*` constants on the class (e.g.
+  `static constexpr const char* kAmount = "amount";`) — each key string is written once and shared by
+  `Serialize`/`Deserialize` (and any legacy aliases).
+- `std::string Name() const` returns the display name; it must exactly match the `Engine.cpp` Registry
+  key and the ConfigUiRegistry key, and is used as the preset `"type"` string.
+- `nlohmann::json Serialize() const` returns `{ { kAmount, Amount }, ... }` (colors via
+  `JsonUtil::ColorToJson`/`ColorsToJson`).
+- `void Deserialize(const nlohmann::json& j)` reads via the reference-based helpers in
+  `src/engine/JsonUtil.h` (`ReadInt`, `ReadFloat`, `ReadBool`, `ReadString`, `ReadColor`, `ReadColors`):
+  if the key exists, the member is assigned; otherwise it keeps its default. No clamping or validation —
+  ranges live only in the UI widgets. `ReadColors` ignores empty arrays so color lists keep ≥1 entry.
+- **Side-effects** (shader/Lua recompiles, animation-state resets) are public methods on the effect
+  (e.g. `Movement::Compile`, `SuperScope::Recompile`, `RotoBlitter::ResetZoomAnim`). `Deserialize`
+  calls them at its end so they fire on preset load; the bespoke UI calls them directly when the
+  relevant widget changes.
+- Special cases: `EffectList::Serialize` emits only its own params — the inner chain is appended as
+  `config["effects"]` by Preset's `SerialiseChain` (via `GetInnerChain()`) and populated on load by
+  `LoadChain`'s recursion. `DotGrid` keeps a legacy `"color"` alias (= `Colors[0]`). `MultiDelay`'s
+  shared per-buffer settings (`usebeats0..5`/`delay0..5`) serialize through static accessors over the
+  global singleton. Asset effects (Picture, Picture2, Texer, Texer2, ImageGrid) store the
+  `assets/<name>` path string in `imageData`; raw bytes arrive via `ApplyAsset` after `Deserialize`.
 
 ## Adding an effect
 
 1. Add `MyEffect.h` / `MyEffect.cpp` in `src/effects/`:
-   - declare `struct MyEffectConfig { ... };` and `class MyEffect : public ReflectedEffect<MyEffectConfig>`
-   - implement `Fields()` (the param table) and `EffectName()`; read config via `Cfg.*` in `Render`
-   - override `OnConfigChanged` only if a param has a side-effect
+   - `class MyEffect : public Effect` with public config members (+ defaults) and
+     `static constexpr const char* k<Param>` key constants
+   - implement `Name()`, `Serialize()`, `Deserialize()` (JsonUtil `Read*` helpers), and
+     Init/Render/Destroy; if a param has a side-effect, give it a public method and call it at the
+     end of `Deserialize`
 2. Register the effect in `Engine.cpp` (the `EffectRegistry.Register(...)` list).
-3. Add `src/ui/effects/MyEffectUI.cpp` with `RegisterMyEffectUI(ConfigUiRegistry&)` (usually just
-   `reg.Register("My Effect", &DrawDefault);`), declare + call it in `ConfigUiRegistry.cpp`'s
+3. Add `src/ui/effects/MyEffectUI.cpp` with `RegisterMyEffectUI(ConfigUiRegistry&)` registering a
+   bespoke draw function that casts to `MyEffect*` and binds ImGui widgets to the public members
+   (calling side-effect methods on change), declare + call it in `ConfigUiRegistry.cpp`'s
    `EFFECT_UI(...)` lists, and add the file to the `avs_ui` target in `CMakeLists.txt`.
 4. If it needs a shader: add the `.sc` file to `src/shaders/` and register it in `CMakeLists.txt`.
 5. Reference the JS implementation in `ref/AVSWeb/src/effects/<name>.js` for behavior.
@@ -206,7 +218,7 @@ Parameters are declared **once** per effect, eliminating the old 3-way duplicati
 
 ## Colors
 
-Effect config properties store colors as `std::array<uint8_t, 3>` (0–255), serialized to JSON as `[r,g,b]`. Divide by 255.0f when passing to GPU uniforms. Use the `Color` / `Colors` field factories to bind them.
+Effect config properties store colors as `std::array<uint8_t, 3>` (0–255), serialized to JSON as `[r,g,b]` via `JsonUtil::ColorToJson` / `ReadColor` (lists via `ColorsToJson` / `ReadColors`). Divide by 255.0f when passing to GPU uniforms. UI editing via `ConfigUi::ColorEdit` / `ColorsEdit`.
 
 ## Preset serialization
 
@@ -239,11 +251,11 @@ Presets are saved as a **store-only ZIP** named `*.avsz` (no compression — pur
 | `src/engine/FBOManager.h/.cpp` | Ping-pong FBO + scratch buffers |
 | `src/engine/Effect.h` | Base class + `RenderContext` struct (includes `QuadVB`, `LineBlendMode`) |
 | `src/engine/LuaRuntime.h/.cpp` | LuaJIT sandboxed scripting runtime; see WohlSoft quirk above |
-| `src/engine/Reflect.h` | Param reflection: `Field`, factory helpers, `ReflectedEffect<Config>` base |
+| `src/engine/JsonUtil.h` | Reference-based JSON readers (`ReadInt`/`ReadColor`/…) + color↔JSON converters for effect Serialize/Deserialize |
 | `src/engine/Preset.h/.cpp` | `.avsz` bundle (or plain-JSON) preset load/save; recursive EffectList + asset collect/resolve |
 | `src/engine/ZipArchive.h/.cpp` | Self-contained store-only (no compression) zip reader/writer + CRC32 for `.avsz` bundles |
 | `src/ui/ConfigPanel.cpp` | Thin host that dispatches to the per-effect UI registry |
-| `src/ui/ConfigUiRegistry.h/.cpp` | Name→draw-fn registry + `DrawDefault` auto-generator + central registration |
+| `src/ui/ConfigUiRegistry.h/.cpp` | Name→draw-fn registry + central registration of every per-effect UI |
 | `src/ui/ConfigUi.h/.cpp` | Shared UI helpers (code editor instances, color conversion) |
 | `src/ui/effects/*UI.cpp` | One bespoke config-UI file per effect |
 | `src/ui/FileDialog.h/.cpp` | SDL3-based cross-platform native file picker |

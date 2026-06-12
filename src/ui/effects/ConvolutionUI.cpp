@@ -32,7 +32,7 @@ static const SDL_DialogFileFilter kCffFilters[] = {
     { "All Files",                 "*"   },
 };
 
-static void SaveKernel(const ConvolutionConfig& cfg)
+static void SaveKernel(const Convolution& fx)
 {
     const std::string path = FileDialog::Save("Save Kernel", "kernel.cff", kCffFilters, 2);
     if (path.empty()) return;
@@ -41,15 +41,15 @@ static void SaveKernel(const ConvolutionConfig& cfg)
     if (!f) return;
 
     WriteI32(f, 1);                       // enabled
-    WriteI32(f, cfg.Wrap     ? 1 : 0);
-    WriteI32(f, cfg.Absolute ? 1 : 0);
-    WriteI32(f, cfg.TwoPass  ? 1 : 0);
-    for (int k : cfg.Kernel) WriteI32(f, k);
-    WriteI32(f, cfg.Bias);
-    WriteI32(f, cfg.Scale);
+    WriteI32(f, fx.Wrap     ? 1 : 0);
+    WriteI32(f, fx.Absolute ? 1 : 0);
+    WriteI32(f, fx.TwoPass  ? 1 : 0);
+    for (int k : fx.Kernel) WriteI32(f, k);
+    WriteI32(f, fx.Bias);
+    WriteI32(f, fx.Scale);
 }
 
-static bool LoadKernel(ConvolutionConfig& cfg)
+static bool LoadKernel(Convolution& fx)
 {
     const std::string path = FileDialog::Open("Load Kernel", kCffFilters, 2);
     if (path.empty()) return false;
@@ -62,36 +62,34 @@ static bool LoadKernel(ConvolutionConfig& cfg)
     if (f.gcount() < (std::streamsize)sizeof(buf)) return false;
 
     int pos = 4;                          // skip enabled
-    cfg.Wrap     = ReadI32(buf + pos) != 0; pos += 4;
-    cfg.Absolute = ReadI32(buf + pos) != 0; pos += 4;
-    cfg.TwoPass  = ReadI32(buf + pos) != 0; pos += 4;
-    for (int i = 0; i < 49; ++i) { cfg.Kernel[i] = ReadI32(buf + pos); pos += 4; }
-    cfg.Bias  = ReadI32(buf + pos); pos += 4;
-    cfg.Scale = ReadI32(buf + pos);
-    if (cfg.Scale == 0) cfg.Scale = 1;
+    fx.Wrap     = ReadI32(buf + pos) != 0; pos += 4;
+    fx.Absolute = ReadI32(buf + pos) != 0; pos += 4;
+    fx.TwoPass  = ReadI32(buf + pos) != 0; pos += 4;
+    for (int i = 0; i < 49; ++i) { fx.Kernel[i] = ReadI32(buf + pos); pos += 4; }
+    fx.Bias  = ReadI32(buf + pos); pos += 4;
+    fx.Scale = ReadI32(buf + pos);
+    if (fx.Scale == 0) fx.Scale = 1;
     return true;
 }
 
 static void DrawConvolutionUI(Effect* effect)
 {
     auto* conv = static_cast<Convolution*>(effect);
-    ConvolutionConfig& cfg = conv->ConfigRef();
 
-    bool flagsDirty  = false;
-    bool kernelDirty = false;
-
-    // Mode flags (wrap/absolute mutually exclusive — enforced in OnConfigChanged)
-    if (ImGui::Checkbox("Wrap", &cfg.Wrap))         flagsDirty = true;
+    // Mode flags (wrap/absolute mutually exclusive, matching the reference)
+    if (ImGui::Checkbox("Wrap", &conv->Wrap) && conv->Wrap)
+        conv->Absolute = false;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Absolute", &cfg.Absolute)) flagsDirty = true;
+    if (ImGui::Checkbox("Absolute", &conv->Absolute) && conv->Absolute)
+        conv->Wrap = false;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Two Pass", &cfg.TwoPass))  flagsDirty = true;
+    ImGui::Checkbox("Two Pass", &conv->TwoPass);
 
     ImGui::SetNextItemWidth(120.0f);
-    if (ImGui::InputInt("Bias", &cfg.Bias))   flagsDirty = true;
+    ImGui::InputInt("Bias", &conv->Bias);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(120.0f);
-    if (ImGui::InputInt("Scale", &cfg.Scale)) flagsDirty = true;
+    ImGui::InputInt("Scale", &conv->Scale);
 
     ImGui::Spacing();
     ImGui::SeparatorText("Kernel (7x7)");
@@ -105,8 +103,7 @@ static void DrawConvolutionUI(Effect* effect)
             if (col > 0) ImGui::SameLine();
             ImGui::PushID(row * 7 + col);
             ImGui::SetNextItemWidth(cellW);
-            if (ImGui::InputInt("##k", &cfg.Kernel[row * 7 + col], 0, 0))
-                kernelDirty = true;
+            ImGui::InputInt("##k", &conv->Kernel[row * 7 + col], 0, 0);
             ImGui::PopID();
         }
     }
@@ -115,33 +112,25 @@ static void DrawConvolutionUI(Effect* effect)
 
     if (ImGui::Button("Auto Scale"))
     {
-        int sum = std::accumulate(cfg.Kernel.begin(), cfg.Kernel.end(), 0) + cfg.Bias;
-        if (cfg.TwoPass) sum *= 2;
-        cfg.Scale = (sum == 0) ? 1 : sum;
-        flagsDirty = true;
+        int sum = std::accumulate(conv->Kernel.begin(), conv->Kernel.end(), 0) + conv->Bias;
+        if (conv->TwoPass) sum *= 2;
+        conv->Scale = (sum == 0) ? 1 : sum;
     }
     ImGui::SameLine();
     if (ImGui::Button("Clear"))
     {
-        cfg.Kernel.fill(0);
-        cfg.Kernel[24] = 1;
-        cfg.Wrap = cfg.Absolute = cfg.TwoPass = false;
-        cfg.Bias = 0;
-        cfg.Scale = 1;
-        flagsDirty = kernelDirty = true;
+        conv->Kernel.fill(0);
+        conv->Kernel[24] = 1;
+        conv->Wrap = conv->Absolute = conv->TwoPass = false;
+        conv->Bias = 0;
+        conv->Scale = 1;
     }
     ImGui::SameLine();
     if (ImGui::Button("Save .cff"))
-        SaveKernel(cfg);
+        SaveKernel(*conv);
     ImGui::SameLine();
     if (ImGui::Button("Load .cff"))
-    {
-        if (LoadKernel(cfg))
-            flagsDirty = kernelDirty = true;
-    }
-
-    if (flagsDirty || kernelDirty)
-        conv->NotifyConfigChanged({ "wrap", "absolute", "twoPass", "bias", "scale", "kernel" });
+        LoadKernel(*conv);
 }
 
 void RegisterConvolutionUI(ConfigUiRegistry& reg)

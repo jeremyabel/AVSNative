@@ -80,9 +80,9 @@ static void LoadChain(EffectChain& Chain,
         if (Item.contains("config"))
         {
             const auto& Cfg = Item["config"];
-            Effect->SetConfig(Cfg);
+            Effect->Deserialize(Cfg);
 
-            // Resolve bundled asset references (after SetConfig) to raw bytes.
+            // Resolve bundled asset references (after Deserialize) to raw bytes.
             if (assets)
             {
                 for (auto it = Cfg.begin(); it != Cfg.end(); ++it)
@@ -98,7 +98,7 @@ static void LoadChain(EffectChain& Chain,
             }
 
             // If this effect owns an inner chain (e.g. EffectList), populate it
-            // recursively using the same registry — SetConfig alone can't do this
+            // recursively using the same registry — Deserialize alone can't do this
             // because it has no access to the Registry.
             EffectChain* Inner = Effect->GetInnerChain();
             if (Inner && Cfg.contains("effects") && Cfg["effects"].is_array())
@@ -198,10 +198,10 @@ static nlohmann::json SerialiseChain(EffectChain& Chain,
         EffectEntry& Entry = Chain.GetEntry(i);
 
         nlohmann::json item;
-        item["type"]    = Entry.Effect->GetDescriptor().Name;
+        item["type"]    = Entry.Effect->Name();
         item["enabled"] = Entry.Enabled;
 
-        nlohmann::json cfg = Entry.Effect->GetConfig();
+        nlohmann::json cfg = Entry.Effect->Serialize();
 
         for (PresetAsset& a : Entry.Effect->CollectAssets())
         {

@@ -1,5 +1,6 @@
 #include "effects/Convolution.h"
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include <bgfx/bgfx.h>
 
@@ -8,36 +9,35 @@
 
 #include <algorithm>
 
-// ── GetConfig / SetConfig ─────────────────────────────────────────────────────
+// ── Serialize / Deserialize ───────────────────────────────────────────────────
 
-nlohmann::json Convolution::GetConfig() const
+nlohmann::json Convolution::Serialize() const
 {
-    nlohmann::json j = ReflectedEffect<ConvolutionConfig>::GetConfig();
-    j["kernel"] = Cfg.Kernel;   // std::array<int,49> -> JSON array
-    return j;
+    return {
+        { kWrap,     Wrap     },
+        { kAbsolute, Absolute },
+        { kTwoPass,  TwoPass  },
+        { kBias,     Bias     },
+        { kScale,    Scale    },
+        { kKernel,   Kernel   },   // std::array<int,49> -> JSON array
+    };
 }
 
-void Convolution::SetConfig(const nlohmann::json& cfg)
+void Convolution::Deserialize(const nlohmann::json& j)
 {
-    ReflectedEffect<ConvolutionConfig>::SetConfig(cfg);
+    JsonUtil::ReadBool(j, kWrap,     Wrap);
+    JsonUtil::ReadBool(j, kAbsolute, Absolute);
+    JsonUtil::ReadBool(j, kTwoPass,  TwoPass);
+    JsonUtil::ReadInt (j, kBias,     Bias);
+    JsonUtil::ReadInt (j, kScale,    Scale);
 
-    if (cfg.contains("kernel") && cfg["kernel"].is_array())
+    if (j.contains(kKernel) && j[kKernel].is_array())
     {
-        const auto& arr = cfg["kernel"];
-        for (size_t i = 0; i < Cfg.Kernel.size(); ++i)
-            Cfg.Kernel[i] = (i < arr.size() && arr[i].is_number())
+        const auto& arr = j[kKernel];
+        for (size_t i = 0; i < Kernel.size(); ++i)
+            Kernel[i] = (i < arr.size() && arr[i].is_number())
                                 ? arr[i].get<int>() : 0;
     }
-}
-
-void Convolution::OnConfigChanged(const std::vector<std::string>& changed)
-{
-    // Wrap and Absolute are mutually exclusive (matches the reference).
-    const auto has = [&](const char* k) {
-        return std::find(changed.begin(), changed.end(), k) != changed.end();
-    };
-    if (has("wrap") && Cfg.Wrap)         Cfg.Absolute = false;
-    if (has("absolute") && Cfg.Absolute) Cfg.Wrap     = false;
 }
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
@@ -76,21 +76,21 @@ void Convolution::Render(const RenderContext& Ctx)
     // Pack 49 kernel ints into 13 vec4s.
     float kernelData[13 * 4] = {};
     for (int i = 0; i < 49; ++i)
-        kernelData[i] = (float)Cfg.Kernel[i];
+        kernelData[i] = (float)Kernel[i];
 
     // Signed scale (sign handled in-shader); 0 is treated as 1 like the original.
-    const float scale = (Cfg.Scale == 0) ? 1.0f : (float)Cfg.Scale;
+    const float scale = (Scale == 0) ? 1.0f : (float)Scale;
 
     // The shader works in integer pixel units (0..255), so bias enters as the
     // original's 256*bias word value.
     float params[4] = {
-        256.0f * (float)Cfg.Bias,
+        256.0f * (float)Bias,
         scale,
-        Cfg.Wrap     ? 1.0f : 0.0f,
-        Cfg.Absolute ? 1.0f : 0.0f,
+        Wrap     ? 1.0f : 0.0f,
+        Absolute ? 1.0f : 0.0f,
     };
     float params2[4] = {
-        Cfg.TwoPass ? 1.0f : 0.0f,
+        TwoPass ? 1.0f : 0.0f,
         (Ctx.Width  > 0) ? 1.0f / (float)Ctx.Width  : 0.0f,
         (Ctx.Height > 0) ? 1.0f / (float)Ctx.Height : 0.0f,
         0.0f,

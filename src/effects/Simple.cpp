@@ -2,6 +2,7 @@
 
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_simple.sc.bin.h"
@@ -25,7 +26,7 @@ void Simple::Init()
 
 void Simple::EnsureNvgContext()
 {
-    if (m_nvg && m_nvgEdgeAa == Cfg.AntialiasingEnabled)
+    if (m_nvg && m_nvgEdgeAa == AntialiasingEnabled)
         return;
 
     // edgeaa is baked into the context at creation time, so recreate when it changes.
@@ -33,8 +34,8 @@ void Simple::EnsureNvgContext()
     if (m_nvg)
         nvgDelete(m_nvg);
 
-    m_nvgEdgeAa = Cfg.AntialiasingEnabled;
-    m_nvg = nvgCreate(Cfg.AntialiasingEnabled ? 1 : 0, 0);
+    m_nvgEdgeAa = AntialiasingEnabled;
+    m_nvg = nvgCreate(AntialiasingEnabled ? 1 : 0, 0);
 }
 
 void Simple::EnsureOverlay(int Width, int Height)
@@ -61,18 +62,18 @@ void Simple::DestroyOverlay()
 
 std::array<float, 3> Simple::GetCurrentColor()
 {
-    if (Cfg.Colors.empty())
+    if (Colors.empty())
         return { 1.0f, 1.0f, 1.0f };
 
-    if (Cfg.Colors.size() == 1)
-        return { Cfg.Colors[0][0] / 255.0f, Cfg.Colors[0][1] / 255.0f, Cfg.Colors[0][2] / 255.0f };
+    if (Colors.size() == 1)
+        return { Colors[0][0] / 255.0f, Colors[0][1] / 255.0f, Colors[0][2] / 255.0f };
 
-    const int total = (int)Cfg.Colors.size() * 64;
+    const int total = (int)Colors.size() * 64;
     m_colorPos = (m_colorPos + 1) % total;
     const int seg  = m_colorPos / 64;
     const float t  = (m_colorPos % 64) / 64.0f;
-    const auto& c0 = Cfg.Colors[seg % Cfg.Colors.size()];
-    const auto& c1 = Cfg.Colors[(seg + 1) % Cfg.Colors.size()];
+    const auto& c0 = Colors[seg % Colors.size()];
+    const auto& c1 = Colors[(seg + 1) % Colors.size()];
     return {
         (c0[0] * (1.0f - t) + c1[0] * t) / 255.0f,
         (c0[1] * (1.0f - t) + c1[1] * t) / 255.0f,
@@ -107,7 +108,7 @@ void Simple::Render(const RenderContext& Context)
 
         // Select audio channel
         float spec[kAudioBins], osc[kAudioBins];
-        if (Cfg.Channel == 2)
+        if (Channel == 2)
         {
             for (int i = 0; i < kAudioBins; i++)
             {
@@ -119,14 +120,14 @@ void Simple::Render(const RenderContext& Context)
         {
             for (int i = 0; i < kAudioBins; i++)
             {
-                spec[i] = vis.spec[Cfg.Channel][i];
-                osc[i]  = vis.osc[Cfg.Channel][i];
+                spec[i] = vis.spec[Channel][i];
+                osc[i]  = vis.osc[Channel][i];
             }
         }
 
         float yBase;
-        if (Cfg.Position == 0)      yBase = 0.0f;
-        else if (Cfg.Position == 2) yBase = (float)(H - 1);
+        if (Position == 0)      yBase = 0.0f;
+        else if (Position == 2) yBase = (float)(H - 1);
         else                    yBase = (float)h2;
 
         const uint32_t lbm       = Context.LineBlendMode ? *Context.LineBlendMode : (1u << 16);
@@ -139,10 +140,10 @@ void Simple::Render(const RenderContext& Context)
 
         const float xscale = (float)kAudioBins / W;
 
-        if (Cfg.Mode == 0 || Cfg.Mode == 1)
+        if (Mode == 0 || Mode == 1)
         {
             // Analyzer modes: spectrum data
-            if (Cfg.Mode == 0)
+            if (Mode == 0)
             {
                 // Solid analyzer: filled polygon from baseline through spectrum top
                 nvgBeginPath(m_nvg);
@@ -182,7 +183,7 @@ void Simple::Render(const RenderContext& Context)
         else
         {
             // Scope modes: waveform data (128 = zero-crossing)
-            if (Cfg.Mode == 2)
+            if (Mode == 2)
             {
                 // Line scope: connected polyline
                 nvgBeginPath(m_nvg);
@@ -268,4 +269,24 @@ void Simple::Destroy()
     m_overlaySampler = BGFX_INVALID_HANDLE;
     m_inputSampler   = BGFX_INVALID_HANDLE;
     m_program        = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json Simple::Serialize() const
+{
+    return {
+        { kMode,         Mode     },
+        { kChannel,      Channel  },
+        { kPosition,     Position },
+        { kColors,       JsonUtil::ColorsToJson(Colors) },
+        { kAntialiasing, AntialiasingEnabled },
+    };
+}
+
+void Simple::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt   (j, kMode,         Mode);
+    JsonUtil::ReadInt   (j, kChannel,      Channel);
+    JsonUtil::ReadInt   (j, kPosition,     Position);
+    JsonUtil::ReadColors(j, kColors,       Colors);
+    JsonUtil::ReadBool  (j, kAntialiasing, AntialiasingEnabled);
 }

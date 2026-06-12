@@ -1,5 +1,7 @@
 #include "DynamicDistanceModifier.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 #include "engine/AudioGlsl.h"
 #include "engine/ShaderSnippets.h"
@@ -25,7 +27,7 @@ void main() {
 }
 )";
 
-static std::string ConcatCode(const DynamicDistanceModifierConfig& c)
+static std::string ConcatCode(const DynamicDistanceModifier& c)
 {
     return c.InitCode + "\n" + c.FrameCode + "\n" + c.BeatCode;
 }
@@ -64,7 +66,7 @@ void main()
 
 )" + m_bridge.EmitLocals() + R"(
     // ---- pixel code ----
-)" + Cfg.PixelCode + R"(
+)" + PixelCode + R"(
     // ---- end pixel code ----
 
     vec2 src_uv;
@@ -100,11 +102,11 @@ void DynamicDistanceModifier::Init()
 
     for (const auto& v : k_builtins) m_lua.SeedVar(v);
 
-    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
 
-    m_bridge.Rescan(m_lua, ConcatCode(Cfg), k_builtins);
+    m_bridge.Rescan(m_lua, ConcatCode(*this), k_builtins);
     Recompile();
 
     m_lua.SetEnvNumber("b", 0.0);
@@ -175,31 +177,56 @@ void DynamicDistanceModifier::Recompile()
     }
 }
 
-void DynamicDistanceModifier::OnConfigChanged(const std::vector<std::string>& Changed)
+// PixelCode/InitCode change → rebuild GLSL (InitCode can add/remove user var uniforms).
+void DynamicDistanceModifier::RecompileMain()
 {
     if (!m_inited) return;
 
-    bool initChanged = false, pixelChanged = false;
-    bool frameChanged = false, beatChanged = false;
-    for (const auto& k : Changed)
-    {
-        if (k == "initCode")  initChanged  = true;
-        if (k == "pixelCode") pixelChanged = true;
-        if (k == "frameCode") frameChanged = true;
-        if (k == "beatCode")  beatChanged  = true;
-    }
+    m_lua.CompileBlock(InitCode, "initCode", m_initRef);
+    m_bridge.Rescan(m_lua, ConcatCode(*this), k_builtins);
+    Recompile();
+    m_lua.SetEnvNumber("b", 0.0);
+    m_lua.RunBlock(m_initRef, "initCode");
+}
 
-    // pixelCode or initCode change → rebuild GLSL (initCode can add/remove user var uniforms).
-    if (pixelChanged || initChanged)
-    {
-        m_lua.CompileBlock(Cfg.InitCode, "initCode", m_initRef);
-        m_bridge.Rescan(m_lua, ConcatCode(Cfg), k_builtins);
-        Recompile();
-        m_lua.SetEnvNumber("b", 0.0);
-        m_lua.RunBlock(m_initRef, "initCode");
-    }
-    if (frameChanged) m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    if (beatChanged)  m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
+void DynamicDistanceModifier::RecompileFrameCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+}
+
+void DynamicDistanceModifier::RecompileBeatCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(BeatCode, "beatCode", m_beatRef);
+}
+
+nlohmann::json DynamicDistanceModifier::Serialize() const
+{
+    return {
+        { kBlend,     Blend     },
+        { kBilinear,  Bilinear  },
+        { kCompat,    Compat    },
+        { kPixelCode, PixelCode },
+        { kInitCode,  InitCode  },
+        { kFrameCode, FrameCode },
+        { kBeatCode,  BeatCode  },
+    };
+}
+
+void DynamicDistanceModifier::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadBool  (j, kBlend,     Blend);
+    JsonUtil::ReadBool  (j, kBilinear,  Bilinear);
+    JsonUtil::ReadBool  (j, kCompat,    Compat);
+    JsonUtil::ReadString(j, kPixelCode, PixelCode);
+    JsonUtil::ReadString(j, kInitCode,  InitCode);
+    JsonUtil::ReadString(j, kFrameCode, FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,  BeatCode);
+
+    RecompileMain();
+    RecompileFrameCode();
+    RecompileBeatCode();
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -221,10 +248,10 @@ void DynamicDistanceModifier::Render(const RenderContext& Context)
     const float maxD = 0.5f * std::sqrt(w * w + h * h);
 
     // compat = original AVS 8-bit integer bilinear (only meaningful when Bilinear).
-    const bool compat = Cfg.Bilinear && Cfg.Compat;
+    const bool compat = Bilinear && Compat;
 
     const float params0[4] = { w, h, maxD, isBeat ? 1.0f : 0.0f };
-    const float params1[4] = { Cfg.Blend ? 1.0f : 0.0f, compat ? 1.0f : 0.0f, 0, 0 };
+    const float params1[4] = { Blend ? 1.0f : 0.0f, compat ? 1.0f : 0.0f, 0, 0 };
     bgfx::setUniform(Params0Unif, params0);
     bgfx::setUniform(Params1Unif, params1);
 
@@ -232,7 +259,7 @@ void DynamicDistanceModifier::Render(const RenderContext& Context)
 
     // Compat does its own integer texelFetch blend → bind POINT. Otherwise bilinear
     // when enabled, else nearest.
-    const uint32_t inputFlags = (Cfg.Bilinear && !compat)
+    const uint32_t inputFlags = (Bilinear && !compat)
         ? UINT32_MAX
         : (BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
     bgfx::setTexture(0, InputUnif, Context.InputTexture, inputFlags);

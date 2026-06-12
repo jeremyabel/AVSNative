@@ -54,35 +54,6 @@ struct RenderContext
     void SetBeat(bool b) const { if (IsBeatPtr) *IsBeatPtr = b; }
 };
 
-enum class ParamType
-{
-    Range,
-    Color,
-    Select,
-    Bool,
-    Number,
-    Glsl,
-    Lua,
-    Colors,
-};
-
-struct ParamDesc
-{
-    std::string Name;
-    std::string Label;
-    ParamType Type = ParamType::Range;
-    float Min = 0.0f;
-    float Max = 1.0f;
-    float Step = 0.01f;
-    std::vector<std::string> Options; // Select only
-};
-
-struct EffectDesc
-{
-    std::string Name;
-    std::vector<ParamDesc> Params;
-};
-
 class EffectChain;
 
 // A binary asset (image/GIF) an effect contributes to / receives from a preset
@@ -101,11 +72,20 @@ public:
 
     virtual void Init() = 0;
     virtual void Render(const RenderContext& Context) = 0;
-    virtual EffectDesc GetDescriptor() const = 0;
-    virtual nlohmann::json GetConfig() const = 0;
-    virtual void SetConfig(const nlohmann::json& Config) = 0;
     virtual void Destroy() = 0;
     virtual ~Effect() = default;
+
+    // Registered display name. Must exactly match the Engine.cpp Registry key and
+    // the ConfigUiRegistry key; used as the preset "type" string.
+    virtual std::string Name() const = 0;
+
+    // Per-effect JSON serialization. Key names are static constexpr strings on
+    // each effect class so each name is written once. Deserialize reads via the
+    // JsonUtil::Read* helpers (absent keys leave members at their defaults) and
+    // fires the effect's own side-effects (shader/Lua recompiles, state resets)
+    // at its end.
+    virtual nlohmann::json Serialize() const = 0;
+    virtual void Deserialize(const nlohmann::json& j) = 0;
 
     // Returns the inner EffectChain for container effects (e.g. EffectList).
     // Returns nullptr for all leaf effects.
@@ -114,7 +94,7 @@ public:
     // ── Preset bundle assets (images/GIFs stored as raw files in the .avsz) ────
     // Effects with binary assets override these. CollectAssets returns the raw
     // bytes to bundle on save (with the original filename). ApplyAsset delivers
-    // raw bytes on load (called after SetConfig); the effect caches them, keeps
+    // raw bytes on load (called after Deserialize); the effect caches them, keeps
     // the name for re-save, and rebuilds. Default: no assets.
     virtual std::vector<PresetAsset> CollectAssets() const { return {}; }
     virtual void ApplyAsset(const std::string& /*key*/, const std::string& /*name*/,

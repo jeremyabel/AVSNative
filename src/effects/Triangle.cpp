@@ -1,5 +1,7 @@
 #include "Triangle.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
 
@@ -47,10 +49,10 @@ void Triangle::Init()
 
     EnsureNvgContext();
 
-    Cfg.InitCode     = k_defaultInit;
-    Cfg.FrameCode    = k_defaultFrame;
-    Cfg.BeatCode     = k_defaultBeat;
-    Cfg.TriangleCode = k_defaultTriangle;
+    InitCode     = k_defaultInit;
+    FrameCode    = k_defaultFrame;
+    BeatCode     = k_defaultBeat;
+    TriangleCode = k_defaultTriangle;
 
     m_outBuf.assign(kStride, 0.0f);
 
@@ -93,7 +95,7 @@ void Triangle::Destroy()
 
 void Triangle::EnsureNvgContext()
 {
-    if (m_nvg && m_nvgEdgeAa == Cfg.AntialiasingEnabled)
+    if (m_nvg && m_nvgEdgeAa == AntialiasingEnabled)
         return;
 
     // edgeaa is baked into the context at creation time, so recreate when it changes.
@@ -101,8 +103,8 @@ void Triangle::EnsureNvgContext()
     if (m_nvg)
         nvgDelete(m_nvg);
 
-    m_nvgEdgeAa = Cfg.AntialiasingEnabled;
-    m_nvg = nvgCreate(Cfg.AntialiasingEnabled ? 1 : 0, 0);
+    m_nvgEdgeAa = AntialiasingEnabled;
+    m_nvg = nvgCreate(AntialiasingEnabled ? 1 : 0, 0);
 }
 
 void Triangle::EnsureOverlay(int w, int h)
@@ -126,7 +128,7 @@ void Triangle::SeedBuiltins()
 void Triangle::SeedUserVars()
 {
     const std::string allCode =
-        Cfg.InitCode + "\n" + Cfg.FrameCode + "\n" + Cfg.BeatCode + "\n" + Cfg.TriangleCode;
+        InitCode + "\n" + FrameCode + "\n" + BeatCode + "\n" + TriangleCode;
     for (const auto& v : LuaRuntime::ScanVarDecls(allCode, k_builtins))
         m_lua.SeedVar(v);
 }
@@ -145,26 +147,35 @@ void Triangle::ResetPerFrameVars()
 
 void Triangle::RecompileAll()
 {
-    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
-    m_lua.CompileTriangleLoop(Cfg.TriangleCode, m_triangleRef);
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
+    m_lua.CompileTriangleLoop(TriangleCode, m_triangleRef);
     SeedUserVars();
     m_lua.RunBlock(m_initRef, "initCode");
     m_inited = true;
 }
 
-void Triangle::OnConfigChanged(const std::vector<std::string>& changed)
+nlohmann::json Triangle::Serialize() const
 {
-    bool codeChanged = false;
-    for (const std::string& k : changed)
-        if (k == "initCode" || k == "frameCode" || k == "beatCode" || k == "triangleCode")
-        {
-            codeChanged = true;
-            break;
-        }
-    if (codeChanged)
-        RecompileAll();
+    return {
+        { kInitCode,     InitCode     },
+        { kFrameCode,    FrameCode    },
+        { kBeatCode,     BeatCode     },
+        { kTriangleCode, TriangleCode },
+        { kAntialiasing, AntialiasingEnabled },
+    };
+}
+
+void Triangle::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadString(j, kInitCode,     InitCode);
+    JsonUtil::ReadString(j, kFrameCode,    FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,     BeatCode);
+    JsonUtil::ReadString(j, kTriangleCode, TriangleCode);
+    JsonUtil::ReadBool  (j, kAntialiasing, AntialiasingEnabled);
+
+    RecompileAll();
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────

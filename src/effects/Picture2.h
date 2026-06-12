@@ -1,14 +1,16 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <bgfx/bgfx.h>
 #include <cstdint>
 #include <string>
 #include <vector>
 
-struct Picture2Config
+class Picture2 : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     int  BlendMode         = 0;     // 0-10 (see blend modes in fs_picture2.sc)
     int  OnBeatBlendMode   = 0;
     bool Bilinear          = true;
@@ -16,17 +18,22 @@ struct Picture2Config
     int  AdjustBlend       = 128;   // 0-255, used when BlendMode == 7 (Adjustable)
     int  OnBeatAdjustBlend = 128;
     std::string ImageData  = "";    // bundle asset ref/name; raw bytes arrive via ApplyAsset
-};
 
-class Picture2 : public ReflectedEffect<Picture2Config>
-{
-public:
+    static constexpr const char* kBlendMode         = "blendMode";
+    static constexpr const char* kOnBeatBlendMode   = "onBeatBlendMode";
+    static constexpr const char* kBilinear          = "bilinear";
+    static constexpr const char* kOnBeatBilinear    = "onBeatBilinear";
+    static constexpr const char* kAdjustBlend       = "adjustBlend";
+    static constexpr const char* kOnBeatAdjustBlend = "onBeatAdjustBlend";
+    static constexpr const char* kImageData         = "imageData";
+
     void Init() override;
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 
-    nlohmann::json GetConfig() const override;
-    void           SetConfig(const nlohmann::json& cfg) override;
+    std::string Name() const override { return "Picture II"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
     std::vector<PresetAsset> CollectAssets() const override;
     void ApplyAsset(const std::string& key, const std::string& name,
@@ -34,27 +41,6 @@ public:
 
     int GetImageW() const { return m_imgW; }
     int GetImageH() const { return m_imgH; }
-
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<std::string> kBlendNames = {
-            "Replace", "Additive", "Maximum", "50/50",
-            "Subtractive 1", "Subtractive 2", "Multiply",
-            "Adjustable", "XOR", "Minimum", "Ignore",
-        };
-        static const std::vector<Field> kFields = {
-            SelectI(&Picture2Config::BlendMode, "blendMode", "Blend Mode", kBlendNames),
-            RangeI(&Picture2Config::AdjustBlend, "adjustBlend", "Blend Amount", 0, 255),
-            ::Bool(&Picture2Config::Bilinear, "bilinear", "Bilinear"),
-            SelectI(&Picture2Config::OnBeatBlendMode, "onBeatBlendMode", "On-Beat Blend Mode", kBlendNames),
-            RangeI(&Picture2Config::OnBeatAdjustBlend, "onBeatAdjustBlend", "On-Beat Blend Amount", 0, 255),
-            ::Bool(&Picture2Config::OnBeatBilinear, "onBeatBilinear", "On-Beat Bilinear"),
-        };
-        return kFields;
-    }
-    std::string EffectName() const override { return "Picture II"; }
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
     void BuildFromRaw(const std::vector<uint8_t>& raw);

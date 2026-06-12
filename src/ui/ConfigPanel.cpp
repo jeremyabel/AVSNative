@@ -45,7 +45,7 @@ void ConfigPanel::Render(Engine& engine, Effect* effect)
         s_lastEffect = effect;
     }
 
-    const std::string name = effect->GetDescriptor().Name;
+    const std::string name = effect->Name();
 
     ImGui::TextUnformatted(name.c_str());
     ImGui::Separator();
@@ -54,7 +54,7 @@ void ConfigPanel::Render(Engine& engine, Effect* effect)
     if (const EffectUiDraw* draw = UiRegistry().Find(name))
         (*draw)(effect);
     else
-        DrawDefault(effect);
+        ImGui::TextDisabled("No UI registered.");
 
     ImGui::End();
 }

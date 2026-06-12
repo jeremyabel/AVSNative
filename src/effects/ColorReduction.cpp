@@ -1,6 +1,7 @@
 #include "ColorReduction.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_colorreduction.sc.bin.h"
@@ -19,8 +20,8 @@ void ColorReduction::Init()
 
 void ColorReduction::Render(const RenderContext& Context)
 {
-    const float Levels = std::pow(2.f, (float)Cfg.Levels);
-    const float Params[4] = { Levels, 0.f, 0.f, 0.f };
+    const float LevelCount = std::pow(2.f, (float)Levels);
+    const float Params[4] = { LevelCount, 0.f, 0.f, 0.f };
     
     bgfx::setUniform(ParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
@@ -45,4 +46,16 @@ void ColorReduction::Destroy()
     ParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json ColorReduction::Serialize() const
+{
+    return {
+        { kLevels, Levels },
+    };
+}
+
+void ColorReduction::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt(j, kLevels, Levels);
 }

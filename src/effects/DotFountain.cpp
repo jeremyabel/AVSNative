@@ -1,4 +1,6 @@
 #include "DotFountain.h"
+
+#include "engine/JsonUtil.h"
 #include "engine/MathConstants.h"
 
 #include "engine/AudioAnalyzer.h"
@@ -79,7 +81,7 @@ void DotFountain::Destroy()
 
 void DotFountain::BuildColorMap()
 {
-    const std::array<uint8_t, 3>* cols[5] = { &Cfg.Color0, &Cfg.Color1, &Cfg.Color2, &Cfg.Color3, &Cfg.Color4 };
+    const std::array<uint8_t, 3>* cols[5] = { &Color0, &Color1, &Color2, &Color3, &Color4 };
     for (int t = 0; t < 4; t++)
     {
         const auto& c1 = *cols[t];
@@ -173,7 +175,7 @@ void DotFountain::Render(const RenderContext& Context)
     // ── 3. Build transform: T(0,-20,400) × Rx(angle) × Ry(rotation). ─────────────
     float m[16], m2[16];
     MatRot(m,  2, m_rotation);
-    MatRot(m2, 1, (float)Cfg.Angle);
+    MatRot(m2, 1, (float)Angle);
     MatMul(m, m2);
     MatTrans(m2, 0.0f, -20.0f, 400.0f);
     MatMul(m, m2);
@@ -229,7 +231,33 @@ void DotFountain::Render(const RenderContext& Context)
     Context.FboManager->Swap();
 
     // ── 6. Advance rotation. ─────────────────────────────────────────────────────
-    m_rotation += Cfg.RotationSpeed / 5.0f;
+    m_rotation += RotationSpeed / 5.0f;
     if (m_rotation >= 360.0f) m_rotation -= 360.0f;
     if (m_rotation <    0.0f) m_rotation += 360.0f;
+}
+
+nlohmann::json DotFountain::Serialize() const
+{
+    return {
+        { kColor0,        JsonUtil::ColorToJson(Color0) },
+        { kColor1,        JsonUtil::ColorToJson(Color1) },
+        { kColor2,        JsonUtil::ColorToJson(Color2) },
+        { kColor3,        JsonUtil::ColorToJson(Color3) },
+        { kColor4,        JsonUtil::ColorToJson(Color4) },
+        { kRotationSpeed, RotationSpeed },
+        { kAngle,         Angle         },
+    };
+}
+
+void DotFountain::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColor(j, kColor0,        Color0);
+    JsonUtil::ReadColor(j, kColor1,        Color1);
+    JsonUtil::ReadColor(j, kColor2,        Color2);
+    JsonUtil::ReadColor(j, kColor3,        Color3);
+    JsonUtil::ReadColor(j, kColor4,        Color4);
+    JsonUtil::ReadInt  (j, kRotationSpeed, RotationSpeed);
+    JsonUtil::ReadInt  (j, kAngle,         Angle);
+
+    BuildColorMap();
 }

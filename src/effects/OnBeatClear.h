@@ -1,32 +1,28 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct OnBeatClearConfig
-{
-    std::array<uint8_t, 3> Color = { 255, 255, 255 };
-    bool                   Blend = false;
-    int                    Nf    = 1;   // clear every N beats; 0 = disabled
-};
+#include <array>
 
-class OnBeatClear : public ReflectedEffect<OnBeatClearConfig>
+class OnBeatClear : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    std::array<uint8_t, 3> Color = { 255, 255, 255 };
+    bool                   Blend = false;
+    int                    Nf    = 1;   // clear every N beats (0–100); 0 = disabled
+
+    static constexpr const char* kColor = "color";
+    static constexpr const char* kBlend = "blend";
+    static constexpr const char* kNf    = "nf";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Color(&OnBeatClearConfig::Color, "color", "Color"),
-            Bool(&OnBeatClearConfig::Blend, "blend", "Blend"),
-            RangeI(&OnBeatClearConfig::Nf, "nf", "Every N Beats", 0, 100),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "OnBeat Clear"; }
+    std::string Name() const override { return "OnBeat Clear"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     // Runtime counters

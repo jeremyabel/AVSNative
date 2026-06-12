@@ -1,6 +1,7 @@
 #include "Starfield.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_blit.sc.bin.h"
@@ -82,7 +83,7 @@ void Starfield::InitStars(int W, int H)
 {
     // Scale star count to canvas area, capped at kMaxStars-1. Matches JS exactly.
     AbsStars = std::min(kMaxStars - 1,
-        (int)std::round((double)Cfg.StarCount * W * H / (512.0 * 384.0)));
+        (int)std::round((double)StarCount * W * H / (512.0 * 384.0)));
 
     int XOff = W >> 1;
     int YOff = H >> 1;
@@ -113,18 +114,18 @@ void Starfield::Render(const RenderContext& Context)
     const int YOff = H >> 1;
 
     // On-beat: snap to on-beat speed and begin linear ramp back.
-    if (Context.IsBeat() && Cfg.OnBeat)
+    if (Context.IsBeat() && OnBeat)
     {
-        CurrentSpeed = Cfg.OnBeatSpeed;
-        OnBeatDiff   = (Cfg.Speed - Cfg.OnBeatSpeed) / (float)Cfg.OnBeatDuration;
-        Cooldown     = Cfg.OnBeatDuration;
+        CurrentSpeed = OnBeatSpeed;
+        OnBeatDiff   = (Speed - OnBeatSpeed) / (float)OnBeatDuration;
+        Cooldown     = OnBeatDuration;
     }
 
     // Reinitialise pool whenever canvas size changes.
     if (W != LastW || H != LastH)
     {
         LastW = W;  LastH = H;
-        CurrentSpeed = Cfg.Speed;
+        CurrentSpeed = Speed;
         InitStars(W, H);
     }
 
@@ -143,9 +144,9 @@ void Starfield::Render(const RenderContext& Context)
         StarVertex* verts = reinterpret_cast<StarVertex*>(tvb.data);
         int32_t count = 0;
 
-        bool isWhite = (Cfg.Color[0] == 255 && Cfg.Color[1] == 255 && Cfg.Color[2] == 255);
+        bool isWhite = (Color[0] == 255 && Color[1] == 255 && Color[2] == 255);
         // 50/50 uses alpha-blend (src_alpha, inv_src_alpha); encode alpha = 0.5.
-        uint8_t alpha = (Cfg.BlendMode == 2) ? 128 : 255;
+        uint8_t alpha = (BlendMode == 2) ? 128 : 255;
         float curSpeed = CurrentSpeed;
 
         for (int i = 0; i < AbsStars; i++)
@@ -168,7 +169,7 @@ void Starfield::Render(const RenderContext& Context)
 
             uint8_t r, g, b;
             if (isWhite) { r = g = b = bright; }
-            else         { Colorize(bright, Cfg.Color[0], Cfg.Color[1], Cfg.Color[2], r, g, b); }
+            else         { Colorize(bright, Color[0], Color[1], Color[2], r, g, b); }
 
             // NDC: Vulkan y=-1 is top-of-screen, matching our UV convention.
             StarVertex& v = verts[count++];
@@ -181,7 +182,7 @@ void Starfield::Render(const RenderContext& Context)
 
         // Speed ramp-back (runs after star loop, matching original).
         if (Cooldown <= 0)
-            CurrentSpeed = Cfg.Speed;
+            CurrentSpeed = Speed;
         else
         {
             CurrentSpeed = std::max(0.0f, CurrentSpeed + OnBeatDiff);
@@ -197,7 +198,7 @@ void Starfield::Render(const RenderContext& Context)
             bgfx::setViewRect(starView, 0, 0, (uint16_t)W, (uint16_t)H);
 
             uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_PT_POINTS;
-            switch (Cfg.BlendMode)
+            switch (BlendMode)
             {
             case 1: state |= BGFX_STATE_BLEND_ADD; break;
             case 2: state |= BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
@@ -213,9 +214,36 @@ void Starfield::Render(const RenderContext& Context)
     else
     {
         // No transient space or no stars — speed ramp still ticks.
-        if (Cooldown <= 0) CurrentSpeed = Cfg.Speed;
+        if (Cooldown <= 0) CurrentSpeed = Speed;
         else { CurrentSpeed = std::max(0.0f, CurrentSpeed + OnBeatDiff); --Cooldown; }
     }
 
     Context.FboManager->Swap();
+}
+
+nlohmann::json Starfield::Serialize() const
+{
+    return {
+        { kColor,          JsonUtil::ColorToJson(Color) },
+        { kBlendMode,      BlendMode      },
+        { kSpeed,          Speed          },
+        { kStarCount,      StarCount      },
+        { kOnBeat,         OnBeat         },
+        { kOnBeatSpeed,    OnBeatSpeed    },
+        { kOnBeatDuration, OnBeatDuration },
+    };
+}
+
+void Starfield::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColor(j, kColor,          Color);
+    JsonUtil::ReadInt  (j, kBlendMode,      BlendMode);
+    JsonUtil::ReadFloat(j, kSpeed,          Speed);
+    JsonUtil::ReadInt  (j, kStarCount,      StarCount);
+    JsonUtil::ReadBool (j, kOnBeat,         OnBeat);
+    JsonUtil::ReadFloat(j, kOnBeatSpeed,    OnBeatSpeed);
+    JsonUtil::ReadInt  (j, kOnBeatDuration, OnBeatDuration);
+
+    ResetSpeed();
+    ReinitStars();
 }

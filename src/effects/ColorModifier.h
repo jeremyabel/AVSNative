@@ -1,15 +1,16 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/ShaderCompiler.h"
 #include "engine/LuaRuntime.h"
 #include "engine/LuaUniformBridge.h"
 
 #include <string>
-#include <vector>
 
-struct ColorModifierConfig
+class ColorModifier : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::string PixelCode =
         "// red, green, blue all start at the same channel intensity (0..1).\n"
         "// Modify them to remap that intensity to new R, G, B output values.\n"
@@ -21,35 +22,33 @@ struct ColorModifierConfig
     std::string InitCode  = "";
     std::string FrameCode = "";
     std::string BeatCode  = "";
-};
 
-class ColorModifier : public ReflectedEffect<ColorModifierConfig>
-{
-public:
+    static constexpr const char* kPixelCode = "pixelCode";
+    static constexpr const char* kInitCode  = "initCode";
+    static constexpr const char* kFrameCode = "frameCode";
+    static constexpr const char* kBeatCode  = "beatCode";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
+    std::string Name() const override { return "Color Modifier"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
+
     std::string GetScriptError(const std::string& paramName) const override
     {
-        if (paramName == "pixelCode") return m_shaderError;
+        if (paramName == kPixelCode) return m_shaderError;
         return m_lua.GetError(paramName);
     }
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Glsl(&ColorModifierConfig::PixelCode, "pixelCode", "Pixel (GLSL)"),
-            Lua (&ColorModifierConfig::InitCode,  "initCode",  "Init"),
-            Lua (&ColorModifierConfig::FrameCode, "frameCode", "Frame"),
-            Lua (&ColorModifierConfig::BeatCode,  "beatCode",  "Beat"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Color Modifier"; }
-
-    void OnConfigChanged(const std::vector<std::string>& Changed) override;
+    // Recompiles after PixelCode or InitCode changes: recompiles the init block,
+    // rescans user-var uniforms, rebuilds the GLSL, and reruns init. Called after
+    // Deserialize and by the UI.
+    void RecompileMain();
+    // Recompiles just the frame / beat Lua blocks.
+    void RecompileFrameCode();
+    void RecompileBeatCode();
 
 private:
     void Recompile();      // builds GLSL → SPIRV → bgfx program

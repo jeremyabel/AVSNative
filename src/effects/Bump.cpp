@@ -1,5 +1,7 @@
 #include "Bump.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -24,7 +26,7 @@ void Bump::Init()
     ParamsUnif = bgfx::createUniform("u_bumpParams", bgfx::UniformType::Vec4);
     FlagsUnif  = bgfx::createUniform("u_bumpFlags",  bgfx::UniformType::Vec4);
 
-    m_curDepth = Cfg.Depth;
+    m_curDepth = Depth;
 
     for (const auto& v : k_builtins) m_lua.SeedVar(v);
     m_lua.SetEnvNumber("bi", 1.0);
@@ -37,32 +39,57 @@ void Bump::Init()
 
 void Bump::SeedUserVars()
 {
-    const std::string all = Cfg.InitCode + "\n" + Cfg.FrameCode + "\n" + Cfg.BeatCode;
+    const std::string all = InitCode + "\n" + FrameCode + "\n" + BeatCode;
     for (const auto& v : LuaRuntime::ScanVarDecls(all, k_builtins))
         m_lua.SeedVar(v);
 }
 
 void Bump::Recompile()
 {
-    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
 }
 
-void Bump::OnConfigChanged(const std::vector<std::string>& Changed)
+void Bump::RecompileCode()
 {
     if (!m_inited) return;
-
-    bool codeChanged = false;
-    for (const std::string& k : Changed)
-        if (k == "initCode" || k == "frameCode" || k == "beatCode")
-            { codeChanged = true; break; }
-
-    if (!codeChanged) return;
 
     Recompile();
     SeedUserVars();
     m_lua.RunBlock(m_initRef, "initCode");
+}
+
+nlohmann::json Bump::Serialize() const
+{
+    return {
+        { kDepth,          Depth          },
+        { kOnBeat,         OnBeat         },
+        { kOnBeatDuration, OnBeatDuration },
+        { kOnBeatDepth,    OnBeatDepth    },
+        { kBlendMode,      BlendMode      },
+        { kShowLightPos,   ShowLightPos   },
+        { kInvertDepth,    InvertDepth    },
+        { kInitCode,       InitCode       },
+        { kFrameCode,      FrameCode      },
+        { kBeatCode,       BeatCode       },
+    };
+}
+
+void Bump::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt   (j, kDepth,          Depth);
+    JsonUtil::ReadBool  (j, kOnBeat,         OnBeat);
+    JsonUtil::ReadInt   (j, kOnBeatDuration, OnBeatDuration);
+    JsonUtil::ReadInt   (j, kOnBeatDepth,    OnBeatDepth);
+    JsonUtil::ReadInt   (j, kBlendMode,      BlendMode);
+    JsonUtil::ReadBool  (j, kShowLightPos,   ShowLightPos);
+    JsonUtil::ReadBool  (j, kInvertDepth,    InvertDepth);
+    JsonUtil::ReadString(j, kInitCode,       InitCode);
+    JsonUtil::ReadString(j, kFrameCode,      FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,       BeatCode);
+
+    RecompileCode();
 }
 
 void Bump::Render(const RenderContext& Context)
@@ -83,14 +110,14 @@ void Bump::Render(const RenderContext& Context)
     m_lua.SetEnvNumber("bi", bi);
 
     // On-beat depth snap (before bi multiplication, matching original).
-    if (Context.IsBeat() && Cfg.OnBeat)
+    if (Context.IsBeat() && OnBeat)
     {
-        m_curDepth      = Cfg.OnBeatDepth;
-        m_onBeatFadeout = Cfg.OnBeatDuration;
+        m_curDepth      = OnBeatDepth;
+        m_onBeatFadeout = OnBeatDuration;
     }
     else if (!m_onBeatFadeout)
     {
-        m_curDepth = Cfg.Depth;
+        m_curDepth = Depth;
     }
 
     m_curDepth = (int)((double)m_curDepth * bi);
@@ -101,9 +128,9 @@ void Bump::Render(const RenderContext& Context)
     const int centerY = std::clamp((int)(m_lua.GetEnvNumber("y") * h), 0, h);
 
     const float texelSz[4] = { 1.0f / (float)w, 1.0f / (float)h, (float)w, (float)h };
-    const float params[4]  = { (float)centerX, (float)centerY, (float)depthScaled, (float)Cfg.BlendMode };
-    const float flags[4]   = { Cfg.InvertDepth  ? 1.0f : 0.0f,
-                                Cfg.ShowLightPos ? 1.0f : 0.0f, 0.0f, 0.0f };
+    const float params[4]  = { (float)centerX, (float)centerY, (float)depthScaled, (float)BlendMode };
+    const float flags[4]   = { InvertDepth  ? 1.0f : 0.0f,
+                                ShowLightPos ? 1.0f : 0.0f, 0.0f, 0.0f };
 
     bgfx::setUniform(TexelUnif,  texelSz);
     bgfx::setUniform(ParamsUnif, params);
@@ -120,10 +147,10 @@ void Bump::Render(const RenderContext& Context)
     if (m_onBeatFadeout > 0)
     {
         m_onBeatFadeout--;
-        if (m_onBeatFadeout > 0 && Cfg.OnBeatDuration > 0)
+        if (m_onBeatFadeout > 0 && OnBeatDuration > 0)
         {
-            const int step = std::abs(Cfg.Depth - Cfg.OnBeatDepth) / Cfg.OnBeatDuration;
-            m_curDepth += step * (Cfg.OnBeatDepth > Cfg.Depth ? -1 : 1);
+            const int step = std::abs(Depth - OnBeatDepth) / OnBeatDuration;
+            m_curDepth += step * (OnBeatDepth > Depth ? -1 : 1);
         }
     }
 }

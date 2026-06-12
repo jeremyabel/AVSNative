@@ -1,5 +1,7 @@
 #include "DynamicMovement.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 #include "engine/ShaderCompiler.h"
 #include "engine/AudioGlsl.h"
@@ -60,7 +62,7 @@ static bool Contains(const std::vector<std::string>& v, const std::string& s)
 
 void DynamicMovement::Init()
 {
-    Cfg.PixelCode = k_defaultPixel;
+    PixelCode = k_defaultPixel;
 
     Params0Unif  = bgfx::createUniform("u_params0",  bgfx::UniformType::Vec4);
     Params1Unif  = bgfx::createUniform("u_params1",  bgfx::UniformType::Vec4);
@@ -119,7 +121,7 @@ std::string DynamicMovement::BuildTransformBody() const
         s += "    float " + l + " = 0.0;\n";
 
     s += "\n    // --- user pixel code ---\n";
-    s += Cfg.PixelCode;
+    s += PixelCode;
     s += R"(
     // --- end user pixel code ---
 
@@ -390,17 +392,17 @@ void DynamicMovement::CompileShaders()
 
 void DynamicMovement::RescanAndCompile()
 {
-    m_bridged = LuaRuntime::ScanVarDecls(Cfg.InitCode, k_builtins);
+    m_bridged = LuaRuntime::ScanVarDecls(InitCode, k_builtins);
     if ((int)m_bridged.size() > kMaxDyn)
         m_bridged.resize(kMaxDyn);
 
     m_locals.clear();
-    for (const auto& name : ScanAssigned(Cfg.PixelCode))
+    for (const auto& name : ScanAssigned(PixelCode))
         if (!Contains(k_builtins, name) && !Contains(m_bridged, name))
             m_locals.push_back(name);
 
-    m_usesAudio = Cfg.PixelCode.find("getspec") != std::string::npos ||
-                  Cfg.PixelCode.find("getosc")  != std::string::npos;
+    m_usesAudio = PixelCode.find("getspec") != std::string::npos ||
+                  PixelCode.find("getosc")  != std::string::npos;
 
     CompileShaders();
 }
@@ -409,11 +411,11 @@ void DynamicMovement::RescanAndCompile()
 
 void DynamicMovement::RecompileLua()
 {
-    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
 
-    const std::string all = Cfg.InitCode + "\n" + Cfg.FrameCode + "\n" + Cfg.BeatCode;
+    const std::string all = InitCode + "\n" + FrameCode + "\n" + BeatCode;
     for (const auto& v : LuaRuntime::ScanVarDecls(all, k_builtins))
         m_lua.SeedVar(v);
 
@@ -422,34 +424,76 @@ void DynamicMovement::RecompileLua()
     m_inited = true;
 }
 
-void DynamicMovement::OnConfigChanged(const std::vector<std::string>& changed)
+void DynamicMovement::ApplyPixelCodeChange()
 {
-    bool shaderDirty = false, initDirty = false, frameDirty = false, beatDirty = false;
+    RescanAndCompile();
+}
 
-    for (const std::string& k : changed)
-    {
-        if      (k == "pixelCode") shaderDirty = true;
-        else if (k == "initCode")  { shaderDirty = true; initDirty = true; }
-        else if (k == "frameCode") frameDirty = true;
-        else if (k == "beatCode")  beatDirty = true;
-    }
+void DynamicMovement::ApplyInitCodeChange()
+{
+    RescanAndCompile();
+    RecompileLua();
+}
 
-    if (shaderDirty) RescanAndCompile();
+void DynamicMovement::ApplyFrameCodeChange()
+{
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+}
 
-    if (initDirty)
-        RecompileLua();
-    else
-    {
-        if (frameDirty) m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-        if (beatDirty)  m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
-    }
+void DynamicMovement::ApplyBeatCodeChange()
+{
+    m_lua.CompileBlock(BeatCode, "beatCode", m_beatRef);
+}
+
+nlohmann::json DynamicMovement::Serialize() const
+{
+    return {
+        { kPixelCode,      PixelCode      },
+        { kFrameCode,      FrameCode      },
+        { kBeatCode,       BeatCode       },
+        { kInitCode,       InitCode       },
+        { kRectCoords,     RectCoords     },
+        { kWrap,           Wrap           },
+        { kBlend,          Blend          },
+        { kBilinear,       Bilinear       },
+        { kBilinearCompat, BilinearCompat },
+        { kNoMove,         NoMove         },
+        { kShowUV,         ShowUV         },
+        { kUseGrid,        UseGrid        },
+        { kGridW,          GridW          },
+        { kGridH,          GridH          },
+        { kBufferN,        BufferN        },
+    };
+}
+
+void DynamicMovement::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadString(j, kPixelCode,      PixelCode);
+    JsonUtil::ReadString(j, kFrameCode,      FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,       BeatCode);
+    JsonUtil::ReadString(j, kInitCode,       InitCode);
+    JsonUtil::ReadBool  (j, kRectCoords,     RectCoords);
+    JsonUtil::ReadBool  (j, kWrap,           Wrap);
+    JsonUtil::ReadBool  (j, kBlend,          Blend);
+    JsonUtil::ReadBool  (j, kBilinear,       Bilinear);
+    JsonUtil::ReadBool  (j, kBilinearCompat, BilinearCompat);
+    JsonUtil::ReadBool  (j, kNoMove,         NoMove);
+    JsonUtil::ReadBool  (j, kShowUV,         ShowUV);
+    JsonUtil::ReadBool  (j, kUseGrid,        UseGrid);
+    JsonUtil::ReadInt   (j, kGridW,          GridW);
+    JsonUtil::ReadInt   (j, kGridH,          GridH);
+    JsonUtil::ReadInt   (j, kBufferN,        BufferN);
+
+    ApplyInitCodeChange();
+    ApplyFrameCodeChange();
+    ApplyBeatCodeChange();
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
 void DynamicMovement::Render(const RenderContext& Context)
 {
-    const bool grid = Cfg.UseGrid && bgfx::isValid(ProgramGrid);
+    const bool grid = UseGrid && bgfx::isValid(ProgramGrid);
     const bgfx::ProgramHandle program = grid ? ProgramGrid : ProgramDirect;
     if (!bgfx::isValid(program)) return;
 
@@ -477,24 +521,24 @@ void DynamicMovement::Render(const RenderContext& Context)
     }
 
     // Source buffer: current input (0) or scratch buffer (1..8).
-    const bool sameBuffer = (Cfg.BufferN == 0);
+    const bool sameBuffer = (BufferN == 0);
     bgfx::TextureHandle srcTex = Context.InputTexture;
     if (!sameBuffer)
     {
-        const int slot = std::clamp(Cfg.BufferN - 1, 0, SCRATCH_BUFFER_COUNT - 1);
+        const int slot = std::clamp(BufferN - 1, 0, SCRATCH_BUFFER_COUNT - 1);
         srcTex = Context.FboManager->GetScratch(slot).Texture;
     }
 
-    const float rect = Cfg.RectCoords ? 1.0f : 0.0f;
-    const float wrap = Cfg.Wrap ? 1.0f : 0.0f;
-    const float p_blendNoMoveShow[4] = { wrap, Cfg.Blend ? 1.0f : 0.0f,
-                                         Cfg.NoMove ? 1.0f : 0.0f, Cfg.ShowUV ? 1.0f : 0.0f };
-    const float p_sameBi[4] = { sameBuffer ? 1.0f : 0.0f, Cfg.BilinearCompat ? 1.0f : 0.0f, 0.0f, 0.0f };
+    const float rect = RectCoords ? 1.0f : 0.0f;
+    const float wrap = Wrap ? 1.0f : 0.0f;
+    const float p_blendNoMoveShow[4] = { wrap, Blend ? 1.0f : 0.0f,
+                                         NoMove ? 1.0f : 0.0f, ShowUV ? 1.0f : 0.0f };
+    const float p_sameBi[4] = { sameBuffer ? 1.0f : 0.0f, BilinearCompat ? 1.0f : 0.0f, 0.0f, 0.0f };
 
     if (grid)
     {
         const float v0[4] = { W, H, beat, rect };
-        const float v1[4] = { wrap, (float)Cfg.GridW, (float)Cfg.GridH, 0.0f };
+        const float v1[4] = { wrap, (float)GridW, (float)GridH, 0.0f };
         bgfx::setUniform(VParams0Unif, v0);
         bgfx::setUniform(VParams1Unif, v1);
         bgfx::setUniform(FParams0Unif, p_blendNoMoveShow);
@@ -510,7 +554,7 @@ void DynamicMovement::Render(const RenderContext& Context)
 
     // bilinearCompat samples integer texels manually → always NEAREST there.
     uint32_t srcFlags = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
-    if (Cfg.BilinearCompat || !Cfg.Bilinear)
+    if (BilinearCompat || !Bilinear)
         srcFlags |= BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT;
 
     bgfx::setTexture(0, SourceUnif, srcTex, srcFlags);
@@ -520,7 +564,7 @@ void DynamicMovement::Render(const RenderContext& Context)
 
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     if (grid)
-        bgfx::setVertexCount(Cfg.GridW * Cfg.GridH * 6);
+        bgfx::setVertexCount(GridW * GridH * 6);
     else
         bgfx::setVertexCount(3);
     bgfx::submit(Context.ViewId, program);

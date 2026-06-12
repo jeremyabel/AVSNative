@@ -1,28 +1,24 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct ColorClipConfig
-{
-    std::array<uint8_t, 3> Color = { 32, 32, 32 };
-};
+#include <array>
 
-class ColorClip : public ReflectedEffect<ColorClipConfig>
+class ColorClip : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    std::array<uint8_t, 3> Color = { 32, 32, 32 };
+
+    static constexpr const char* kColor = "color";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Color(&ColorClipConfig::Color, "color", "Clip Color"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Color Clip"; }
+    std::string Name() const override { return "Color Clip"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     bgfx::ProgramHandle Program      = BGFX_INVALID_HANDLE;

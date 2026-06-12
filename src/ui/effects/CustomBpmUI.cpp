@@ -5,7 +5,8 @@
 #include <imgui.h>
 
 // The beat simulation lives in CustomBpm::Render(). This UI only edits the
-// parameters and displays the before/after beat meters the effect computes.
+// parameters (enforcing mode exclusivity) and displays the before/after beat
+// meters the effect computes.
 
 static void DrawBeatMeter(const char* label, int seg)
 {
@@ -31,34 +32,33 @@ static void DrawBeatMeter(const char* label, int seg)
 static void DrawCustomBpmUI(Effect* effect)
 {
     auto* bpm = static_cast<CustomBpm*>(effect);
-    CustomBpmConfig& cfg = bpm->ConfigRef();
 
-    // ── Mode selection (mutually exclusive; OnConfigChanged enforces it) ──
+    // ── Mode selection (mutually exclusive; turning one on clears the others) ──
     ImGui::SeparatorText("Mode");
-    bool modeChanged = false;
-    modeChanged |= ImGui::Checkbox("Arbitrary BPM", &cfg.Arbitrary);
-    modeChanged |= ImGui::Checkbox("Skip Beats",    &cfg.Skip);
-    modeChanged |= ImGui::Checkbox("Invert Beat",   &cfg.Invert);
-    if (modeChanged)
-        bpm->NotifyConfigChanged({ "arbitrary", "skip", "invert" });
+    if (ImGui::Checkbox("Arbitrary BPM", &bpm->Arbitrary) && bpm->Arbitrary)
+        { bpm->Skip = false; bpm->Invert = false; }
+    if (ImGui::Checkbox("Skip Beats", &bpm->Skip) && bpm->Skip)
+        { bpm->Arbitrary = false; bpm->Invert = false; }
+    if (ImGui::Checkbox("Invert Beat", &bpm->Invert) && bpm->Invert)
+        { bpm->Arbitrary = false; bpm->Skip = false; }
 
     ImGui::Spacing();
 
-    ImGui::BeginDisabled(!cfg.Arbitrary);
+    ImGui::BeginDisabled(!bpm->Arbitrary);
     ImGui::TextUnformatted("Arbitrary BPM");
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::SliderInt("##arbval", &cfg.ArbVal, 6, 300);
+    ImGui::SliderInt("##arbval", &bpm->ArbVal, 6, 300);
     ImGui::EndDisabled();
 
-    ImGui::BeginDisabled(!cfg.Skip);
+    ImGui::BeginDisabled(!bpm->Skip);
     ImGui::TextUnformatted("Skip");
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::SliderInt("##skipval", &cfg.SkipVal, 1, 16);
+    ImGui::SliderInt("##skipval", &bpm->SkipVal, 1, 16);
     ImGui::EndDisabled();
 
     ImGui::TextUnformatted("Skip First N");
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::SliderInt("##skipfirst", &cfg.SkipFirst, 0, 64);
+    ImGui::SliderInt("##skipfirst", &bpm->SkipFirst, 0, 64);
 
     // ── Before / after beat meters (computed by the effect) ──
     ImGui::SeparatorText("Beat Meter");

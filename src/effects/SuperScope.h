@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/LuaRuntime.h"
 
 #include <array>
@@ -8,8 +8,10 @@
 #include <string>
 #include <vector>
 
-struct SuperScopeConfig
+class SuperScope : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::string InitCode;
     std::string FrameCode;
     std::string BeatCode;
@@ -18,53 +20,30 @@ struct SuperScopeConfig
     int AudioSource  = 0;         // 0 = waveform, 1 = spectrum
     int AudioChannel = 0;         // 0 = center, 1 = left, 2 = right
     int DrawMode     = 1;         // 0 = dots, 1 = lines
-};
 
-class SuperScope : public ReflectedEffect<SuperScopeConfig>
-{
-public:
+    static constexpr const char* kInitCode     = "initCode";
+    static constexpr const char* kFrameCode    = "frameCode";
+    static constexpr const char* kBeatCode     = "beatCode";
+    static constexpr const char* kPointCode    = "pointCode";
+    static constexpr const char* kColors       = "colors";
+    static constexpr const char* kAudioSource  = "audioSource";
+    static constexpr const char* kAudioChannel = "audioChannel";
+    static constexpr const char* kDrawMode     = "drawMode";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
+
+    std::string Name() const override { return "Super Scope"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
+
     std::string GetScriptError(const std::string& paramName) const override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Lua(&SuperScopeConfig::InitCode, "initCode", "Init"),
-            Lua(&SuperScopeConfig::FrameCode, "frameCode", "Frame"),
-            Lua(&SuperScopeConfig::BeatCode, "beatCode", "Beat"),
-            Lua(&SuperScopeConfig::PointCode, "pointCode", "Point"),
-            Colors(&SuperScopeConfig::Colors, "colors", "Color"),
-            SelectI(&SuperScopeConfig::AudioSource, "audioSource", "Source", { "Waveform", "Spectrum" }),
-            SelectI(&SuperScopeConfig::AudioChannel, "audioChannel", "Channel", { "Center", "Left", "Right" }),
-            SelectI(&SuperScopeConfig::DrawMode, "drawMode", "Draw", { "Dots", "Lines" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Super Scope"; }
-
-    void OnConfigChanged(const std::vector<std::string>& changed) override
-    {
-        bool codeChanged = false;
-        for (const std::string& k : changed)
-            if (k == "initCode" || k == "frameCode" || k == "beatCode" || k == "pointCode")
-            {
-                codeChanged = true;
-                break;
-            }
-        if (!codeChanged)
-            return;
-
-        m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-        m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-        m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
-        SeedUserVars();
-        m_lua.RunBlock(m_initRef, "initCode");
-        m_inited = true;
-        RebuildPointLoop();
-    }
+    // Recompiles all four Lua blocks, reseeds user vars, reruns init, and rebuilds
+    // the point loop. Called after Deserialize and by the UI when any code editor
+    // changes.
+    void Recompile();
 
 private:
     // ── Script state ─────────────────────────────────────────────────────────

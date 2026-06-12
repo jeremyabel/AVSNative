@@ -1,6 +1,7 @@
 #include "FastBrightness.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_fastbrightness.sc.bin.h"
@@ -17,7 +18,7 @@ void FastBrightness::Init()
 
 void FastBrightness::Render(const RenderContext& Context)
 {
-    const float Params[4] = { (float)Cfg.Dir, 0.f, 0.f, 0.f };
+    const float Params[4] = { (float)Dir, 0.f, 0.f, 0.f };
     bgfx::setUniform(ParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
@@ -41,4 +42,16 @@ void FastBrightness::Destroy()
     ParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json FastBrightness::Serialize() const
+{
+    return {
+        { kDir, Dir },
+    };
+}
+
+void FastBrightness::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt(j, kDir, Dir);
 }

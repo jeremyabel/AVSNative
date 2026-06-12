@@ -1,9 +1,11 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct RotoBlitterConfig
+class RotoBlitter : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     int  ZoomScale   = 31;    // 0-256; 31 = no zoom
     int  ZoomScale2  = 31;    // beat zoom target
     int  RotDir      = 31;    // 0-64; 32 = no rotation, <32 one way, >32 other
@@ -13,39 +15,28 @@ struct RotoBlitterConfig
     bool Blend       = false;
     bool Beatch      = false; // reverse rotation on beat
     bool BeatchScale = false; // snap zoom on beat
-};
 
-class RotoBlitter : public ReflectedEffect<RotoBlitterConfig>
-{
-public:
+    static constexpr const char* kZoomScale   = "zoom_scale";
+    static constexpr const char* kZoomScale2  = "zoom_scale2";
+    static constexpr const char* kRotDir      = "rot_dir";
+    static constexpr const char* kBeatchSpeed = "beatch_speed";
+    static constexpr const char* kSubpixel    = "subpixel";
+    static constexpr const char* kCompat      = "bilinearCompat";
+    static constexpr const char* kBlend       = "blend";
+    static constexpr const char* kBeatch      = "beatch";
+    static constexpr const char* kBeatchScale = "beatch_scale";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            RangeI(&RotoBlitterConfig::ZoomScale, "zoom_scale", "Zoom", 0, 256),
-            RangeI(&RotoBlitterConfig::ZoomScale2, "zoom_scale2", "Zoom (On Beat)", 0, 256),
-            RangeI(&RotoBlitterConfig::RotDir, "rot_dir", "Rotation", 0, 64),
-            RangeI(&RotoBlitterConfig::BeatchSpeed, "beatch_speed", "Reversal Smoothing", 0, 8),
-            Bool(&RotoBlitterConfig::Subpixel, "subpixel", "Subpixel"),
-            Bool(&RotoBlitterConfig::Compat, "bilinearCompat", "Bilinear (precise)"),
-            Bool(&RotoBlitterConfig::Blend, "blend", "Blend"),
-            Bool(&RotoBlitterConfig::Beatch, "beatch", "Reverse on Beat"),
-            Bool(&RotoBlitterConfig::BeatchScale, "beatch_scale", "Zoom Snap on Beat"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Roto Blitter"; }
+    std::string Name() const override { return "Roto Blitter"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
-    void OnConfigChanged(const std::vector<std::string>& changed) override
-    {
-        for (const std::string& k : changed)
-            if (k == "zoom_scale")
-                m_scaleFpos = (float)Cfg.ZoomScale; // reset animation on load
-    }
+    // Snaps the zoom animation to the current ZoomScale. Called after Deserialize
+    // and by the UI when the zoom slider changes.
+    void ResetZoomAnim() { m_scaleFpos = (float)ZoomScale; }
 
 private:
     // Runtime state (not serialized)

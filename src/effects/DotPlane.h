@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <array>
 #include <cstdint>
@@ -11,8 +11,10 @@
 // rotated/tilted in 3D and each grid point projects to a single dot.
 // See ref/AVSWeb/src/effects/dot-plane.js.
 
-struct DotPlaneConfig
+class DotPlane : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     int RotationSpeed = 16;   // -50..50
     int Angle         = -20;  // -90..91
     std::array<uint8_t, 3> Color0 = { 28, 107, 24 };
@@ -20,41 +22,30 @@ struct DotPlaneConfig
     std::array<uint8_t, 3> Color2 = { 42, 29, 116 };
     std::array<uint8_t, 3> Color3 = { 144, 54, 217 };
     std::array<uint8_t, 3> Color4 = { 107, 136, 255 };
-};
 
-class DotPlane : public ReflectedEffect<DotPlaneConfig>
-{
-public:
+    static constexpr const char* kRotationSpeed = "rotationSpeed";
+    static constexpr const char* kAngle         = "angle";
+    static constexpr const char* kColor0        = "color0";
+    static constexpr const char* kColor1        = "color1";
+    static constexpr const char* kColor2        = "color2";
+    static constexpr const char* kColor3        = "color3";
+    static constexpr const char* kColor4        = "color4";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            RangeI(&DotPlaneConfig::RotationSpeed, "rotationSpeed", "Rotation Speed", -50, 50),
-            RangeI(&DotPlaneConfig::Angle,         "angle",         "Angle",          -90, 91),
-            Color(&DotPlaneConfig::Color0, "color0", "Color 1"),
-            Color(&DotPlaneConfig::Color1, "color1", "Color 2"),
-            Color(&DotPlaneConfig::Color2, "color2", "Color 3"),
-            Color(&DotPlaneConfig::Color3, "color3", "Color 4"),
-            Color(&DotPlaneConfig::Color4, "color4", "Color 5"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Dot Plane"; }
+    std::string Name() const override { return "Dot Plane"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
-    void OnConfigChanged(const std::vector<std::string>& changed) override
-    {
-        for (const std::string& k : changed)
-            if (k.rfind("color", 0) == 0) { BuildColorMap(); break; }
-    }
+    // Rebuilds the 64-entry interpolated color map from Color0..Color4. Called
+    // after Deserialize and by the UI when any color changes.
+    void BuildColorMap();
 
 private:
     static constexpr int GRID = 64;
 
-    void BuildColorMap();
     void EnsureDots(int w, int h);
     void UpdateGrid(const struct VisData* vd);
 

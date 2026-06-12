@@ -1,6 +1,7 @@
 #include "FadeOut.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_fadeout.sc.bin.h"
@@ -19,7 +20,7 @@ void FadeOut::Render(const RenderContext& Context)
 {
     // Speed maps directly to blend amount: 0 = no fade, 1 = instant wipe to color.
     // speed=0.08 → 8% per frame toward target, equivalent to AVS_Remake fade=0.92.
-    const float Params[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, Cfg.Speed };
+    const float Params[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, Speed };
 
     bgfx::setUniform(FadeParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
@@ -28,6 +29,20 @@ void FadeOut::Render(const RenderContext& Context)
     bgfx::submit(Context.ViewId, Program);
 
     Context.FboManager->Swap();
+}
+
+nlohmann::json FadeOut::Serialize() const
+{
+    return {
+        { kSpeed, Speed },
+        { kColor, JsonUtil::ColorToJson(Color) },
+    };
+}
+
+void FadeOut::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadFloat(j, kSpeed, Speed);
+    JsonUtil::ReadColor(j, kColor, Color);
 }
 
 void FadeOut::Destroy()

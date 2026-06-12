@@ -1,4 +1,5 @@
 #include "ImageGrid.h"
+#include "engine/JsonUtil.h"
 
 #include "engine/FBOManager.h"
 #include "thirdparty/StbGifStream.h"
@@ -33,37 +34,47 @@ static std::string SubstitutePi(std::string code)
     return code;
 }
 
-// ── GetConfig / SetConfig ─────────────────────────────────────────────────────
+// ── Serialize / Deserialize ───────────────────────────────────────────────────
 
-nlohmann::json ImageGrid::GetConfig() const
+nlohmann::json ImageGrid::Serialize() const
 {
-    nlohmann::json j = ReflectedEffect<ImageGridConfig>::GetConfig();
-    j["imageData"]   = Cfg.ImageData;
-    j["imageData2"]  = Cfg.ImageData2;
-    j["activeImage"] = Cfg.ActiveImage;
-    return j;
+    return {
+        { kBlendMode,   BlendMode   },
+        { kInitCode,    InitCode    },
+        { kFrameCode,   FrameCode   },
+        { kBeatCode,    BeatCode    },
+        // Bundle asset references — raw bytes arrive via ApplyAsset.
+        { kImageData,   ImageData   },
+        { kImageData2,  ImageData2  },
+        { kActiveImage, ActiveImage },
+    };
 }
 
-void ImageGrid::SetConfig(const nlohmann::json& cfg)
+void ImageGrid::Deserialize(const nlohmann::json& j)
 {
-    ReflectedEffect<ImageGridConfig>::SetConfig(cfg);
-
-    bool activeChanged = false;
-
-    if (cfg.contains("activeImage") && cfg["activeImage"].is_number_integer())
-    {
-        const int v = cfg["activeImage"].get<int>() ? 1 : 0;
-        if (v != Cfg.ActiveImage) { Cfg.ActiveImage = v; activeChanged = true; }
-    }
+    JsonUtil::ReadInt   (j, kBlendMode, BlendMode);
+    JsonUtil::ReadString(j, kInitCode,  InitCode);
+    JsonUtil::ReadString(j, kFrameCode, FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,  BeatCode);
     // imageData/imageData2 are bundle asset references — the raw bytes arrive via
     // ApplyAsset, not decoded here. Just store the strings for round-trip.
-    if (cfg.contains("imageData") && cfg["imageData"].is_string())
-        Cfg.ImageData = cfg["imageData"].get<std::string>();
-    if (cfg.contains("imageData2") && cfg["imageData2"].is_string())
-        Cfg.ImageData2 = cfg["imageData2"].get<std::string>();
+    JsonUtil::ReadString(j, kImageData,  ImageData);
+    JsonUtil::ReadString(j, kImageData2, ImageData2);
 
+    if (j.contains(kActiveImage) && j[kActiveImage].is_number_integer())
+        SetActiveImage(j[kActiveImage].get<int>());
+
+    RecompileInitCode();
+}
+
+void ImageGrid::SetActiveImage(int slot)
+{
+    const int v = slot ? 1 : 0;
+    if (v == ActiveImage)
+        return;
+    ActiveImage = v;
     // On a slot toggle, rebuild the texture from the (already cached) raw bytes.
-    if (m_inited && activeChanged)
+    if (m_inited)
         LoadActiveImage();
 }
 
@@ -85,38 +96,34 @@ void ImageGrid::ApplyAsset(const std::string& key, const std::string& name,
     const int slot = (key == "imageData2") ? 1 : 0;
     m_slotRaw[slot]  = std::move(bytes);
     m_slotName[slot] = name;
-    (slot == 1 ? Cfg.ImageData2 : Cfg.ImageData) = name;  // non-empty marker for UI/round-trip
+    (slot == 1 ? ImageData2 : ImageData) = name;  // non-empty marker for UI/round-trip
 
-    if (m_inited && slot == (Cfg.ActiveImage == 1 ? 1 : 0))
+    if (m_inited && slot == (ActiveImage == 1 ? 1 : 0))
         LoadActiveImage();
 }
 
-// ── OnConfigChanged ───────────────────────────────────────────────────────────
+// ── Recompile entry points ────────────────────────────────────────────────────
 
-void ImageGrid::OnConfigChanged(const std::vector<std::string>& changed)
+void ImageGrid::RecompileInitCode()
 {
     if (!m_inited) return;
 
-    bool recompileInit = false, recompileFrame = false, recompileBeat = false;
-    for (const auto& key : changed)
-    {
-        if (key == "initCode")  recompileInit = true;
-        if (key == "frameCode") recompileFrame = true;
-        if (key == "beatCode")  recompileBeat = true;
-    }
+    // An init-code change may add/remove user vars: re-scan + recompile everything.
+    RescanAndSeed();
+    CompileAll();
+    RunInit();
+}
 
-    if (recompileInit)
-    {
-        // An init-code change may add/remove user vars: re-scan + recompile everything.
-        RescanAndSeed();
-        CompileAll();
-        RunInit();
-    }
-    else
-    {
-        if (recompileFrame) m_lua.CompileBlock(SubstitutePi(Cfg.FrameCode), "frameCode", m_frameRef);
-        if (recompileBeat)  m_lua.CompileBlock(SubstitutePi(Cfg.BeatCode),  "beatCode",  m_beatRef);
-    }
+void ImageGrid::RecompileFrameCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(SubstitutePi(FrameCode), "frameCode", m_frameRef);
+}
+
+void ImageGrid::RecompileBeatCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(SubstitutePi(BeatCode), "beatCode", m_beatRef);
 }
 
 // ── Default 64×64 checkerboard ────────────────────────────────────────────────
@@ -236,7 +243,7 @@ void ImageGrid::LoadActiveImage()
 {
     ResetAnimation();
 
-    const std::vector<uint8_t>& raw = m_slotRaw[Cfg.ActiveImage == 1 ? 1 : 0];
+    const std::vector<uint8_t>& raw = m_slotRaw[ActiveImage == 1 ? 1 : 0];
     if (raw.empty()) { MakeDefaultImage(); return; }
 
     // Try the streaming GIF decoder first — returns null for any non-GIF format.
@@ -292,16 +299,16 @@ void ImageGrid::RescanAndSeed()
         m_lua.SeedVar(name);
 
     const std::string allCode =
-        Cfg.InitCode + "\n" + Cfg.FrameCode + "\n" + Cfg.BeatCode;
+        InitCode + "\n" + FrameCode + "\n" + BeatCode;
     for (const auto& name : LuaRuntime::ScanVarDecls(allCode, k_builtins))
         m_lua.SeedVar(name);
 }
 
 void ImageGrid::CompileAll()
 {
-    m_lua.CompileBlock(SubstitutePi(Cfg.InitCode),  "initCode",  m_initRef);
-    m_lua.CompileBlock(SubstitutePi(Cfg.FrameCode), "frameCode", m_frameRef);
-    m_lua.CompileBlock(SubstitutePi(Cfg.BeatCode),  "beatCode",  m_beatRef);
+    m_lua.CompileBlock(SubstitutePi(InitCode),  "initCode",  m_initRef);
+    m_lua.CompileBlock(SubstitutePi(FrameCode), "frameCode", m_frameRef);
+    m_lua.CompileBlock(SubstitutePi(BeatCode),  "beatCode",  m_beatRef);
 }
 
 void ImageGrid::RunInit()
@@ -400,7 +407,7 @@ void ImageGrid::Render(const RenderContext& Ctx)
     const float scrAspect = (h > 0) ? (float)w / (float)h : 1.0f;
 
     float xform[4]  = { x, y, sizex, sizey };
-    float params[4] = { r, imgAspect, scrAspect, (float)Cfg.BlendMode };
+    float params[4] = { r, imgAspect, scrAspect, (float)BlendMode };
     bgfx::setUniform(m_xformUnif,  xform);
     bgfx::setUniform(m_paramsUnif, params);
 

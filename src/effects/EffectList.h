@@ -1,14 +1,16 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/EffectChain.h"
 #include "engine/FBOManager.h"
 #include "engine/LuaRuntime.h"
 
 #include <string>
 
-struct EffectListConfig
+class EffectList : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     int  InBlend    = 0;     // 0=Ignore
     int  OutBlend   = 1;     // 1=Replace
     bool ClearFrame = false;
@@ -24,56 +26,44 @@ struct EffectListConfig
     bool        UseEval  = false;
     std::string InitCode;
     std::string FrameCode;
-};
 
-class EffectList : public ReflectedEffect<EffectListConfig>
-{
-public:
+    static constexpr const char* kOnBeat            = "onBeat";
+    static constexpr const char* kOnBeatFrames      = "onBeatFrames";
+    static constexpr const char* kClearFrame        = "clearFrame";
+    static constexpr const char* kInBlend           = "inBlend";
+    static constexpr const char* kInBlendBuf        = "inBlendBuf";
+    static constexpr const char* kInBlendBufInvert  = "inBlendBufInvert";
+    static constexpr const char* kOutBlend          = "outBlend";
+    static constexpr const char* kOutBlendBuf       = "outBlendBuf";
+    static constexpr const char* kOutBlendBufInvert = "outBlendBufInvert";
+    static constexpr const char* kBlendAmt          = "blendAmt";
+    static constexpr const char* kUseEval           = "useCode";
+    static constexpr const char* kInitCode          = "initCode";
+    static constexpr const char* kFrameCode         = "frameCode";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-    // EffectList augments the generic field JSON with its inner chain.
-    nlohmann::json GetConfig() const override;
+    std::string Name() const override { return "Effect List"; }
+    // Serializes only this list's own params. The inner chain is appended as
+    // config["effects"] by Preset's SerialiseChain (via GetInnerChain), and
+    // populated on load by Preset's LoadChain recursion.
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
     EffectChain* GetInnerChain() override { return &Inner; }
     uint8_t ExpectedViewCount() const override;
-
-    void OnConfigChanged(const std::vector<std::string>& Changed) override;
 
     std::string GetScriptError(const std::string& paramName) const override
     {
         return m_lua.GetError(paramName);
     }
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<std::string> kBlendOpts = {
-            "Ignore", "Replace", "50/50", "Maximum", "Additive",
-            "Subtractive 1", "Subtractive 2", "Every Other Line", "Every Other Pixel",
-            "XOR", "Adjustable", "Multiply", "Buffer", "Minimum"
-        };
-        static const std::vector<std::string> kSlotOpts = { "0","1","2","3","4","5","6","7" };
-
-        static const std::vector<Field> f = {
-            Bool(&EffectListConfig::OnBeat, "onBeat", "Enable on Beat"),
-            NumberI(&EffectListConfig::OnBeatFrames, "onBeatFrames", "For N Frames", 0, 64),
-            Bool(&EffectListConfig::ClearFrame, "clearFrame", "Clear Frame"),
-            SelectI(&EffectListConfig::InBlend, "inBlend", "Input Blend", kBlendOpts),
-            SelectI(&EffectListConfig::InBlendBuf, "inBlendBuf", "Input Buffer", kSlotOpts),
-            Bool(&EffectListConfig::InBlendBufInvert, "inBlendBufInvert", "Invert Input Mask"),
-            SelectI(&EffectListConfig::OutBlend, "outBlend", "Output Blend", kBlendOpts),
-            SelectI(&EffectListConfig::OutBlendBuf, "outBlendBuf", "Output Buffer", kSlotOpts),
-            Bool(&EffectListConfig::OutBlendBufInvert, "outBlendBufInvert", "Invert Output Mask"),
-            Range(&EffectListConfig::BlendAmt, "blendAmt", "Blend Amount", 0.0f, 1.0f, 0.01f),
-            Bool(&EffectListConfig::UseEval, "useCode", "Use evaluation override"),
-            Lua(&EffectListConfig::InitCode,  "initCode",  "Init"),
-            Lua(&EffectListConfig::FrameCode, "frameCode", "Frame"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Effect List"; }
+    // Recompile entry points for the eval override. Called after Deserialize and
+    // by the UI when the matching code editor changes.
+    void RecompileInitCode();   // rescans user vars; Init re-runs on next active frame
+    void RecompileFrameCode();
 
 private:
     void SubmitBlend(uint8_t ViewId,

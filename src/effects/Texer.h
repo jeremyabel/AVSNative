@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <bgfx/bgfx.h>
 #include <chrono>
@@ -11,27 +11,30 @@
 // additively stamps a user-provided image (centered on each hit pixel) into the output.
 // addToInput: composite stamps on top of the input; Colorize: multiply image by pixel color.
 // See ref/AVSWeb/src/effects/texer.js.
-struct TexerConfig
+class Texer : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::string ImageData    = "";     // bundle asset ref/name; empty = built-in soft-dot
     bool        AddToInput   = false;
     bool        Colorize     = false;
-    int         NumParticles = 100;   // max stamps per frame
-};
+    int         NumParticles = 100;   // max stamps per frame (1–1024)
 
-class Texer : public ReflectedEffect<TexerConfig>
-{
-public:
+    static constexpr const char* kImageData    = "imageData";
+    static constexpr const char* kAddToInput   = "addToInput";
+    static constexpr const char* kColorize     = "colorize";
+    static constexpr const char* kNumParticles = "numParticles";
+
     void Init() override;
-    void Destroy()                               override;
-    void Render(const RenderContext& Context)    override;
+    void Destroy() override;
+    void Render(const RenderContext& Context) override;
+
+    std::string Name() const override { return "Texer"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
     // Uses 2 views: blitViewId (blit input→staging) + drawViewId (upload→output FBO).
     uint8_t ExpectedViewCount() const override { return 2; }
-
-    // ImageData is handled via GetConfig/SetConfig; the binary asset via the bundle API.
-    nlohmann::json GetConfig() const override;
-    void           SetConfig(const nlohmann::json& cfg) override;
 
     std::vector<PresetAsset> CollectAssets() const override;
     void ApplyAsset(const std::string& key, const std::string& name,
@@ -41,19 +44,6 @@ public:
     int GetImageH() const { return m_imgH; }
     // Number of animation frames (>1 for an animated GIF, 0 for a static image).
     int GetFrameCount() const { return (int)m_frames.size(); }
-
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> kFields = {
-            ::Bool(&TexerConfig::AddToInput,   "addToInput",   "Add to Input"),
-            ::Bool(&TexerConfig::Colorize,     "colorize",     "Colorize"),
-            RangeI(&TexerConfig::NumParticles, "numParticles", "Particles", 1, 1024),
-        };
-        return kFields;
-    }
-    std::string EffectName() const override { return "Texer"; }
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
     void BuildFromRaw(const std::vector<uint8_t>& raw);

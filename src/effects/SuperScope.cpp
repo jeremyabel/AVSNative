@@ -1,5 +1,7 @@
 #include "SuperScope.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
 
@@ -43,11 +45,11 @@ void SuperScope::Init()
     m_uOverlay = bgfx::createUniform("s_overlay", bgfx::UniformType::Sampler);
     m_uParams  = bgfx::createUniform("u_ssParams",bgfx::UniformType::Vec4);
 
-    Cfg.Colors      = { {255, 255, 255} };
-    Cfg.InitCode    = k_defaultInit;
-    Cfg.FrameCode   = k_defaultFrame;
-    Cfg.BeatCode    = k_defaultBeat;
-    Cfg.PointCode   = k_defaultPoint;
+    Colors      = { {255, 255, 255} };
+    InitCode    = k_defaultInit;
+    FrameCode   = k_defaultFrame;
+    BeatCode    = k_defaultBeat;
+    PointCode   = k_defaultPoint;
 
     m_audioBuf.resize(kAudioBins, 128.0f);
     m_outBuf.resize(kAudioBins * kOutStride, 0.0f);
@@ -55,11 +57,11 @@ void SuperScope::Init()
     // Seed built-ins and compile all blocks.
     for (const auto& v : k_builtins) m_lua.SeedVar(v);
     m_lua.SetEnvNumber("n", 800);
-    m_lua.SetEnvNumber("drawmode", (double)Cfg.DrawMode);
+    m_lua.SetEnvNumber("drawmode", (double)DrawMode);
 
-    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
 
     // Seed all user-declared vars to 0 so frame/point code can reference them
     // before init has a chance to set them (e.g. `t = t - 0.05` with t unset).
@@ -91,16 +93,16 @@ void SuperScope::Destroy()
 
 SuperScope::Rgb SuperScope::AdvanceColor()
 {
-    if (Cfg.Colors.empty()) return { 1.f, 1.f, 1.f };
-    if (Cfg.Colors.size() == 1)
-        return { Cfg.Colors[0][0] / 255.f, Cfg.Colors[0][1] / 255.f, Cfg.Colors[0][2] / 255.f };
+    if (Colors.empty()) return { 1.f, 1.f, 1.f };
+    if (Colors.size() == 1)
+        return { Colors[0][0] / 255.f, Colors[0][1] / 255.f, Colors[0][2] / 255.f };
 
-    const int total = (int)Cfg.Colors.size() * 64;
+    const int total = (int)Colors.size() * 64;
     m_colorPos = (m_colorPos + 1) % total;
     const int   p    = m_colorPos / 64;
     const float frac = (float)(m_colorPos % 64);
-    const auto& c1 = Cfg.Colors[p];
-    const auto& c2 = Cfg.Colors[(p + 1) % (int)Cfg.Colors.size()];
+    const auto& c1 = Colors[p];
+    const auto& c2 = Colors[(p + 1) % (int)Colors.size()];
     return {
         (c1[0] * (63.f - frac) + c2[0] * frac) / (63.f * 255.f),
         (c1[1] * (63.f - frac) + c2[1] * frac) / (63.f * 255.f),
@@ -133,16 +135,16 @@ void SuperScope::BuildAudioBuf(const RenderContext& ctx)
     for (int i = 0; i < kAudioBins; ++i)
     {
         float val;
-        if (Cfg.AudioSource == 0) // waveform
+        if (AudioSource == 0) // waveform
         {
-            if (Cfg.AudioChannel == 1)      val = vd ? vd->osc[0][i] : 128.f;
-            else if (Cfg.AudioChannel == 2) val = vd ? vd->osc[1][i] : 128.f;
+            if (AudioChannel == 1)      val = vd ? vd->osc[0][i] : 128.f;
+            else if (AudioChannel == 2) val = vd ? vd->osc[1][i] : 128.f;
             else                          val = vd ? (vd->osc[0][i] + vd->osc[1][i]) * 0.5f : 128.f;
         }
         else // spectrum
         {
-            if (Cfg.AudioChannel == 1)      val = vd ? vd->spec[0][i] : 0.f;
-            else if (Cfg.AudioChannel == 2) val = vd ? vd->spec[1][i] : 0.f;
+            if (AudioChannel == 1)      val = vd ? vd->spec[0][i] : 0.f;
+            else if (AudioChannel == 2) val = vd ? vd->spec[1][i] : 0.f;
             else                          val = vd ? (vd->spec[0][i] + vd->spec[1][i]) * 0.5f : 0.f;
 
             // Spec is [0,255]; JS returns v = spec/255 ∈ [0,1].
@@ -189,7 +191,7 @@ void SuperScope::SeedUserVars()
     // Scan all code blocks for bare assignments and seed each declared var to 0
     // (SeedVar is a no-op for vars already set, so init-code assignments win).
     const std::string allCode =
-        Cfg.InitCode + "\n" + Cfg.FrameCode + "\n" + Cfg.BeatCode + "\n" + Cfg.PointCode;
+        InitCode + "\n" + FrameCode + "\n" + BeatCode + "\n" + PointCode;
     const auto decls = LuaRuntime::ScanVarDecls(allCode, k_builtins);
     printf("[SuperScope] SeedUserVars: seeding %d vars:", (int)decls.size());
     for (const auto& v : decls) { printf(" %s", v.c_str()); m_lua.SeedVar(v); }
@@ -202,7 +204,7 @@ void SuperScope::RebuildPointLoop()
 {
     // Collect user-declared vars after init has run (they're now in env).
     const std::vector<std::string> userVars = m_lua.GetUserVars();
-    m_lua.CompilePointLoop(Cfg.PointCode, userVars, m_pointRef);
+    m_lua.CompilePointLoop(PointCode, userVars, m_pointRef);
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -221,7 +223,7 @@ void SuperScope::Render(const RenderContext& ctx)
     m_lua.SetEnvNumber("green",    color.g);
     m_lua.SetEnvNumber("blue",     color.b);
     m_lua.SetEnvNumber("linesize", 1.0);
-    m_lua.SetEnvNumber("drawmode", (double)Cfg.DrawMode);
+    m_lua.SetEnvNumber("drawmode", (double)DrawMode);
 
     if (!m_inited)
     {
@@ -309,4 +311,43 @@ void SuperScope::Render(const RenderContext& ctx)
 std::string SuperScope::GetScriptError(const std::string& paramName) const
 {
     return m_lua.GetError(paramName);
+}
+
+void SuperScope::Recompile()
+{
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
+    SeedUserVars();
+    m_lua.RunBlock(m_initRef, "initCode");
+    m_inited = true;
+    RebuildPointLoop();
+}
+
+nlohmann::json SuperScope::Serialize() const
+{
+    return {
+        { kInitCode,     InitCode  },
+        { kFrameCode,    FrameCode },
+        { kBeatCode,     BeatCode  },
+        { kPointCode,    PointCode },
+        { kColors,       JsonUtil::ColorsToJson(Colors) },
+        { kAudioSource,  AudioSource  },
+        { kAudioChannel, AudioChannel },
+        { kDrawMode,     DrawMode     },
+    };
+}
+
+void SuperScope::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadString(j, kInitCode,     InitCode);
+    JsonUtil::ReadString(j, kFrameCode,    FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,     BeatCode);
+    JsonUtil::ReadString(j, kPointCode,    PointCode);
+    JsonUtil::ReadColors(j, kColors,       Colors);
+    JsonUtil::ReadInt   (j, kAudioSource,  AudioSource);
+    JsonUtil::ReadInt   (j, kAudioChannel, AudioChannel);
+    JsonUtil::ReadInt   (j, kDrawMode,     DrawMode);
+
+    Recompile();
 }

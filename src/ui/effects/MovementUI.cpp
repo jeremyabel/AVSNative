@@ -5,20 +5,17 @@
 
 #include <imgui.h>
 
-#include <vector>
 #include <string>
 
-// Bespoke UI for Movement — plain ImGui drawn against the effect's Config, with
-// conditional hiding (Blend) and BeginDisabled (On-Beat Toggle).
+// Bespoke UI for Movement — plain ImGui editing the effect's members directly,
+// with conditional hiding (Blend) and BeginDisabled (On-Beat Toggle).
 static void DrawMovementUI(Effect* base)
 {
     auto* fx = static_cast<Movement*>(base);
-    auto& c  = fx->ConfigRef();
-    std::vector<std::string> changed;
 
-    // --- Coordinate system (string select) ---
+    // --- Coordinate system ---
     const char* coordItems[] = { "polar", "cartesian" };
-    int coordIdx = (c.Coordinates == "cartesian") ? 1 : 0;
+    int coordIdx = (fx->Coordinates == "cartesian") ? 1 : 0;
     ImGui::TextUnformatted("Coordinates");
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::Combo("##coords", &coordIdx, coordItems, 2))
@@ -26,35 +23,32 @@ static void DrawMovementUI(Effect* base)
 
     // --- GLSL editor (shared helper owns the TextEditor instance) ---
     ImGui::TextUnformatted("GLSL Code");
-    if (ConfigUi::CodeEditor("movement.code", c.Code, ConfigUi::Lang::Glsl))
-        changed.push_back("code");
-    if (std::string err = fx->GetScriptError("code"); !err.empty())
+    if (ConfigUi::CodeEditor("movement.code", fx->Code, ConfigUi::Lang::Glsl))
+        fx->Compile();
+    if (std::string err = fx->GetScriptError(Movement::kCode); !err.empty())
         ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
 
     ImGui::SeparatorText("Sampling");
 
-    if (ImGui::Checkbox("Bilinear", &c.Bilinear)) changed.push_back("bilinear");
+    ImGui::Checkbox("Bilinear", &fx->Bilinear);
 
     // Precise = original AVS 8-bit integer bilinear; only meaningful with Bilinear on.
-    ImGui::BeginDisabled(!c.Bilinear);
-    if (ImGui::Checkbox("Bilinear (precise)", &c.Compat)) changed.push_back("bilinearCompat");
+    ImGui::BeginDisabled(!fx->Bilinear);
+    ImGui::Checkbox("Bilinear (precise)", &fx->Compat);
     ImGui::EndDisabled();
 
-    if (ImGui::Checkbox("Wrap",     &c.Wrap))     changed.push_back("wrap");
+    ImGui::Checkbox("Wrap", &fx->Wrap);
 
     // Conditional: "Blend" is meaningless when Source Map is on — hide it entirely.
-    if (!c.SourceMap)
-        if (ImGui::Checkbox("Blend (50/50)", &c.Blend)) changed.push_back("blend");
+    if (!fx->SourceMap)
+        ImGui::Checkbox("Blend (50/50)", &fx->Blend);
 
-    if (ImGui::Checkbox("Source Map", &c.SourceMap)) changed.push_back("sourceMap");
+    ImGui::Checkbox("Source Map", &fx->SourceMap);
 
     // Conditional: On-Beat Toggle only relevant in polar mode — disable (greyed), keep visible.
-    ImGui::BeginDisabled(c.Coordinates != "polar");
-    if (ImGui::Checkbox("On-Beat Toggle", &c.OnBeatToggle)) changed.push_back("onBeatToggle");
+    ImGui::BeginDisabled(fx->Coordinates != "polar");
+    ImGui::Checkbox("On-Beat Toggle", &fx->OnBeatToggle);
     ImGui::EndDisabled();
-
-    if (!changed.empty())
-        fx->NotifyConfigChanged(changed);  // triggers Movement::Compile() when code changed
 }
 
 void RegisterMovementUI(ConfigUiRegistry& reg)

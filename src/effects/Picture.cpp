@@ -1,5 +1,6 @@
 #include "effects/Picture.h"
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include <bgfx/bgfx.h>
 #include <stb/stb_image.h>
@@ -9,23 +10,27 @@
 
 #include <vector>
 
-// ── GetConfig / SetConfig ─────────────────────────────────────────────────────
+// ── Serialize / Deserialize ───────────────────────────────────────────────────
 
-nlohmann::json Picture::GetConfig() const
+nlohmann::json Picture::Serialize() const
 {
-    nlohmann::json j = ReflectedEffect<PictureConfig>::GetConfig();
-    j["imageData"] = Cfg.ImageData;
-    return j;
+    return {
+        { kBlendMode,      BlendMode      },
+        { kOnBeatAdditive, OnBeatAdditive },
+        { kOnBeatDuration, OnBeatDuration },
+        { kFit,            Fit            },
+        // Bundle asset reference — raw bytes arrive via ApplyAsset.
+        { kImageData,      ImageData      },
+    };
 }
 
-void Picture::SetConfig(const nlohmann::json& cfg)
+void Picture::Deserialize(const nlohmann::json& j)
 {
-    ReflectedEffect<PictureConfig>::SetConfig(cfg);
-
-    // imageData is a bundle asset reference — raw bytes arrive via ApplyAsset, not
-    // decoded here. Just store the string for round-trip.
-    if (cfg.contains("imageData") && cfg["imageData"].is_string())
-        Cfg.ImageData = cfg["imageData"].get<std::string>();
+    JsonUtil::ReadInt   (j, kBlendMode,      BlendMode);
+    JsonUtil::ReadBool  (j, kOnBeatAdditive, OnBeatAdditive);
+    JsonUtil::ReadInt   (j, kOnBeatDuration, OnBeatDuration);
+    JsonUtil::ReadInt   (j, kFit,            Fit);
+    JsonUtil::ReadString(j, kImageData,      ImageData);
 }
 
 // ── Preset bundle assets ──────────────────────────────────────────────────────
@@ -42,12 +47,10 @@ void Picture::ApplyAsset(const std::string& /*key*/, const std::string& name,
 {
     m_raw  = std::move(bytes);
     m_name = name;
-    Cfg.ImageData = name;  // non-empty marker for round-trip
+    ImageData = name;  // non-empty marker for round-trip
     if (m_inited)
         BuildFromRaw(m_raw);
 }
-
-void Picture::OnConfigChanged(const std::vector<std::string>& /*changed*/) {}
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
@@ -62,7 +65,7 @@ void Picture::Init()
     m_paramsUnif = bgfx::createUniform("u_picParams", bgfx::UniformType::Vec4);
 
     m_inited = true;
-    // No image until ApplyAsset delivers the bundled bytes (called after SetConfig).
+    // No image until ApplyAsset delivers the bundled bytes (called after Deserialize).
 }
 
 void Picture::Destroy()
@@ -122,21 +125,21 @@ void Picture::Render(const RenderContext& Ctx)
     if (!bgfx::isValid(m_imageTex))
         return;  // No image loaded: pass through without swapping (EffectChain handles it)
 
-    if (Ctx.IsBeat() && Cfg.OnBeatAdditive)
-        m_cooldown = Cfg.OnBeatDuration;
+    if (Ctx.IsBeat() && OnBeatAdditive)
+        m_cooldown = OnBeatDuration;
     else if (m_cooldown > 0)
         --m_cooldown;
 
     const bool beatActive    = Ctx.IsBeat() || m_cooldown > 0;
     const int  effectiveBlend =
-        (Cfg.BlendMode == 1 || (Cfg.OnBeatAdditive && beatActive)) ? 1 : Cfg.BlendMode;
+        (BlendMode == 1 || (OnBeatAdditive && beatActive)) ? 1 : BlendMode;
 
     const float imgAspect = (m_imgH > 0) ? (float)m_imgW / (float)m_imgH : 1.0f;
     const float scrAspect = (Ctx.Height > 0) ? (float)Ctx.Width / (float)Ctx.Height : 1.0f;
 
     float params[4] = {
         (float)effectiveBlend,
-        (float)Cfg.Fit,
+        (float)Fit,
         imgAspect,
         scrAspect,
     };

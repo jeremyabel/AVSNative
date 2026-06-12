@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <array>
 #include <cstdint>
@@ -18,51 +18,49 @@ struct Star
     float SpeedMult;  // per-star speed factor [0.1, 1.0]
 };
 
-struct StarfieldConfig
+class Starfield : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     // Defaults match original AVS
     std::array<uint8_t, 3> Color = { 255, 255, 255 };
     int   BlendMode      = 0;    // 0=Replace, 1=Additive, 2=50/50
-    float Speed          = 6.0f;
-    int   StarCount      = 350;
+    float Speed          = 6.0f;   // 1–500
+    int   StarCount      = 350;    // 100–4095
     bool  OnBeat         = false;
-    float OnBeatSpeed    = 4.0f;
-    int   OnBeatDuration = 15;
-};
+    float OnBeatSpeed    = 4.0f;   // 1–500
+    int   OnBeatDuration = 15;     // 1–100
 
-class Starfield : public ReflectedEffect<StarfieldConfig>
-{
-public:
+    static constexpr const char* kColor          = "color";
+    static constexpr const char* kBlendMode      = "blendMode";
+    static constexpr const char* kSpeed          = "speed";
+    static constexpr const char* kStarCount      = "starCount";
+    static constexpr const char* kOnBeat         = "onBeat";
+    static constexpr const char* kOnBeatSpeed    = "onBeatSpeed";
+    static constexpr const char* kOnBeatDuration = "onBeatDuration";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Color(&StarfieldConfig::Color, "color", "Color"),
-            SelectI(&StarfieldConfig::BlendMode, "blendMode", "Blend Mode",
-                    { "Replace", "Additive", "50/50" }),
-            Range(&StarfieldConfig::Speed, "speed", "Warp Speed", 1.0f, 500.0f, 1.0f),
-            RangeI(&StarfieldConfig::StarCount, "starCount", "Stars", 100, 4095),
-            Bool(&StarfieldConfig::OnBeat, "onBeat", "On Beat"),
-            Range(&StarfieldConfig::OnBeatSpeed, "onBeatSpeed", "On-Beat Speed", 1.0f, 500.0f, 1.0f),
-            RangeI(&StarfieldConfig::OnBeatDuration, "onBeatDuration", "On-Beat Duration", 1, 100),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Starfield"; }
+    std::string Name() const override { return "Starfield"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
-    void OnConfigChanged(const std::vector<std::string>& changed) override
+    // Applies a Speed change to the live animation (unless an on-beat speed burst
+    // is still cooling down). Called after Deserialize and by the UI.
+    void ResetSpeed()
     {
-        for (const std::string& k : changed)
-        {
-            if (k == "speed" && Cooldown <= 0)
-                CurrentSpeed = Cfg.Speed;
-            if (k == "starCount" && LastW > 0)
-                InitStars(LastW, LastH);
-        }
+        if (Cooldown <= 0)
+            CurrentSpeed = Speed;
+    }
+
+    // Re-seeds the star array after StarCount changes. Called after Deserialize
+    // and by the UI; no-op until the first Render establishes dimensions.
+    void ReinitStars()
+    {
+        if (LastW > 0)
+            InitStars(LastW, LastH);
     }
 
 private:

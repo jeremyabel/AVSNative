@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 // Multi Delay — delay-line buffers shared across all MultiDelay instances in a preset.
 //
@@ -16,36 +16,36 @@
 // (bgfx caps out at 128 framebuffers but 4096 textures), at the cost of up to
 // 6 * MAX_RING full-resolution textures of VRAM worst-case.
 
-struct MultiDelayConfig
-{
-    int Mode         = 0;   // 0=Disabled, 1=Write to buffer, 2=Read from buffer
-    int ActiveBuffer = 0;   // 0..5
-};
-
-class MultiDelay : public ReflectedEffect<MultiDelayConfig>
+class MultiDelay : public Effect
 {
 public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    int Mode         = 0;   // 0=Disabled, 1=Write to buffer, 2=Read from buffer
+    int ActiveBuffer = 0;   // 0..5
+
+    static constexpr const char* kMode           = "mode";
+    static constexpr const char* kActiveBuffer   = "activebuffer";
+    // Shared per-buffer settings serialize as usebeats0..5 / delay0..5.
+    static constexpr const char* kUseBeatsPrefix = "usebeats";
+    static constexpr const char* kDelayPrefix    = "delay";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
+    std::string Name() const override { return "Multi Delay"; }
     // The per-buffer delay/unit settings live in shared global state, so they are
-    // serialized on top of the generic per-instance config (mode/activebuffer).
-    nlohmann::json GetConfig() const override;
-    void SetConfig(const nlohmann::json& Config) override;
+    // serialized on top of the per-instance config (mode/activebuffer).
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            SelectI(&MultiDelayConfig::Mode, "mode", "Mode",
-                    { "Disabled", "Write to buffer", "Read from buffer" }),
-            SelectI(&MultiDelayConfig::ActiveBuffer, "activebuffer", "Buffer",
-                    { "Buffer 1", "Buffer 2", "Buffer 3", "Buffer 4", "Buffer 5", "Buffer 6" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Multi Delay"; }
+    // Accessors for the shared (global) per-buffer settings, used by the UI.
+    // SetBufferDelay applies the frame delay immediately in frame mode; beat mode
+    // picks the new value up on the next beat.
+    static bool GetBufferUseBeats(int i);
+    static void SetBufferUseBeats(int i, bool useBeats);
+    static int  GetBufferDelay(int i);
+    static void SetBufferDelay(int i, int delay);
 
 private:
     bool                m_inited     = false;

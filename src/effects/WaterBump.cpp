@@ -1,6 +1,7 @@
 #include "WaterBump.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_waterbump.sc.bin.h"
@@ -81,7 +82,7 @@ void WaterBump::CalcWater()
     int32_t* newbuf = Bufs[Page ^ 1].data();
     const int w  = BufW;
     const int h  = BufH;
-    const int fl = Cfg.Fluidity;
+    const int fl = Fluidity;
 
     for (int y = 1; y < h - 1; y++)
     {
@@ -107,18 +108,18 @@ void WaterBump::Render(const RenderContext& Context)
 
     if (Context.IsBeat())
     {
-        if (Cfg.Random)
+        if (Random)
         {
             const int maxDim  = std::max(w, h);
-            const int radius  = Cfg.DropRadius * maxDim / 100;
-            SineBlob(-1, -1, radius, -Cfg.Depth);
+            const int radius  = DropRadius * maxDim / 100;
+            SineBlob(-1, -1, radius, -Depth);
         }
         else
         {
             const int xPos[3] = { w / 4, w / 2, w * 3 / 4 };
             const int yPos[3] = { h / 4, h / 2, h * 3 / 4 };
-            SineBlob(xPos[Cfg.DropPositionX], yPos[Cfg.DropPositionY],
-                     Cfg.DropRadius, -Cfg.Depth);
+            SineBlob(xPos[DropPositionX], yPos[DropPositionY],
+                     DropRadius, -Depth);
         }
     }
 
@@ -170,4 +171,26 @@ void WaterBump::Destroy()
     UploadBuf.clear();
     Page = 0;
     BufW = BufH = 0;
+}
+
+nlohmann::json WaterBump::Serialize() const
+{
+    return {
+        { kFluidity,      Fluidity      },
+        { kDepth,         Depth         },
+        { kRandom,        Random        },
+        { kDropPositionX, DropPositionX },
+        { kDropPositionY, DropPositionY },
+        { kDropRadius,    DropRadius    },
+    };
+}
+
+void WaterBump::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt (j, kFluidity,      Fluidity);
+    JsonUtil::ReadInt (j, kDepth,         Depth);
+    JsonUtil::ReadBool(j, kRandom,        Random);
+    JsonUtil::ReadInt (j, kDropPositionX, DropPositionX);
+    JsonUtil::ReadInt (j, kDropPositionY, DropPositionY);
+    JsonUtil::ReadInt (j, kDropRadius,    DropRadius);
 }

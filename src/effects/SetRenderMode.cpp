@@ -1,5 +1,7 @@
 #include "SetRenderMode.h"
 
+#include "engine/JsonUtil.h"
+
 void SetRenderMode::Init()
 {
 }
@@ -12,12 +14,28 @@ void SetRenderMode::Render(const RenderContext& Context)
     if (Context.LineBlendMode)
     {
         *Context.LineBlendMode =
-            ((uint32_t)(Cfg.LineWidth & 0xFF) << 16) |
-            ((uint32_t)(Cfg.Alpha & 0xFF) <<  8) |
-             (uint32_t)(Cfg.BlendMode & 0xFF);
+            ((uint32_t)(LineWidth & 0xFF) << 16) |
+            ((uint32_t)(Alpha & 0xFF) <<  8) |
+             (uint32_t)(BlendMode & 0xFF);
     }
 }
 
 void SetRenderMode::Destroy()
 {
+}
+
+nlohmann::json SetRenderMode::Serialize() const
+{
+    return {
+        { kBlendMode, BlendMode },
+        { kLineWidth, LineWidth },
+        { kAlpha,     Alpha     },
+    };
+}
+
+void SetRenderMode::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt(j, kBlendMode, BlendMode);
+    JsonUtil::ReadInt(j, kLineWidth, LineWidth);
+    JsonUtil::ReadInt(j, kAlpha,     Alpha);
 }

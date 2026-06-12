@@ -1,5 +1,7 @@
 #include "DynamicShift.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -15,7 +17,7 @@ static const std::vector<std::string> k_builtins = {
 
 void DynamicShift::RescanUserVars()
 {
-    auto vars = LuaRuntime::ScanVarDecls(Cfg.InitCode, k_builtins);
+    auto vars = LuaRuntime::ScanVarDecls(InitCode, k_builtins);
     for (const auto& v : vars)
         m_lua.SeedVar(v);
 }
@@ -40,9 +42,9 @@ void DynamicShift::Init()
     // Scan user-declared vars in init code (e.g. "d = 0" → seeds "d").
     RescanUserVars();
 
-    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-    m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
 
     m_lua.SetEnvNumber("b", 0.0);
     m_lua.RunBlock(m_initRef, "initCode");
@@ -80,17 +82,17 @@ void DynamicShift::Render(const RenderContext& Context)
     const double alpha = std::clamp(m_lua.GetEnvNumber("alpha"), 0.0, 1.0);
 
     // compat = original AVS 8-bit integer bilinear (only meaningful when Subpixel).
-    const bool compat = Cfg.Subpixel && Cfg.Compat;
+    const bool compat = Subpixel && Compat;
 
     const float p0[4] = { (float)x, (float)y, (float)Context.Width, (float)Context.Height };
-    const float p1[4] = { Cfg.Blend ? 1.0f : 0.0f, (float)alpha, compat ? 1.0f : 0.0f, 0.0f };
+    const float p1[4] = { Blend ? 1.0f : 0.0f, (float)alpha, compat ? 1.0f : 0.0f, 0.0f };
     bgfx::setUniform(Params0Unif, p0);
     bgfx::setUniform(Params1Unif, p1);
 
     // Compat does its own integer texelFetch blend → bind POINT. Otherwise bilinear
     // when Subpixel, else nearest.
     uint32_t samplerFlags = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
-    if (!Cfg.Subpixel || compat)
+    if (!Subpixel || compat)
         samplerFlags |= BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT;
 
     bgfx::setTexture(0, InputUnif, Context.InputTexture, samplerFlags);
@@ -101,20 +103,50 @@ void DynamicShift::Render(const RenderContext& Context)
     Context.FboManager->Swap();
 }
 
-void DynamicShift::OnConfigChanged(const std::vector<std::string>& Changed)
+void DynamicShift::RecompileInitCode()
 {
     if (!m_inited) return;
 
-    for (const auto& k : Changed)
-    {
-        if (k == "initCode")
-        {
-            RescanUserVars();
-            m_lua.CompileBlock(Cfg.InitCode, "initCode", m_initRef);
-            m_lua.SetEnvNumber("b", 0.0);
-            m_lua.RunBlock(m_initRef, "initCode");
-        }
-        else if (k == "frameCode") m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-        else if (k == "beatCode")  m_lua.CompileBlock(Cfg.BeatCode,  "beatCode",  m_beatRef);
-    }
+    RescanUserVars();
+    m_lua.CompileBlock(InitCode, "initCode", m_initRef);
+    m_lua.SetEnvNumber("b", 0.0);
+    m_lua.RunBlock(m_initRef, "initCode");
+}
+
+void DynamicShift::RecompileFrameCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+}
+
+void DynamicShift::RecompileBeatCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(BeatCode, "beatCode", m_beatRef);
+}
+
+nlohmann::json DynamicShift::Serialize() const
+{
+    return {
+        { kInitCode,  InitCode  },
+        { kFrameCode, FrameCode },
+        { kBeatCode,  BeatCode  },
+        { kBlend,     Blend     },
+        { kSubpixel,  Subpixel  },
+        { kCompat,    Compat    },
+    };
+}
+
+void DynamicShift::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadString(j, kInitCode,  InitCode);
+    JsonUtil::ReadString(j, kFrameCode, FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,  BeatCode);
+    JsonUtil::ReadBool  (j, kBlend,     Blend);
+    JsonUtil::ReadBool  (j, kSubpixel,  Subpixel);
+    JsonUtil::ReadBool  (j, kCompat,    Compat);
+
+    RecompileInitCode();
+    RecompileFrameCode();
+    RecompileBeatCode();
 }

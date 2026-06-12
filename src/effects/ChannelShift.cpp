@@ -1,6 +1,7 @@
 #include "ChannelShift.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_channelshift.sc.bin.h"
@@ -19,8 +20,8 @@ void ChannelShift::Init()
 
 void ChannelShift::Render(const RenderContext& Context)
 {
-    int32_t ActiveMode = Cfg.Mode;
-    if (Cfg.OnBeatRandom && Context.IsBeat())
+    int32_t ActiveMode = Mode;
+    if (OnBeatRandom && Context.IsBeat())
     {
         ActiveMode = std::rand() % 6;
     }
@@ -50,4 +51,18 @@ void ChannelShift::Destroy()
     ParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json ChannelShift::Serialize() const
+{
+    return {
+        { kMode,         Mode         },
+        { kOnBeatRandom, OnBeatRandom },
+    };
+}
+
+void ChannelShift::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt (j, kMode,         Mode);
+    JsonUtil::ReadBool(j, kOnBeatRandom, OnBeatRandom);
 }

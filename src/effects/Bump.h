@@ -1,57 +1,52 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/LuaRuntime.h"
 
 #include <string>
 
-struct BumpConfig
+class Bump : public Effect
 {
-    int  Depth          = 30;
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    int  Depth          = 30;   // 1–100
     bool OnBeat         = false;
-    int  OnBeatDuration = 15;
-    int  OnBeatDepth    = 100;
+    int  OnBeatDuration = 15;   // 0–100
+    int  OnBeatDepth    = 100;  // 1–100
     int  BlendMode      = 0;    // 0=Replace 1=Additive 2=50/50
     bool ShowLightPos   = false;
     bool InvertDepth    = false;
     std::string InitCode  = "t=0";
     std::string FrameCode = "x=0.5+cos(t)*0.3\ny=0.5+sin(t)*0.3\nt=t+0.1";
     std::string BeatCode  = "";
-};
 
-class Bump : public ReflectedEffect<BumpConfig>
-{
-public:
+    static constexpr const char* kDepth          = "depth";
+    static constexpr const char* kOnBeat         = "onBeat";
+    static constexpr const char* kOnBeatDuration = "onBeatDuration";
+    static constexpr const char* kOnBeatDepth    = "onBeatDepth";
+    static constexpr const char* kBlendMode      = "blendMode";
+    static constexpr const char* kShowLightPos   = "showLightPos";
+    static constexpr const char* kInvertDepth    = "invertDepth";
+    static constexpr const char* kInitCode       = "initCode";
+    static constexpr const char* kFrameCode      = "frameCode";
+    static constexpr const char* kBeatCode       = "beatCode";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
+
+    std::string Name() const override { return "Bump"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
     std::string GetScriptError(const std::string& paramName) const override
     {
         return m_lua.GetError(paramName);
     }
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            RangeI (&BumpConfig::Depth,          "depth",          "Depth",            1, 100),
-            Bool   (&BumpConfig::OnBeat,          "onBeat",         "On Beat"),
-            RangeI (&BumpConfig::OnBeatDuration,  "onBeatDuration", "On Beat Duration", 0, 100),
-            RangeI (&BumpConfig::OnBeatDepth,     "onBeatDepth",    "On Beat Depth",    1, 100),
-            SelectI(&BumpConfig::BlendMode,       "blendMode",      "Blend Mode",
-                    { "Replace", "Additive", "50/50" }),
-            Bool   (&BumpConfig::ShowLightPos,    "showLightPos",   "Show Light Pos"),
-            Bool   (&BumpConfig::InvertDepth,     "invertDepth",    "Invert Depth"),
-            Lua    (&BumpConfig::InitCode,        "initCode",       "Init"),
-            Lua    (&BumpConfig::FrameCode,       "frameCode",      "Frame"),
-            Lua    (&BumpConfig::BeatCode,        "beatCode",       "Beat"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Bump"; }
-
-    void OnConfigChanged(const std::vector<std::string>& Changed) override;
+    // Recompiles all Lua blocks, reseeds user vars, and reruns init. Called after
+    // Deserialize and by the UI when any code editor changes.
+    void RecompileCode();
 
 private:
     void SeedUserVars();

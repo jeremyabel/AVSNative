@@ -1,6 +1,7 @@
 #include "Movement.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 #include "engine/ShaderCompiler.h"
 #include "engine/ShaderSnippets.h"
 
@@ -84,7 +85,7 @@ void main() {
 
 void Movement::Init()
 {
-    Cfg.Code = k_polarDefault;
+    Code = k_polarDefault;
 
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_params", bgfx::UniformType::Vec4);
@@ -99,7 +100,7 @@ void Movement::Init()
 
 std::string Movement::BuildPullFragGlsl() const
 {
-    bool IsPolar = (Cfg.Coordinates == "polar");
+    bool IsPolar = (Coordinates == "polar");
 
     const char* OutputUV = IsPolar
         ? "    vec2 NewUv = vec2(\n"
@@ -130,7 +131,7 @@ void main() {
     float t = u_params.x;
 
     // --- user Code ---
-)") + Cfg.Code + R"(
+)") + Code + R"(
     // --- end user Code ---
 
 )" + OutputUV + R"(
@@ -154,7 +155,7 @@ void main() {
 
 std::string Movement::BuildScatterVertGlsl() const
 {
-    bool IsPolar = (Cfg.Coordinates == "polar");
+    bool IsPolar = (Coordinates == "polar");
 
     const char* DestUV = IsPolar
         ? "    vec2 DestUV = vec2(\n"
@@ -184,7 +185,7 @@ void main() {
     float t = u_scatter_params.x;
 
     // --- user Code ---
-)") + Cfg.Code + R"(
+)") + Code + R"(
     // --- end user Code ---
 
 )" + DestUV + R"(
@@ -283,10 +284,10 @@ void Movement::Compile()
 
 void Movement::Render(const RenderContext& Context)
 {
-    if (Cfg.OnBeatToggle && Context.IsBeat())
-        Cfg.SourceMap = !Cfg.SourceMap;
+    if (OnBeatToggle && Context.IsBeat())
+        SourceMap = !SourceMap;
 
-    if (Cfg.SourceMap && bgfx::isValid(ScatterProgram))
+    if (SourceMap && bgfx::isValid(ScatterProgram))
         RenderScatter(Context);
     else
         RenderPull(Context);
@@ -298,19 +299,19 @@ void Movement::RenderPull(const RenderContext& Context)
         return;
 
     // compat = original AVS 8-bit integer bilinear (only meaningful when Bilinear).
-    const bool compat = Cfg.Bilinear && Cfg.Compat;
+    const bool compat = Bilinear && Compat;
 
     float Params[4] = {
         (float)Context.Time,
-        Cfg.Wrap  ? 1.0f : 0.0f,
-        Cfg.Blend ? 1.0f : 0.0f,
+        Wrap  ? 1.0f : 0.0f,
+        Blend ? 1.0f : 0.0f,
         compat ? 1.0f : 0.0f
     };
     bgfx::setUniform(ParamsUniform, Params);
 
     // Compat does its own integer texelFetch blend → bind POINT. Otherwise bilinear
     // when enabled, else nearest.
-    const uint32_t SamplerFlags = (Cfg.Bilinear && !compat)
+    const uint32_t SamplerFlags = (Bilinear && !compat)
         ? UINT32_MAX
         : (BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
     bgfx::setTexture(0, TexUniform, Context.InputTexture, SamplerFlags);
@@ -331,7 +332,7 @@ void Movement::RenderScatter(const RenderContext& Context)
         (float)Context.Time,
         (float)Context.Width,
         (float)Context.Height,
-        Cfg.Wrap ? 1.0f : 0.0f,
+        Wrap ? 1.0f : 0.0f,
     };
     bgfx::setUniform(ScatterParamsUniform, ScatterParams);
 
@@ -346,19 +347,47 @@ void Movement::RenderScatter(const RenderContext& Context)
 }
 
 // ---------------------------------------------------------------------------
-// Descriptor / config
+// Serialization / config
 // ---------------------------------------------------------------------------
+
+nlohmann::json Movement::Serialize() const
+{
+    return {
+        { kCoordinates,  Coordinates  },
+        { kCode,         Code         },
+        { kBilinear,     Bilinear     },
+        { kCompat,       Compat       },
+        { kWrap,         Wrap         },
+        { kBlend,        Blend        },
+        { kSourceMap,    SourceMap    },
+        { kOnBeatToggle, OnBeatToggle },
+    };
+}
+
+void Movement::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadString(j, kCoordinates,  Coordinates);
+    JsonUtil::ReadString(j, kCode,         Code);
+    JsonUtil::ReadBool  (j, kBilinear,     Bilinear);
+    JsonUtil::ReadBool  (j, kCompat,       Compat);
+    JsonUtil::ReadBool  (j, kWrap,         Wrap);
+    JsonUtil::ReadBool  (j, kBlend,        Blend);
+    JsonUtil::ReadBool  (j, kSourceMap,    SourceMap);
+    JsonUtil::ReadBool  (j, kOnBeatToggle, OnBeatToggle);
+
+    Compile();
+}
 
 void Movement::SetCoordinateSystem(const std::string& coord)
 {
-    if (coord == Cfg.Coordinates)
+    if (coord == Coordinates)
         return;
 
     // Swap the built-in default code only if the user hasn't customized it.
-    if (Cfg.Code == k_polarDefault || Cfg.Code == k_cartesianDefault)
-        Cfg.Code = (coord == "polar") ? k_polarDefault : k_cartesianDefault;
+    if (Code == k_polarDefault || Code == k_cartesianDefault)
+        Code = (coord == "polar") ? k_polarDefault : k_cartesianDefault;
 
-    Cfg.Coordinates = coord;
+    Coordinates = coord;
     Compile();
 }
 

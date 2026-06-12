@@ -1,6 +1,7 @@
 #include "BlitEffect.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_bliteffect.sc.bin.h"
@@ -18,12 +19,12 @@ void BlitEffect::Init()
 
 void BlitEffect::Render(const RenderContext& Context)
 {
-    Angle += Cfg.Rotation;
+    Angle += Rotation;
 
-    const float Params[4] = { Cfg.Zoom, Angle, Cfg.CenterX, Cfg.CenterY };
+    const float Params[4] = { Zoom, Angle, CenterX, CenterY };
 
     // compat = original AVS 8-bit integer bilinear (only meaningful when Bilinear).
-    const bool compat = Cfg.Bilinear && Cfg.Compat;
+    const bool compat = Bilinear && Compat;
     const float Flags[4] = { compat ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
 
     // Nearest by default (matches the win32 original); bilinear is opt-in. Using
@@ -31,7 +32,7 @@ void BlitEffect::Render(const RenderContext& Context)
     // Compat does its own integer texelFetch blend, so it binds POINT too.
     const uint32_t PointFlags  = BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT |
                                  BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP;
-    const uint32_t samplerFlags = (Cfg.Bilinear && !compat)
+    const uint32_t samplerFlags = (Bilinear && !compat)
         ? (BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP)
         : PointFlags;
 
@@ -63,4 +64,26 @@ void BlitEffect::Destroy()
     ParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json BlitEffect::Serialize() const
+{
+    return {
+        { kZoom,     Zoom     },
+        { kRotation, Rotation },
+        { kCenterX,  CenterX  },
+        { kCenterY,  CenterY  },
+        { kBilinear, Bilinear },
+        { kCompat,   Compat   },
+    };
+}
+
+void BlitEffect::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadFloat(j, kZoom,     Zoom);
+    JsonUtil::ReadFloat(j, kRotation, Rotation);
+    JsonUtil::ReadFloat(j, kCenterX,  CenterX);
+    JsonUtil::ReadFloat(j, kCenterY,  CenterY);
+    JsonUtil::ReadBool (j, kBilinear, Bilinear);
+    JsonUtil::ReadBool (j, kCompat,   Compat);
 }

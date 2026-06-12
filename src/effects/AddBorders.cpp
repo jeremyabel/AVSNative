@@ -1,6 +1,7 @@
 #include "AddBorders.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_addborders.sc.bin.h"
@@ -24,14 +25,14 @@ void AddBorders::Render(const RenderContext& Context)
     const float W = (float)Context.Width;
     const float H = (float)Context.Height;
 
-    const float BorderW = std::max(1.0f, std::floor(W * Cfg.Size / 100.f));
-    const float BorderH = std::max(1.0f, std::floor(H * Cfg.Size / 100.f));
+    const float BorderW = std::max(1.0f, std::floor(W * Size / 100.f));
+    const float BorderH = std::max(1.0f, std::floor(H * Size / 100.f));
 
     const float Params[4] = { BorderW, BorderH, W, H };
-    const float Color[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, 0.f };
+    const float BorderColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
 
     bgfx::setUniform(BorderParamsUniform, Params);
-    bgfx::setUniform(BorderColorUniform, Color);
+    bgfx::setUniform(BorderColorUniform, BorderColor);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -58,4 +59,18 @@ void AddBorders::Destroy()
     BorderParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json AddBorders::Serialize() const
+{
+    return {
+        { kColor, JsonUtil::ColorToJson(Color) },
+        { kSize,  Size },
+    };
+}
+
+void AddBorders::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColor(j, kColor, Color);
+    JsonUtil::ReadInt  (j, kSize,  Size);
 }

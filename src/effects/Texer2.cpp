@@ -1,4 +1,5 @@
 #include "Texer2.h"
+#include "engine/JsonUtil.h"
 
 #include "engine/FBOManager.h"
 #include "engine/AudioAnalyzer.h"
@@ -38,22 +39,35 @@ static std::string SubstitutePi(std::string code)
     return code;
 }
 
-// ── GetConfig / SetConfig ─────────────────────────────────────────────────────
+// ── Serialize / Deserialize ───────────────────────────────────────────────────
 
-nlohmann::json Texer2::GetConfig() const
+nlohmann::json Texer2::Serialize() const
 {
-    nlohmann::json j = ReflectedEffect<Texer2Config>::GetConfig();
-    j["imageData"] = Cfg.ImageData;
-    return j;
+    return {
+        { kResize,    Resize    },
+        { kWrap,      Wrap      },
+        { kColorize,  Colorize  },
+        { kInitCode,  InitCode  },
+        { kFrameCode, FrameCode },
+        { kBeatCode,  BeatCode  },
+        { kPointCode, PointCode },
+        // Bundle asset reference — raw bytes arrive via ApplyAsset.
+        { kImageData, ImageData },
+    };
 }
 
-void Texer2::SetConfig(const nlohmann::json& cfg)
+void Texer2::Deserialize(const nlohmann::json& j)
 {
-    ReflectedEffect<Texer2Config>::SetConfig(cfg);
+    JsonUtil::ReadBool  (j, kResize,    Resize);
+    JsonUtil::ReadBool  (j, kWrap,      Wrap);
+    JsonUtil::ReadBool  (j, kColorize,  Colorize);
+    JsonUtil::ReadString(j, kInitCode,  InitCode);
+    JsonUtil::ReadString(j, kFrameCode, FrameCode);
+    JsonUtil::ReadString(j, kBeatCode,  BeatCode);
+    JsonUtil::ReadString(j, kPointCode, PointCode);
+    JsonUtil::ReadString(j, kImageData, ImageData);
 
-    // imageData is a bundle asset reference — raw bytes arrive via ApplyAsset.
-    if (cfg.contains("imageData") && cfg["imageData"].is_string())
-        Cfg.ImageData = cfg["imageData"].get<std::string>();
+    RecompileInitCode();
 }
 
 // ── Preset bundle assets ──────────────────────────────────────────────────────
@@ -70,41 +84,42 @@ void Texer2::ApplyAsset(const std::string& /*key*/, const std::string& name,
 {
     m_raw  = std::move(bytes);
     m_name = name;
-    Cfg.ImageData = name;
+    ImageData = name;
     if (m_inited)
         BuildFromRaw(m_raw);
 }
 
-// ── OnConfigChanged ───────────────────────────────────────────────────────────
+// ── Recompile entry points ────────────────────────────────────────────────────
 
-void Texer2::OnConfigChanged(const std::vector<std::string>& changed)
+void Texer2::RecompileInitCode()
 {
     if (!m_inited) return;
 
-    bool recompileInit = false;
-    bool recompileFrame = false, recompileBeat = false, recompilePoint = false;
+    // Re-scan all code for user vars (init code change may add/remove vars).
+    RescanAndSeed();
+    m_lua.CompileBlock(SubstitutePi(InitCode),   "initCode",   m_initRef);
+    m_lua.CompileBlock(SubstitutePi(FrameCode),  "frameCode",  m_frameRef);
+    m_lua.CompileBlock(SubstitutePi(BeatCode),   "beatCode",   m_beatRef);
+    m_lua.CompileBlock(SubstitutePi(PointCode),  "pointCode",  m_pointRef);
+    RunInit();
+}
 
-    for (const auto& key : changed)
-    {
-        if (key == "initCode")   recompileInit = true;
-        if (key == "frameCode")  recompileFrame = true;
-        if (key == "beatCode")   recompileBeat = true;
-        if (key == "pointCode")  recompilePoint = true;
-    }
+void Texer2::RecompileFrameCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(SubstitutePi(FrameCode), "frameCode", m_frameRef);
+}
 
-    if (recompileInit) {
-        // Re-scan all code for user vars (init code change may add/remove vars).
-        RescanAndSeed();
-        m_lua.CompileBlock(SubstitutePi(Cfg.InitCode),   "initCode",   m_initRef);
-        m_lua.CompileBlock(SubstitutePi(Cfg.FrameCode),  "frameCode",  m_frameRef);
-        m_lua.CompileBlock(SubstitutePi(Cfg.BeatCode),   "beatCode",   m_beatRef);
-        m_lua.CompileBlock(SubstitutePi(Cfg.PointCode),  "pointCode",  m_pointRef);
-        RunInit();
-    } else {
-        if (recompileFrame) m_lua.CompileBlock(SubstitutePi(Cfg.FrameCode), "frameCode", m_frameRef);
-        if (recompileBeat)  m_lua.CompileBlock(SubstitutePi(Cfg.BeatCode),  "beatCode",  m_beatRef);
-        if (recompilePoint) m_lua.CompileBlock(SubstitutePi(Cfg.PointCode), "pointCode", m_pointRef);
-    }
+void Texer2::RecompileBeatCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(SubstitutePi(BeatCode), "beatCode", m_beatRef);
+}
+
+void Texer2::RecompilePointCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(SubstitutePi(PointCode), "pointCode", m_pointRef);
 }
 
 // ── Default 21×21 soft-dot image ─────────────────────────────────────────────
@@ -252,17 +267,17 @@ void Texer2::RescanAndSeed()
 
     // Discover user-declared vars from all blocks and seed them too.
     const std::string allCode =
-        Cfg.InitCode + "\n" + Cfg.FrameCode + "\n" + Cfg.BeatCode + "\n" + Cfg.PointCode;
+        InitCode + "\n" + FrameCode + "\n" + BeatCode + "\n" + PointCode;
     for (const auto& name : LuaRuntime::ScanVarDecls(allCode, k_builtins))
         m_lua.SeedVar(name);
 }
 
 void Texer2::CompileAll()
 {
-    m_lua.CompileBlock(SubstitutePi(Cfg.InitCode),  "initCode",  m_initRef);
-    m_lua.CompileBlock(SubstitutePi(Cfg.FrameCode), "frameCode", m_frameRef);
-    m_lua.CompileBlock(SubstitutePi(Cfg.BeatCode),  "beatCode",  m_beatRef);
-    m_lua.CompileBlock(SubstitutePi(Cfg.PointCode), "pointCode", m_pointRef);
+    m_lua.CompileBlock(SubstitutePi(InitCode),  "initCode",  m_initRef);
+    m_lua.CompileBlock(SubstitutePi(FrameCode), "frameCode", m_frameRef);
+    m_lua.CompileBlock(SubstitutePi(BeatCode),  "beatCode",  m_beatRef);
+    m_lua.CompileBlock(SubstitutePi(PointCode), "pointCode", m_pointRef);
 }
 
 void Texer2::RunInit()
@@ -320,7 +335,7 @@ void Texer2::StampParticle(int cx, int cy, double sizex_raw, double sizey_raw,
     const double szx = std::abs(sizex_raw), szy = std::abs(sizey_raw);
 
     int left, top, destW, destH;
-    if (Cfg.Resize) {
+    if (Resize) {
         destW = std::max(1, (int)std::round(m_imgW * szx));
         destH = std::max(1, (int)std::round(m_imgH * szy));
         left  = (int)std::round(cx - destW * 0.5);
@@ -348,7 +363,7 @@ void Texer2::StampParticle(int cx, int cy, double sizex_raw, double sizey_raw,
             if (flipX) fu = 1.0f - fu;
 
             float ir, ig, ib;
-            if (Cfg.Resize)
+            if (Resize)
             {
                 // bilinear sample
                 const float tx = fu * (float)(m_imgW - 1);
@@ -384,9 +399,9 @@ void Texer2::StampParticle(int cx, int cy, double sizex_raw, double sizey_raw,
                 ib = m_imgPixels[si+2] / 255.0f;
             }
 
-            const float sr = ir * (Cfg.Colorize ? cr : 1.0f);
-            const float sg = ig * (Cfg.Colorize ? cg : 1.0f);
-            const float sb = ib * (Cfg.Colorize ? cb : 1.0f);
+            const float sr = ir * (Colorize ? cr : 1.0f);
+            const float sg = ig * (Colorize ? cg : 1.0f);
+            const float sb = ib * (Colorize ? cb : 1.0f);
 
             const int di = (sy * bufW + sx) * 4;
             BlendPx(&m_overlayBuf[di], m_overlayBuf[di + 3] > 0, sr, sg, sb, blendMode, alpha);
@@ -509,7 +524,7 @@ void Texer2::Render(const RenderContext& Context)
             double nx = m_lua.GetEnvNumber("x");
             double ny = m_lua.GetEnvNumber("y");
 
-            if (Cfg.Wrap) {
+            if (Wrap) {
                 nx -= std::round(nx / 2.0) * 2.0;
                 ny -= std::round(ny / 2.0) * 2.0;
             }
@@ -526,11 +541,11 @@ void Texer2::Render(const RenderContext& Context)
 
             StampParticle(cx, cy, szx, szy, cr, cg, cb, blendMode, blendAlpha, w, h);
 
-            if (Cfg.Wrap)
+            if (Wrap)
             {
                 const double absSzx = std::abs(szx), absSzy = std::abs(szy);
-                const int spriteW = Cfg.Resize ? std::max(1,(int)std::round(m_imgW*absSzx)) : m_imgW;
-                const int spriteH = Cfg.Resize ? std::max(1,(int)std::round(m_imgH*absSzy)) : m_imgH;
+                const int spriteW = Resize ? std::max(1,(int)std::round(m_imgW*absSzx)) : m_imgW;
+                const int spriteH = Resize ? std::max(1,(int)std::round(m_imgH*absSzy)) : m_imgH;
                 const bool ovX = (cx - spriteW/2 < 0) || (cx + spriteW/2 >= w);
                 const bool ovY = (cy - spriteH/2 < 0) || (cy + spriteH/2 >= h);
                 const int dX = (cx < w/2) ? w : -w;

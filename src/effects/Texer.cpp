@@ -1,4 +1,5 @@
 #include "Texer.h"
+#include "engine/JsonUtil.h"
 
 #include "engine/FBOManager.h"
 
@@ -11,22 +12,25 @@
 #include <cmath>
 #include <cstring>
 
-// ── GetConfig / SetConfig ─────────────────────────────────────────────────────
+// ── Serialize / Deserialize ───────────────────────────────────────────────────
 
-nlohmann::json Texer::GetConfig() const
+nlohmann::json Texer::Serialize() const
 {
-    nlohmann::json j = ReflectedEffect<TexerConfig>::GetConfig();
-    j["imageData"] = Cfg.ImageData;
-    return j;
+    return {
+        { kAddToInput,   AddToInput   },
+        { kColorize,     Colorize     },
+        { kNumParticles, NumParticles },
+        // Bundle asset reference — raw bytes arrive via ApplyAsset.
+        { kImageData,    ImageData    },
+    };
 }
 
-void Texer::SetConfig(const nlohmann::json& cfg)
+void Texer::Deserialize(const nlohmann::json& j)
 {
-    ReflectedEffect<TexerConfig>::SetConfig(cfg);
-
-    // imageData is a bundle asset reference — raw bytes arrive via ApplyAsset.
-    if (cfg.contains("imageData") && cfg["imageData"].is_string())
-        Cfg.ImageData = cfg["imageData"].get<std::string>();
+    JsonUtil::ReadBool  (j, kAddToInput,   AddToInput);
+    JsonUtil::ReadBool  (j, kColorize,     Colorize);
+    JsonUtil::ReadInt   (j, kNumParticles, NumParticles);
+    JsonUtil::ReadString(j, kImageData,    ImageData);
 }
 
 // ── Preset bundle assets ──────────────────────────────────────────────────────
@@ -43,12 +47,11 @@ void Texer::ApplyAsset(const std::string& /*key*/, const std::string& name,
 {
     m_raw  = std::move(bytes);
     m_name = name;
-    Cfg.ImageData = name;
+    ImageData = name;
     if (m_inited)
         BuildFromRaw(m_raw);
 }
 
-void Texer::OnConfigChanged(const std::vector<std::string>& /*changed*/) {}
 
 // ── Default soft-dot image (21×21, matches texer.js makeDefaultImage) ─────────
 
@@ -212,7 +215,7 @@ void Texer::Stamp(int cx, int cy, uint8_t cr, uint8_t cg, uint8_t cb, int fbW, i
 
     if (imgEndX <= imgStartX || imgEndY <= imgStartY) return;
 
-    const bool colorize = Cfg.Colorize;
+    const bool colorize = Colorize;
 
     for (int iy = imgStartY, fby = fby0; iy < imgEndY; iy++, fby++)
     {
@@ -296,13 +299,13 @@ void Texer::Render(const RenderContext& Context)
     // ── 2. CPU stamp using last frame's read-back data ─────────────────────────
     if (m_hasReadback)
     {
-        if (Cfg.AddToInput)
+        if (AddToInput)
             m_outBuf = m_readBuf;  // start from the input
         else
             std::fill(m_outBuf.begin(), m_outBuf.end(), (uint8_t)0);
 
         int p = 0;
-        const int maxP = Cfg.NumParticles;
+        const int maxP = NumParticles;
         bool done = false;
 
         // Scan top-to-bottom, left-to-right (Vulkan y=0=top matches screen top).

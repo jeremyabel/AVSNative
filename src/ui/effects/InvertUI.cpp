@@ -1,7 +1,13 @@
 #include "ui/ConfigUiRegistry.h"
 
+#include <imgui.h>
+
+static void DrawInvertUI(Effect* /*base*/)
+{
+    ImGui::TextDisabled("No parameters.");
+}
+
 void RegisterInvertUI(ConfigUiRegistry& reg)
 {
-    // Invert has no parameters
-    reg.Register("Invert", &DrawDefault);
+    reg.Register("Invert", &DrawInvertUI);
 }

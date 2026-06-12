@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <array>
 #include <cstdint>
@@ -15,33 +15,27 @@
 // frames — the engine reuses the previous frame's framebuffer as input — is what
 // accumulates the scrolling history, mirroring the original's in-place framebuffer.
 
-struct TimescopeConfig
+class Timescope : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     int Channel = 2;   // 0 = Left, 1 = Right, 2 = Center (avg) — spectrum
     std::array<uint8_t, 3> Color = { 255, 255, 255 };
     int Blend = 3;     // 0 = Replace, 1 = Additive, 2 = 50/50, 3 = Default (= Replace)
     int Bands = 576;   // spectrum bins spread across the column height (16..576)
-};
 
-class Timescope : public ReflectedEffect<TimescopeConfig>
-{
-public:
+    static constexpr const char* kChannel = "channel";
+    static constexpr const char* kColor   = "color";
+    static constexpr const char* kBlend   = "blend";
+    static constexpr const char* kBands   = "bands";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            SelectI(&TimescopeConfig::Channel, "channel", "Source", { "Left", "Right", "Center" }),
-            Color(&TimescopeConfig::Color, "color", "Color"),
-            SelectI(&TimescopeConfig::Blend, "blend", "Blend", { "Replace", "Additive", "50/50", "Default" }),
-            RangeI(&TimescopeConfig::Bands, "bands", "Bands", 16, 576),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Timescope"; }
+    std::string Name() const override { return "Timescope"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     void EnsureScope(int w, int h);

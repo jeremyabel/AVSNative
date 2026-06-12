@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/LuaRuntime.h"
 
 #include <bgfx/bgfx.h>
@@ -17,8 +17,10 @@ struct GifStream;  // streaming GIF decoder (src/thirdparty/StbGifStream.h)
 // width,height (viewport) and b (beat) are engine-set each frame. Tiles carry the image
 // aspect ratio so the image isn't stretched. Single full-screen GPU pass — Lua drives
 // the shader uniforms. See fs_imagegrid.sc.
-struct ImageGridConfig
+class ImageGrid : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::string ImageData  = "";  // slot 0 bundle asset ref/name; empty = built-in checkerboard
     std::string ImageData2 = "";  // slot 1 bundle asset ref/name (for A/B toggle testing)
     int         ActiveImage = 0;  // which slot is displayed (0 or 1)
@@ -26,17 +28,22 @@ struct ImageGridConfig
     std::string FrameCode = "";
     std::string BeatCode  = "";
     int         BlendMode = 0;    // 0=Replace, 1=Additive, 2=50/50, 3=Alpha
-};
 
-class ImageGrid : public ReflectedEffect<ImageGridConfig>
-{
-public:
+    static constexpr const char* kImageData   = "imageData";
+    static constexpr const char* kImageData2  = "imageData2";
+    static constexpr const char* kActiveImage = "activeImage";
+    static constexpr const char* kInitCode    = "initCode";
+    static constexpr const char* kFrameCode   = "frameCode";
+    static constexpr const char* kBeatCode    = "beatCode";
+    static constexpr const char* kBlendMode   = "blendMode";
+
     void Init() override;
-    void Destroy()                            override;
+    void Destroy() override;
     void Render(const RenderContext& Context) override;
 
-    nlohmann::json GetConfig() const override;
-    void           SetConfig(const nlohmann::json& cfg) override;
+    std::string Name() const override { return "Image Grid"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
     std::vector<PresetAsset> CollectAssets() const override;
     void ApplyAsset(const std::string& key, const std::string& name,
@@ -47,24 +54,19 @@ public:
         return m_lua.GetError(paramName);
     }
 
+    // Switches the displayed slot (0/1) and rebuilds the texture from the cached
+    // raw bytes. Used by the UI's A/B toggle and by Deserialize.
+    void SetActiveImage(int slot);
+
+    // Recompile entry points. Called after Deserialize and by the UI when the
+    // matching code editor changes.
+    void RecompileInitCode();   // rescans user vars, recompiles all blocks, reruns init
+    void RecompileFrameCode();
+    void RecompileBeatCode();
+
     int GetImageW()    const { return m_imgW; }
     int GetImageH()    const { return m_imgH; }
     int GetFrameCount() const { return (int)m_frames.size(); }
-
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> kFields = {
-            SelectI(&ImageGridConfig::BlendMode, "blendMode", "Blend",
-                    { "Replace", "Additive", "50/50", "Alpha" }),
-            Lua(&ImageGridConfig::InitCode,  "initCode",  "Init"),
-            Lua(&ImageGridConfig::FrameCode, "frameCode", "Frame"),
-            Lua(&ImageGridConfig::BeatCode,  "beatCode",  "Beat"),
-        };
-        return kFields;
-    }
-    std::string EffectName() const override { return "Image Grid"; }
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
     void LoadActiveImage();            // (re)build the texture from the active slot's raw bytes

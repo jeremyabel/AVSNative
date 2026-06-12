@@ -1,39 +1,35 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
+
+#include <array>
 
 struct NVGcontext;
 struct NVGLUframebuffer;
 
-struct BassSpinConfig
+class BassSpin : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     bool                   EnabledLeft  = true;
     bool                   EnabledRight = true;
     std::array<uint8_t, 3> ColorLeft    = { 255, 255, 255 };
     std::array<uint8_t, 3> ColorRight   = { 255, 255, 255 };
     int                    Mode         = 1;   // 0=Outline, 1=Filled
-};
 
-class BassSpin : public ReflectedEffect<BassSpinConfig>
-{
-public:
+    static constexpr const char* kEnabledLeft  = "enabledLeft";
+    static constexpr const char* kEnabledRight = "enabledRight";
+    static constexpr const char* kColorLeft    = "colorLeft";
+    static constexpr const char* kColorRight   = "colorRight";
+    static constexpr const char* kMode         = "mode";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Bool(&BassSpinConfig::EnabledLeft, "enabledLeft", "Enabled Left"),
-            Bool(&BassSpinConfig::EnabledRight, "enabledRight", "Enabled Right"),
-            Color(&BassSpinConfig::ColorLeft, "colorLeft", "Color Left"),
-            Color(&BassSpinConfig::ColorRight, "colorRight", "Color Right"),
-            SelectI(&BassSpinConfig::Mode, "mode", "Mode", { "Outline", "Filled" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Bass Spin"; }
+    std::string Name() const override { return "Bass Spin"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     void EnsureOverlay(int W, int H);

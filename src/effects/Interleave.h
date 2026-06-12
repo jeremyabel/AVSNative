@@ -1,52 +1,42 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct InterleaveConfig
+#include <array>
+
+class Interleave : public Effect
 {
-    float                  X        = 1.0f;
-    float                  Y        = 1.0f;
-    float                  X2       = 1.0f;
-    float                  Y2       = 1.0f;
-    int                    BeatDur  = 4;
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    float                  X        = 1.0f;  // 0–64
+    float                  Y        = 1.0f;  // 0–64
+    float                  X2       = 1.0f;  // 0–64
+    float                  Y2       = 1.0f;  // 0–64
+    int                    BeatDur  = 4;     // 1–64
     std::array<uint8_t, 3> Color    = { 0, 0, 0 };
     bool                   OnBeat   = false;
     int                    OutBlend = 0;
-};
 
-class Interleave : public ReflectedEffect<InterleaveConfig>
-{
-public:
+    static constexpr const char* kX        = "x";
+    static constexpr const char* kY        = "y";
+    static constexpr const char* kX2       = "x2";
+    static constexpr const char* kY2       = "y2";
+    static constexpr const char* kBeatDur  = "beatdur";
+    static constexpr const char* kColor    = "color";
+    static constexpr const char* kOnBeat   = "onbeat";
+    static constexpr const char* kOutBlend = "outBlend";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Range(&InterleaveConfig::X, "x", "X Size", 0.0f, 64.0f, 1.0f),
-            Range(&InterleaveConfig::Y, "y", "Y Size", 0.0f, 64.0f, 1.0f),
-            Range(&InterleaveConfig::X2, "x2", "X Size (On Beat)", 0.0f, 64.0f, 1.0f),
-            Range(&InterleaveConfig::Y2, "y2", "Y Size (On Beat)", 0.0f, 64.0f, 1.0f),
-            RangeI(&InterleaveConfig::BeatDur, "beatdur", "Beat Duration", 1, 64),
-            Color(&InterleaveConfig::Color, "color", "Color"),
-            Bool(&InterleaveConfig::OnBeat, "onbeat", "On Beat"),
-            SelectI(&InterleaveConfig::OutBlend, "outBlend", "Blend",
-                    { "Replace", "Additive", "Average" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Interleave"; }
+    std::string Name() const override { return "Interleave"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
-    void OnConfigChanged(const std::vector<std::string>& changed) override
-    {
-        for (const std::string& k : changed)
-        {
-            if (k == "x") CurX = Cfg.X;
-            if (k == "y") CurY = Cfg.Y;
-        }
-    }
+    // Snaps the animated grid position to X/Y. Called after Deserialize and by
+    // the UI when the X/Y sliders change.
+    void ResetAnim() { CurX = X; CurY = Y; }
 
 private:
     // Runtime state (animated positions)

@@ -1,5 +1,7 @@
 #include "EffectList.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 #include "engine/Registry.h"
 
@@ -33,35 +35,71 @@ void EffectList::Init()
     for (const auto& v : k_builtins)
         m_lua.SeedVar(v);
     RescanUserVars();
-    m_lua.CompileBlock(Cfg.InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
+    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
     m_needInit = true;
     m_inited   = true;
 }
 
 void EffectList::RescanUserVars()
 {
-    for (const auto& v : LuaRuntime::ScanVarDecls(Cfg.InitCode, k_builtins))
+    for (const auto& v : LuaRuntime::ScanVarDecls(InitCode, k_builtins))
         m_lua.SeedVar(v);
 }
 
-void EffectList::OnConfigChanged(const std::vector<std::string>& Changed)
+void EffectList::RecompileInitCode()
 {
     if (!m_inited) return;
 
-    for (const auto& k : Changed)
-    {
-        if (k == "initCode")
-        {
-            RescanUserVars();
-            m_lua.CompileBlock(Cfg.InitCode, "initCode", m_initRef);
-            m_needInit = true; // re-run Init on the next active eval frame
-        }
-        else if (k == "frameCode")
-        {
-            m_lua.CompileBlock(Cfg.FrameCode, "frameCode", m_frameRef);
-        }
-    }
+    RescanUserVars();
+    m_lua.CompileBlock(InitCode, "initCode", m_initRef);
+    m_needInit = true; // re-run Init on the next active eval frame
+}
+
+void EffectList::RecompileFrameCode()
+{
+    if (!m_inited) return;
+    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
+}
+
+nlohmann::json EffectList::Serialize() const
+{
+    return {
+        { kOnBeat,            OnBeat            },
+        { kOnBeatFrames,      OnBeatFrames      },
+        { kClearFrame,        ClearFrame        },
+        { kInBlend,           InBlend           },
+        { kInBlendBuf,        InBlendBuf        },
+        { kInBlendBufInvert,  InBlendBufInvert  },
+        { kOutBlend,          OutBlend          },
+        { kOutBlendBuf,       OutBlendBuf       },
+        { kOutBlendBufInvert, OutBlendBufInvert },
+        { kBlendAmt,          BlendAmt          },
+        { kUseEval,           UseEval           },
+        { kInitCode,          InitCode          },
+        { kFrameCode,         FrameCode         },
+    };
+}
+
+void EffectList::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadBool  (j, kOnBeat,            OnBeat);
+    JsonUtil::ReadInt   (j, kOnBeatFrames,      OnBeatFrames);
+    JsonUtil::ReadBool  (j, kClearFrame,        ClearFrame);
+    JsonUtil::ReadInt   (j, kInBlend,           InBlend);
+    JsonUtil::ReadInt   (j, kInBlendBuf,        InBlendBuf);
+    JsonUtil::ReadBool  (j, kInBlendBufInvert,  InBlendBufInvert);
+    JsonUtil::ReadInt   (j, kOutBlend,          OutBlend);
+    JsonUtil::ReadInt   (j, kOutBlendBuf,       OutBlendBuf);
+    JsonUtil::ReadBool  (j, kOutBlendBufInvert, OutBlendBufInvert);
+    JsonUtil::ReadFloat (j, kBlendAmt,          BlendAmt);
+    JsonUtil::ReadBool  (j, kUseEval,           UseEval);
+    JsonUtil::ReadString(j, kInitCode,          InitCode);
+    JsonUtil::ReadString(j, kFrameCode,         FrameCode);
+    // The "effects" array is handled by Preset's LoadChain recursion.
+
+    RecompileInitCode();
+    RecompileFrameCode();
 }
 
 void EffectList::EnsureInternalBuffers(const RenderContext& Context)
@@ -120,16 +158,16 @@ void EffectList::RenderPassThrough(const RenderContext& Context)
     bgfx::touch(passView);
     SubmitBlend(passView,
                 Context.InputTexture, Context.InputTexture, BGFX_INVALID_HANDLE,
-                1, Cfg.BlendAmt, false, Context.QuadVB);
+                1, BlendAmt, false, Context.QuadVB);
     Context.FboManager->Swap();
 }
 
 void EffectList::Render(const RenderContext& Context)
 {
     // On-beat gating
-    if (Context.IsBeat() && Cfg.OnBeat)
-        OnBeatCooldown = Cfg.OnBeatFrames;
-    const bool Active = !Cfg.OnBeat || OnBeatCooldown > 0;
+    if (Context.IsBeat() && OnBeat)
+        OnBeatCooldown = OnBeatFrames;
+    const bool Active = !OnBeat || OnBeatCooldown > 0;
     if (OnBeatCooldown > 0)
         --OnBeatCooldown;
 
@@ -146,10 +184,10 @@ void EffectList::Render(const RenderContext& Context)
 
     // ── Step 0: evaluation override ───────────────────────────────────────────
     // Runs before any rendering so the script can override per-frame state.
-    bool  clearThisFrame = Cfg.ClearFrame;
-    float alphaIn        = Cfg.BlendAmt;
-    float alphaOut       = Cfg.BlendAmt;
-    if (Cfg.UseEval)
+    bool  clearThisFrame = ClearFrame;
+    float alphaIn        = BlendAmt;
+    float alphaOut       = BlendAmt;
+    if (UseEval)
     {
         m_lua.SetAudioData(Context.AudioData);
         m_lua.SetEnvNumber("w",        (double)W);
@@ -195,14 +233,14 @@ void EffectList::Render(const RenderContext& Context)
     // ── Step 2: input blend ───────────────────────────────────────────────────
     // IGNORE (0): skip — internal buffer keeps its state.
     // Anything else: blend(internal_current, parent_input) → internal_next, then swap.
-    if (Cfg.InBlend != 0)
+    if (InBlend != 0)
     {
         const uint8_t blendView = *Context.NextViewId;
         *Context.NextViewId += 4;
 
         bgfx::TextureHandle MaskTex = BGFX_INVALID_HANDLE;
-        if (Cfg.InBlend == 12)
-            MaskTex = Context.FboManager->GetScratch(Cfg.InBlendBuf).Texture;
+        if (InBlend == 12)
+            MaskTex = Context.FboManager->GetScratch(InBlendBuf).Texture;
 
         bgfx::setViewFrameBuffer(blendView, InnerFbos.GetNext().Fbo);
         bgfx::setViewClear(blendView, BGFX_CLEAR_NONE, 0);
@@ -211,7 +249,7 @@ void EffectList::Render(const RenderContext& Context)
 
         SubmitBlend(blendView,
                     InnerFbos.GetCurrent().Texture, Context.InputTexture,
-                    MaskTex, Cfg.InBlend, alphaIn, Cfg.InBlendBufInvert, Context.QuadVB);
+                    MaskTex, InBlend, alphaIn, InBlendBufInvert, Context.QuadVB);
         InnerFbos.Swap();
     }
 
@@ -235,8 +273,8 @@ void EffectList::Render(const RenderContext& Context)
     *Context.NextViewId += 4;
 
     bgfx::TextureHandle OutMaskTex = BGFX_INVALID_HANDLE;
-    if (Cfg.OutBlend == 12)
-        OutMaskTex = Context.FboManager->GetScratch(Cfg.OutBlendBuf).Texture;
+    if (OutBlend == 12)
+        OutMaskTex = Context.FboManager->GetScratch(OutBlendBuf).Texture;
 
     bgfx::setViewFrameBuffer(outView, Context.OutputFBO);
     bgfx::setViewClear(outView, BGFX_CLEAR_NONE, 0);
@@ -245,36 +283,18 @@ void EffectList::Render(const RenderContext& Context)
 
     SubmitBlend(outView,
                 Context.InputTexture, InnerFbos.GetCurrent().Texture,
-                OutMaskTex, Cfg.OutBlend, alphaOut, Cfg.OutBlendBufInvert, Context.QuadVB);
+                OutMaskTex, OutBlend, alphaOut, OutBlendBufInvert, Context.QuadVB);
 
     Context.FboManager->Swap();
-}
-
-nlohmann::json EffectList::GetConfig() const
-{
-    nlohmann::json j = ReflectedEffect::GetConfig();
-
-    nlohmann::json effects = nlohmann::json::array();
-    for (int32_t i = 0; i < Inner.Count(); ++i)
-    {
-        const EffectEntry& e = const_cast<EffectList*>(this)->Inner.GetEntry(i);
-        effects.push_back({
-            { "type",    e.Effect->GetDescriptor().Name },
-            { "enabled", e.Enabled },
-            { "config",  e.Effect->GetConfig() },
-        });
-    }
-    j["effects"] = effects;
-    return j;
 }
 
 uint8_t EffectList::ExpectedViewCount() const
 {
     uint8_t n = 4; // output blend (always)
-    if (!Cfg.OnBeat || OnBeatCooldown > 0)
+    if (!OnBeat || OnBeatCooldown > 0)
     {
-        if (Cfg.ClearFrame) n += 4;
-        if (Cfg.InBlend != 0) n += 4;
+        if (ClearFrame) n += 4;
+        if (InBlend != 0) n += 4;
         for (int32_t i = 0; i < Inner.Count(); ++i)
             n += Inner.GetEntry(i).Effect->ExpectedViewCount();
     }

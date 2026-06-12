@@ -1,6 +1,7 @@
 #include "Mosaic.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_mosaic.sc.bin.h"
@@ -16,20 +17,20 @@ void Mosaic::Init()
     TexUniform    = bgfx::createUniform("s_texColor",    bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_mosaicParams", bgfx::UniformType::Vec4);
 
-    m_curSize = Cfg.Size;
+    m_curSize = Size;
 }
 
 void Mosaic::Render(const RenderContext& Context)
 {
     // ── On-beat size selection + cooldown decay (ported from e_mosaic.cpp). ──────
-    if (Cfg.OnBeatSizeChange && Context.IsBeat())
+    if (OnBeatSizeChange && Context.IsBeat())
     {
-        m_curSize  = Cfg.OnBeatSize;
-        m_cooldown = Cfg.OnBeatDuration;
+        m_curSize  = OnBeatSize;
+        m_cooldown = OnBeatDuration;
     }
     else if (m_cooldown == 0)
     {
-        m_curSize = Cfg.Size;
+        m_curSize = Size;
     }
 
     if (m_cooldown > 0)
@@ -37,9 +38,9 @@ void Mosaic::Render(const RenderContext& Context)
         m_cooldown--;
         if (m_cooldown > 0)
         {
-            const int dur = std::max(1, Cfg.OnBeatDuration);
-            const int a   = std::abs(Cfg.Size - Cfg.OnBeatSize) / dur;
-            m_curSize += a * (Cfg.OnBeatSize > Cfg.Size ? -1 : 1);
+            const int dur = std::max(1, OnBeatDuration);
+            const int a   = std::abs(Size - OnBeatSize) / dur;
+            m_curSize += a * (OnBeatSize > Size ? -1 : 1);
         }
     }
 
@@ -49,7 +50,7 @@ void Mosaic::Render(const RenderContext& Context)
         (float)cs,
         (float)Context.Width,
         (float)Context.Height,
-        (float)Cfg.Blend,
+        (float)Blend,
     };
     bgfx::setUniform(ParamsUniform, params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
@@ -69,4 +70,24 @@ void Mosaic::Destroy()
     ParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform    = BGFX_INVALID_HANDLE;
     Program       = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json Mosaic::Serialize() const
+{
+    return {
+        { kSize,             Size             },
+        { kOnBeatSizeChange, OnBeatSizeChange },
+        { kOnBeatSize,       OnBeatSize       },
+        { kOnBeatDuration,   OnBeatDuration   },
+        { kBlend,            Blend            },
+    };
+}
+
+void Mosaic::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt (j, kSize,             Size);
+    JsonUtil::ReadBool(j, kOnBeatSizeChange, OnBeatSizeChange);
+    JsonUtil::ReadInt (j, kOnBeatSize,       OnBeatSize);
+    JsonUtil::ReadInt (j, kOnBeatDuration,   OnBeatDuration);
+    JsonUtil::ReadInt (j, kBlend,            Blend);
 }

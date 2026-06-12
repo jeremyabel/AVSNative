@@ -2,6 +2,7 @@
 #include "engine/MathConstants.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_rotoblitter.sc.bin.h"
@@ -24,12 +25,12 @@ void RotoBlitter::Init()
 void RotoBlitter::Render(const RenderContext& Context)
 {
     // ── Rotation reversal ────────────────────────────────────────────────────
-    if (Context.IsBeat() && Cfg.Beatch)
+    if (Context.IsBeat() && Beatch)
         m_rotRev = -m_rotRev;
-    if (!Cfg.Beatch)
+    if (!Beatch)
         m_rotRev = 1.0f;
 
-    const float SpeedFactor = 1.0f / (1.0f + Cfg.BeatchSpeed * 4.0f);
+    const float SpeedFactor = 1.0f / (1.0f + BeatchSpeed * 4.0f);
     m_rotRevPos += SpeedFactor * (m_rotRev - m_rotRevPos);
     if (m_rotRevPos > m_rotRev && m_rotRev > 0.0f)
         m_rotRevPos = m_rotRev;
@@ -38,31 +39,31 @@ void RotoBlitter::Render(const RenderContext& Context)
         m_rotRevPos = m_rotRev;
 
     // ── Scale animation ──────────────────────────────────────────────────────
-    if (Context.IsBeat() && Cfg.BeatchScale)
-        m_scaleFpos = (float)Cfg.ZoomScale2;
+    if (Context.IsBeat() && BeatchScale)
+        m_scaleFpos = (float)ZoomScale2;
 
     float fVal;
-    if (Cfg.ZoomScale < Cfg.ZoomScale2)
+    if (ZoomScale < ZoomScale2)
     {
-        fVal = std::max(m_scaleFpos, (float)Cfg.ZoomScale);
-        if (m_scaleFpos > Cfg.ZoomScale) m_scaleFpos -= 3.0f;
+        fVal = std::max(m_scaleFpos, (float)ZoomScale);
+        if (m_scaleFpos > ZoomScale) m_scaleFpos -= 3.0f;
     }
     else
     {
-        fVal = std::min(m_scaleFpos, (float)Cfg.ZoomScale);
-        if (m_scaleFpos < Cfg.ZoomScale) m_scaleFpos += 3.0f;
+        fVal = std::min(m_scaleFpos, (float)ZoomScale);
+        if (m_scaleFpos < ZoomScale) m_scaleFpos += 3.0f;
     }
 
     // ── Transform ────────────────────────────────────────────────────────────
     const float zoom = 1.0f + (fVal - 31.0f) / 31.0f;
-    const float thetaRad = (float)(Cfg.RotDir - 32) * m_rotRevPos * avs::Pi / 180.0f;
+    const float thetaRad = (float)(RotDir - 32) * m_rotRevPos * avs::Pi / 180.0f;
     const float cosT = std::cos(thetaRad);
     const float sinT = std::sin(thetaRad);
 
     // ── Submit ───────────────────────────────────────────────────────────────
-    const float Transform[4] = { cosT, sinT, zoom, Cfg.Blend ? 1.0f : 0.0f };
+    const float Transform[4] = { cosT, sinT, zoom, Blend ? 1.0f : 0.0f };
     const float Resolution[4] = { (float)Context.Width, (float)Context.Height,
-                                  Cfg.Compat ? 1.0f : 0.0f, 0.0f };
+                                  Compat ? 1.0f : 0.0f, 0.0f };
     bgfx::setUniform(TransformUniform, Transform);
     bgfx::setUniform(ResolutionUniform, Resolution);
 
@@ -70,7 +71,7 @@ void RotoBlitter::Render(const RenderContext& Context)
     // ignores the hardware filter). Otherwise: bilinear when Subpixel, else nearest.
     const uint32_t PointFlags = BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT |
                                 BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP;
-    const uint32_t SamplerFlags = (Cfg.Subpixel && !Cfg.Compat) ? UINT32_MAX : PointFlags;
+    const uint32_t SamplerFlags = (Subpixel && !Compat) ? UINT32_MAX : PointFlags;
     bgfx::setTexture(0, TexUniform, Context.InputTexture, SamplerFlags);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -97,4 +98,34 @@ void RotoBlitter::Destroy()
     TransformUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json RotoBlitter::Serialize() const
+{
+    return {
+        { kZoomScale,   ZoomScale   },
+        { kZoomScale2,  ZoomScale2  },
+        { kRotDir,      RotDir      },
+        { kBeatchSpeed, BeatchSpeed },
+        { kSubpixel,    Subpixel    },
+        { kCompat,      Compat      },
+        { kBlend,       Blend       },
+        { kBeatch,      Beatch      },
+        { kBeatchScale, BeatchScale },
+    };
+}
+
+void RotoBlitter::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt (j, kZoomScale,   ZoomScale);
+    JsonUtil::ReadInt (j, kZoomScale2,  ZoomScale2);
+    JsonUtil::ReadInt (j, kRotDir,      RotDir);
+    JsonUtil::ReadInt (j, kBeatchSpeed, BeatchSpeed);
+    JsonUtil::ReadBool(j, kSubpixel,    Subpixel);
+    JsonUtil::ReadBool(j, kCompat,      Compat);
+    JsonUtil::ReadBool(j, kBlend,       Blend);
+    JsonUtil::ReadBool(j, kBeatch,      Beatch);
+    JsonUtil::ReadBool(j, kBeatchScale, BeatchScale);
+
+    ResetZoomAnim();
 }

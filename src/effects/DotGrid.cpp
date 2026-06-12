@@ -1,5 +1,7 @@
 #include "DotGrid.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -21,7 +23,7 @@ void DotGrid::Init()
 
 void DotGrid::Render(const RenderContext& Context)
 {
-    if (Cfg.Colors.empty())
+    if (Colors.empty())
     {
         Context.FboManager->Swap();
         return;
@@ -29,24 +31,24 @@ void DotGrid::Render(const RenderContext& Context)
 
     // Advance color cycle and interpolate between adjacent entries (64 steps per pair)
     ColorPos++;
-    const int cycle = (int)Cfg.Colors.size() * 64;
+    const int cycle = (int)Colors.size() * 64;
     if (ColorPos >= cycle) ColorPos = 0;
     const int p  = ColorPos / 64;
     const int fr = ColorPos & 63;
-    const auto& c1 = Cfg.Colors[p];
-    const auto& c2 = Cfg.Colors[(p + 1) % Cfg.Colors.size()];
+    const auto& c1 = Colors[p];
+    const auto& c2 = Colors[(p + 1) % Colors.size()];
     const int cr = (c1[0] * (63 - fr) + c2[0] * fr) / 64;
     const int cg = (c1[1] * (63 - fr) + c2[1] * fr) / 64;
     const int cb = (c1[2] * (63 - fr) + c2[2] * fr) / 64;
 
     // Compute grid pixel offsets from fixed-point scroll accumulators
-    const int spacing = std::max(2, Cfg.Spacing);
+    const int spacing = std::max(2, Spacing);
     const int sxRaw   = (Xp >> 8) % spacing;
     const int syRaw   = (Yp >> 8) % spacing;
     const int sx      = (sxRaw + spacing) % spacing;  // ensure non-negative
     const int sy      = (syRaw + spacing) % spacing;
 
-    const float Color[4] = { cr / 255.0f, cg / 255.0f, cb / 255.0f, float(Cfg.BlendMode) };
+    const float Color[4] = { cr / 255.0f, cg / 255.0f, cb / 255.0f, float(BlendMode) };
     const float Grid[4]  = { float(spacing), float(sx), float(sy), 0.0f };
     const float Size[4]  = { float(Context.Width), float(Context.Height), 0.0f, 0.0f };
 
@@ -60,8 +62,8 @@ void DotGrid::Render(const RenderContext& Context)
     
     Context.FboManager->Swap();
 
-    Xp += Cfg.SpeedX;
-    Yp += Cfg.SpeedY;
+    Xp += SpeedX;
+    Yp += SpeedY;
 }
 
 void DotGrid::Destroy()
@@ -86,4 +88,32 @@ void DotGrid::Destroy()
     ColorUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json DotGrid::Serialize() const
+{
+    nlohmann::json j = {
+        { kColors,    JsonUtil::ColorsToJson(Colors) },
+        { kSpacing,   Spacing   },
+        { kSpeedX,    SpeedX    },
+        { kSpeedY,    SpeedY    },
+        { kBlendMode, BlendMode },
+    };
+    // Legacy alias (= Colors[0]) for backward-compatible presets.
+    if (!Colors.empty())
+        j[kColorLegacy] = JsonUtil::ColorToJson(Colors[0]);
+    return j;
+}
+
+void DotGrid::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColors(j, kColors, Colors);
+    if (!Colors.empty())
+        JsonUtil::ReadColor(j, kColorLegacy, Colors[0]);
+    JsonUtil::ReadInt(j, kSpacing,   Spacing);
+    JsonUtil::ReadInt(j, kSpeedX,    SpeedX);
+    JsonUtil::ReadInt(j, kSpeedY,    SpeedY);
+    JsonUtil::ReadInt(j, kBlendMode, BlendMode);
+
+    ResetColorCycle();
 }

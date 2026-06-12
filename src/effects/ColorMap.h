@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
 #include <array>
 #include <bgfx/bgfx.h>
@@ -20,8 +20,13 @@ struct ColorMapEntry
                                           { 255, { 255, 255, 255 } } };
 };
 
-struct ColorMapConfig
+class ColorMap : public Effect
 {
+public:
+    static constexpr int kNumMaps = 8;
+    static constexpr int kLutSize = 256;
+
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     int  ColorKey          = 0;     // 0-5
     int  BlendMode         = 0;     // 0-9
     int  AdjustableAlpha   = 0;     // 0-255 (Adjustable blend)
@@ -30,52 +35,34 @@ struct ColorMapConfig
     bool DontSkipFastBeats = false;
     int  CurrentMap        = 0;     // active/display map index
 
-    // 8 maps managed manually (not reflected).
-    std::array<ColorMapEntry, 8> Maps;
+    // 8 maps, edited by the bespoke gradient UI.
+    std::array<ColorMapEntry, kNumMaps> Maps;
 
-    ColorMapConfig() { Maps[0].Enabled = true; }
-};
+    static constexpr const char* kColorKey          = "colorKey";
+    static constexpr const char* kBlendMode         = "blendmode";
+    static constexpr const char* kAdjustableAlpha   = "adjustableAlpha";
+    static constexpr const char* kMapCycleMode      = "mapCycleMode";
+    static constexpr const char* kMapCycleSpeed     = "mapCycleSpeed";
+    static constexpr const char* kDontSkipFastBeats = "dontSkipFastBeats";
+    static constexpr const char* kCurrentMap        = "currentMap";
+    static constexpr const char* kMaps              = "maps";
 
-class ColorMap : public ReflectedEffect<ColorMapConfig>
-{
-public:
-    static constexpr int kNumMaps = 8;
-    static constexpr int kLutSize = 256;
+    ColorMap() { Maps[0].Enabled = true; }
 
     void Init() override;
     void Render(const RenderContext& Ctx) override;
     void Destroy() override;
 
-    nlohmann::json GetConfig() const override;
-    void           SetConfig(const nlohmann::json& cfg) override;
+    std::string Name() const override { return "Color Map"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
     // Re-bake a single map's LUT from its stops (called by the UI after edits).
     void BakeMap(int idx);
     void BakeAll();
 
-    // Incremented on external SetConfig so the UI can resync its gradient widgets.
+    // Incremented on Deserialize so the UI can resync its gradient widgets.
     uint64_t ConfigVersion() const { return m_configVersion; }
-
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> kFields = {
-            SelectI(&ColorMapConfig::ColorKey, "colorKey", "Key",
-                    { "Red Channel", "Green Channel", "Blue Channel",
-                      "(R+G+B)/2", "Maximal Channel", "(R+G+B)/3" }),
-            SelectI(&ColorMapConfig::BlendMode, "blendmode", "Blend Mode",
-                    { "Replace", "Additive", "Maximum", "Minimum", "50/50",
-                      "Subtractive 1", "Subtractive 2", "Multiply", "XOR", "Adjustable" }),
-            RangeI(&ColorMapConfig::AdjustableAlpha, "adjustableAlpha", "Alpha", 0, 255),
-            SelectI(&ColorMapConfig::MapCycleMode, "mapCycleMode", "Cycling",
-                    { "None (single map)", "On-beat random", "On-beat sequential" }),
-            RangeI(&ColorMapConfig::MapCycleSpeed, "mapCycleSpeed", "Cycle Speed", 1, 64),
-            ::Bool(&ColorMapConfig::DontSkipFastBeats, "dontSkipFastBeats", "Don't Skip Fast Beats"),
-        };
-        return kFields;
-    }
-    std::string EffectName() const override { return "Color Map"; }
-    void OnConfigChanged(const std::vector<std::string>& changed) override;
 
 private:
     bool        AnyEnabled() const;

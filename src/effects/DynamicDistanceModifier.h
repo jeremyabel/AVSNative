@@ -1,19 +1,20 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 #include "engine/ShaderCompiler.h"
 #include "engine/LuaRuntime.h"
 #include "engine/LuaUniformBridge.h"
 
 #include <string>
-#include <vector>
 
 // Dynamic Distance Modifier: a user GLSL "pixel" block remaps each pixel's radial
 // distance `d` from center; Lua init/frame/beat blocks compute persistent variables
 // (bridged into the GLSL via LuaUniformBridge). Pixel code may also call getspec/getosc
 // (audio) directly. See ref/AVSWeb/src/effects/ddm.js.
-struct DynamicDistanceModifierConfig
+class DynamicDistanceModifier : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::string PixelCode =
         "// d = normalized distance from center (0..1, 1 = corner)\n"
         "// r = angle (radians), t = time (a user var from Init/Frame), b = beat (0/1)\n"
@@ -25,38 +26,36 @@ struct DynamicDistanceModifierConfig
     bool Blend    = false;   // 50/50 with the original
     bool Bilinear = false;   // linear vs nearest input sampling
     bool Compat   = false;   // 8-bit integer bilinear matching win32 (needs Bilinear)
-};
 
-class DynamicDistanceModifier : public ReflectedEffect<DynamicDistanceModifierConfig>
-{
-public:
+    static constexpr const char* kBlend     = "blend";
+    static constexpr const char* kBilinear  = "bilinear";
+    static constexpr const char* kCompat    = "bilinearCompat";
+    static constexpr const char* kPixelCode = "pixelCode";
+    static constexpr const char* kInitCode  = "initCode";
+    static constexpr const char* kFrameCode = "frameCode";
+    static constexpr const char* kBeatCode  = "beatCode";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
+    std::string Name() const override { return "Dynamic Distance Modifier"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
+
     std::string GetScriptError(const std::string& paramName) const override
     {
-        if (paramName == "pixelCode") return m_shaderError;
+        if (paramName == kPixelCode) return m_shaderError;
         return m_lua.GetError(paramName);
     }
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            ::Bool(&DynamicDistanceModifierConfig::Blend,    "blend",     "Blend"),
-            ::Bool(&DynamicDistanceModifierConfig::Bilinear, "bilinear",  "Bilinear Filtering"),
-            ::Bool(&DynamicDistanceModifierConfig::Compat, "bilinearCompat", "Bilinear (precise)"),
-            Glsl(&DynamicDistanceModifierConfig::PixelCode,  "pixelCode", "Pixel (GLSL)"),
-            Lua (&DynamicDistanceModifierConfig::InitCode,   "initCode",  "Init"),
-            Lua (&DynamicDistanceModifierConfig::FrameCode,  "frameCode", "Frame"),
-            Lua (&DynamicDistanceModifierConfig::BeatCode,   "beatCode",  "Beat"),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Dynamic Distance Modifier"; }
-
-    void OnConfigChanged(const std::vector<std::string>& Changed) override;
+    // Recompiles after PixelCode or InitCode changes: recompiles the init block,
+    // rescans user-var uniforms, rebuilds the GLSL, and reruns init. Called after
+    // Deserialize and by the UI.
+    void RecompileMain();
+    // Recompiles just the frame / beat Lua blocks.
+    void RecompileFrameCode();
+    void RecompileBeatCode();
 
 private:
     void Recompile();

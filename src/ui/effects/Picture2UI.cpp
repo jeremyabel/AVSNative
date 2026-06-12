@@ -34,7 +34,6 @@ static bool BlendCombo(const char* label, int& mode)
 static void DrawPicture2UI(Effect* effect)
 {
     auto* pic = static_cast<Picture2*>(effect);
-    Picture2Config& cfg = pic->ConfigRef();
 
     // Image status
     const int imgW = pic->GetImageW();
@@ -45,43 +44,37 @@ static void DrawPicture2UI(Effect* effect)
         ImGui::TextUnformatted("No image loaded");
 
     if (ImGui::Button("Load Image..."))
-        ConfigUi::PickImageInto(effect, "imageData");
+        ConfigUi::PickImageInto(effect, Picture2::kImageData);
 
     ImGui::Spacing();
     ImGui::SeparatorText("Normal");
 
-    bool dirty = false;
-
     ImGui::TextUnformatted("Blend Mode");
     ImGui::SetNextItemWidth(-1.0f);
-    dirty |= BlendCombo("##blend", cfg.BlendMode);
+    BlendCombo("##blend", pic->BlendMode);
 
-    if (cfg.BlendMode == 7) {
+    if (pic->BlendMode == 7) {
         ImGui::TextUnformatted("Blend Amount");
         ImGui::SetNextItemWidth(-1.0f);
-        dirty |= ImGui::SliderInt("##adj", &cfg.AdjustBlend, 0, 255);
+        ImGui::SliderInt("##adj", &pic->AdjustBlend, 0, 255);
     }
 
-    dirty |= ImGui::Checkbox("Bilinear", &cfg.Bilinear);
+    ImGui::Checkbox("Bilinear", &pic->Bilinear);
 
     ImGui::Spacing();
     ImGui::SeparatorText("On Beat");
 
     ImGui::TextUnformatted("Blend Mode");
     ImGui::SetNextItemWidth(-1.0f);
-    dirty |= BlendCombo("##obblend", cfg.OnBeatBlendMode);
+    BlendCombo("##obblend", pic->OnBeatBlendMode);
 
-    if (cfg.OnBeatBlendMode == 7) {
+    if (pic->OnBeatBlendMode == 7) {
         ImGui::TextUnformatted("Blend Amount");
         ImGui::SetNextItemWidth(-1.0f);
-        dirty |= ImGui::SliderInt("##obadj", &cfg.OnBeatAdjustBlend, 0, 255);
+        ImGui::SliderInt("##obadj", &pic->OnBeatAdjustBlend, 0, 255);
     }
 
-    dirty |= ImGui::Checkbox("On-Beat Bilinear", &cfg.OnBeatBilinear);
-
-    if (dirty)
-        pic->NotifyConfigChanged({ "blendMode", "adjustBlend", "bilinear",
-                                   "onBeatBlendMode", "onBeatAdjustBlend", "onBeatBilinear" });
+    ImGui::Checkbox("On-Beat Bilinear", &pic->OnBeatBilinear);
 }
 
 void RegisterPicture2UI(ConfigUiRegistry& reg)

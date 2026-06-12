@@ -1,6 +1,7 @@
 #include "MovingParticle.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_movingparticle.sc.bin.h"
@@ -45,25 +46,25 @@ void MovingParticle::Render(const RenderContext& Context)
 
     // Pixel-space position
     const float Ss = (float)std::min(Height / 2, (Width * 3) / 8);
-    const float PositionX = PosX * Ss * ((float)Cfg.Distance / 32.f) + (float)Width  * 0.5f;
-    const float PositionY = PosY * Ss * ((float)Cfg.Distance / 32.f) + (float)Height * 0.5f;
+    const float PositionX = PosX * Ss * ((float)Distance / 32.f) + (float)Width  * 0.5f;
+    const float PositionY = PosY * Ss * ((float)Distance / 32.f) + (float)Height * 0.5f;
 
     // On-beat size snap, then smooth toward target
-    if (Context.IsBeat() && Cfg.OnBeatSizeChange)
+    if (Context.IsBeat() && OnBeatSizeChange)
     {
-        CurSize = (float)Cfg.OnBeatSize;
+        CurSize = (float)OnBeatSize;
     }
 
     const float DrawSize = (float)(int32_t)CurSize;
-    CurSize = (float)((int32_t)((CurSize + (float)Cfg.Size) * 0.5f));
+    CurSize = (float)((int32_t)((CurSize + (float)Size) * 0.5f));
 
     // Center in UV space, radius in pixels
     const float CenterU = (PositionX + 0.5f) / (float)Width;
     const float CenterV = (PositionY + 0.5f) / (float)Height;
     const float RadiusPx = DrawSize * 0.5f;
 
-    const float ParticleData[4] = { CenterU, CenterV, RadiusPx, (float)Cfg.BlendMode };
-    const float ColorData[4] = { Cfg.Color[0] / 255.f, Cfg.Color[1] / 255.f, Cfg.Color[2] / 255.f, 1.f };
+    const float ParticleData[4] = { CenterU, CenterV, RadiusPx, (float)BlendMode };
+    const float ColorData[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 1.f };
     const float ResolutionData[4] = { (float)Width, (float)Height, 0.f, 0.f };
 
     bgfx::setUniform(ParticleUniform, ParticleData);
@@ -99,4 +100,26 @@ void MovingParticle::Destroy()
     ParticleUniform = BGFX_INVALID_HANDLE;
     ColorUniform = BGFX_INVALID_HANDLE;
     ResolutionUniform = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json MovingParticle::Serialize() const
+{
+    return {
+        { kColor,            JsonUtil::ColorToJson(Color) },
+        { kDistance,         Distance         },
+        { kSize,             Size             },
+        { kOnBeatSizeChange, OnBeatSizeChange },
+        { kOnBeatSize,       OnBeatSize       },
+        { kBlendMode,        BlendMode        },
+    };
+}
+
+void MovingParticle::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadColor(j, kColor,            Color);
+    JsonUtil::ReadInt  (j, kDistance,         Distance);
+    JsonUtil::ReadInt  (j, kSize,             Size);
+    JsonUtil::ReadBool (j, kOnBeatSizeChange, OnBeatSizeChange);
+    JsonUtil::ReadInt  (j, kOnBeatSize,       OnBeatSize);
+    JsonUtil::ReadInt  (j, kBlendMode,        BlendMode);
 }

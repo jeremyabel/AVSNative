@@ -1,16 +1,29 @@
 #include "effects/CustomBpm.h"
 
+#include "engine/JsonUtil.h"
+
 #include <algorithm>
 
-void CustomBpm::OnConfigChanged(const std::vector<std::string>& changed)
+nlohmann::json CustomBpm::Serialize() const
 {
-    // The three modes are mutually exclusive; turning one on clears the others.
-    const auto has = [&](const char* k) {
-        return std::find(changed.begin(), changed.end(), k) != changed.end();
+    return {
+        { kArbitrary, Arbitrary },
+        { kSkip,      Skip      },
+        { kInvert,    Invert    },
+        { kArbVal,    ArbVal    },
+        { kSkipVal,   SkipVal   },
+        { kSkipFirst, SkipFirst },
     };
-    if      (has("arbitrary") && Cfg.Arbitrary) { Cfg.Skip = false; Cfg.Invert = false; }
-    else if (has("skip")      && Cfg.Skip)      { Cfg.Arbitrary = false; Cfg.Invert = false; }
-    else if (has("invert")    && Cfg.Invert)    { Cfg.Arbitrary = false; Cfg.Skip = false; }
+}
+
+void CustomBpm::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadBool(j, kArbitrary, Arbitrary);
+    JsonUtil::ReadBool(j, kSkip,      Skip);
+    JsonUtil::ReadBool(j, kInvert,    Invert);
+    JsonUtil::ReadInt (j, kArbVal,    ArbVal);
+    JsonUtil::ReadInt (j, kSkipVal,   SkipVal);
+    JsonUtil::ReadInt (j, kSkipFirst, SkipFirst);
 }
 
 void CustomBpm::Init()
@@ -33,23 +46,23 @@ void CustomBpm::Render(const RenderContext& Ctx)
     }
 
     bool outBeat = inBeat;
-    if (Cfg.SkipFirst != 0 && m_beatCount <= Cfg.SkipFirst)
+    if (SkipFirst != 0 && m_beatCount <= SkipFirst)
     {
         outBeat = false;
     }
-    else if (Cfg.Arbitrary)
+    else if (Arbitrary)
     {
         const auto now = Clock::now();
-        const auto period = std::chrono::milliseconds(60000 / std::max(1, Cfg.ArbVal));
+        const auto period = std::chrono::milliseconds(60000 / std::max(1, ArbVal));
         if (now - m_arbLast > period) { m_arbLast = now; outBeat = true; }
         else                          outBeat = false;
     }
-    else if (Cfg.Skip)
+    else if (Skip)
     {
-        if (inBeat && ++m_skipCount >= Cfg.SkipVal + 1) { m_skipCount = 0; outBeat = true; }
+        if (inBeat && ++m_skipCount >= SkipVal + 1) { m_skipCount = 0; outBeat = true; }
         else                                            outBeat = false;
     }
-    else if (Cfg.Invert)
+    else if (Invert)
     {
         outBeat = !inBeat;
     }

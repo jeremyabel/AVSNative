@@ -1,35 +1,28 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct AddBordersConfig
-{
-    std::array<uint8_t, 3> Color = { 0, 0, 0 };
-    int Size = 1; // 1–50, percentage of each dimension
-};
+#include <array>
 
-class AddBorders : public ReflectedEffect<AddBordersConfig>
+class AddBorders : public Effect
 {
 public:
-    
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    std::array<uint8_t, 3> Color = { 0, 0, 0 };
+    int Size = 1; // 1–50, percentage of each dimension
+
+    static constexpr const char* kColor = "color";
+    static constexpr const char* kSize  = "size";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Color(&AddBordersConfig::Color, "color", "Color"),
-            RangeI(&AddBordersConfig::Size, "size", "Size", 1, 50),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Add Borders"; }
+    std::string Name() const override { return "Add Borders"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
-    
     bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle BorderParamsUniform = BGFX_INVALID_HANDLE;

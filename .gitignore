@@ -44,3 +44,4 @@ _deps/
 .DS_Store
 Thumbs.db
 desktop.ini
+avs_shader.log

@@ -1,6 +1,7 @@
 #include "Blur.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_blur.sc.bin.h"
@@ -46,7 +47,7 @@ void Blur::Render(const RenderContext& Context)
     const uint16_t Height = (uint16_t)Context.Height;
     EnsureScratch(Width, Height);
 
-    const float Radius = (Cfg.Intensity == 3) ? 4.f : (Cfg.Intensity == 2) ? 2.f : 1.f;
+    const float Radius = (Intensity == 3) ? 4.f : (Intensity == 2) ? 2.f : 1.f;
     const float HorizParams[4] = { 1.f / (float)Width, 0.f, Radius, 0.f };
     const float VertParams[4] = { 0.f, 1.f / (float)Height, Radius, 0.f };
 
@@ -91,4 +92,16 @@ void Blur::Destroy()
     ParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json Blur::Serialize() const
+{
+    return {
+        { kIntensity, Intensity },
+    };
+}
+
+void Blur::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt(j, kIntensity, Intensity);
 }

@@ -1,33 +1,28 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct UniqueToneConfig
+#include <array>
+
+class UniqueTone : public Effect
 {
+public:
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
     std::array<uint8_t, 3> Color    = { 255, 255, 255 };
     bool                   Invert   = false;
     int                    OutBlend = 0;   // 0=Replace 1=Additive 2=Average
-};
 
-class UniqueTone : public ReflectedEffect<UniqueToneConfig>
-{
-public:
+    static constexpr const char* kColor    = "color";
+    static constexpr const char* kInvert   = "invert";
+    static constexpr const char* kOutBlend = "outBlend";
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {
-            Color(&UniqueToneConfig::Color, "color", "Color"),
-            Bool(&UniqueToneConfig::Invert, "invert", "Invert"),
-            SelectI(&UniqueToneConfig::OutBlend, "outBlend", "Blend",
-                    { "Replace", "Additive", "Average" }),
-        };
-        return f;
-    }
-    std::string EffectName() const override { return "Unique Tone"; }
+    std::string Name() const override { return "Unique Tone"; }
+    nlohmann::json Serialize() const override;
+    void Deserialize(const nlohmann::json& j) override;
 
 private:
     bgfx::ProgramHandle Program       = BGFX_INVALID_HANDLE;

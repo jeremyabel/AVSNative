@@ -1,25 +1,17 @@
 #pragma once
 
-#include "engine/Reflect.h"
+#include "engine/Effect.h"
 
-struct ScatterConfig
-{
-};
-
-class Scatter : public ReflectedEffect<ScatterConfig>
+class Scatter : public Effect
 {
 public:
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
 
-protected:
-    const std::vector<Field>& Fields() const override
-    {
-        static const std::vector<Field> f = {};
-        return f;
-    }
-    std::string EffectName() const override { return "Scatter"; }
+    std::string Name() const override { return "Scatter"; }
+    nlohmann::json Serialize() const override { return nlohmann::json::object(); }
+    void Deserialize(const nlohmann::json& /*j*/) override {}
 
 private:
     uint32_t SeedFrame = 0;

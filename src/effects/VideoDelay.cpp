@@ -1,5 +1,7 @@
 #include "VideoDelay.h"
 
+#include "engine/JsonUtil.h"
+
 #include "engine/FBOManager.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -30,7 +32,7 @@ void VideoDelay::Init()
     m_program = bgfx::createProgram(VS, FS, true);
     m_texUnif = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
-    m_frameDelay = Cfg.Delay;
+    m_frameDelay = Delay;
 }
 
 void VideoDelay::FreeRing()
@@ -41,24 +43,33 @@ void VideoDelay::FreeRing()
     m_writeIdx = 0;
 }
 
-void VideoDelay::OnConfigChanged(const std::vector<std::string>& changed)
+void VideoDelay::ApplyDelayChange()
 {
-    for (const std::string& k : changed)
-    {
-        if (k == "usebeats")
-        {
-            m_frameDelay      = 0;
-            m_framesSinceBeat = 0;
-            if (!Cfg.UseBeats) m_frameDelay = Cfg.Delay;
-        }
-        else if (k == "delay")
-        {
-            // Beats mode multiplies the delay each beat, so it uses a tighter cap.
-            const int hi = Cfg.UseBeats ? 16 : 200;
-            Cfg.Delay = std::clamp(Cfg.Delay, 0, hi);
-            if (!Cfg.UseBeats) m_frameDelay = Cfg.Delay;
-        }
-    }
+    m_frameDelay      = 0;
+    m_framesSinceBeat = 0;
+
+    // Beats mode multiplies the delay each beat, so it uses a tighter cap.
+    const int hi = UseBeats ? 16 : 200;
+    Delay = std::clamp(Delay, 0, hi);
+    if (!UseBeats) m_frameDelay = Delay;
+}
+
+nlohmann::json VideoDelay::Serialize() const
+{
+    return {
+        { kEnabled,  Enabled  },
+        { kUseBeats, UseBeats },
+        { kDelay,    Delay    },
+    };
+}
+
+void VideoDelay::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadBool(j, kEnabled,  Enabled);
+    JsonUtil::ReadBool(j, kUseBeats, UseBeats);
+    JsonUtil::ReadInt (j, kDelay,    Delay);
+
+    ApplyDelayChange();
 }
 
 void VideoDelay::Render(const RenderContext& Context)
@@ -67,21 +78,21 @@ void VideoDelay::Render(const RenderContext& Context)
     const uint16_t h = (uint16_t)Context.Height;
 
     // Resolve the active frame delay.
-    if (Cfg.UseBeats)
+    if (UseBeats)
     {
         if (Context.IsBeat())
         {
-            m_frameDelay = std::min(m_framesSinceBeat * Cfg.Delay, 400);
+            m_frameDelay = std::min(m_framesSinceBeat * Delay, 400);
             m_framesSinceBeat = 0;
         }
         m_framesSinceBeat++;
     }
     else
     {
-        m_frameDelay = Cfg.Delay;
+        m_frameDelay = Delay;
     }
 
-    if (!Cfg.Enabled || m_frameDelay == 0)
+    if (!Enabled || m_frameDelay == 0)
         return;   // pass-through (no swap)
 
     const int slots = std::min(m_frameDelay, MAX_RING_SLOTS);

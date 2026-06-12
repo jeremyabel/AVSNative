@@ -1,5 +1,6 @@
 #include "effects/ColorMap.h"
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include <bgfx/bgfx.h>
 
@@ -15,7 +16,7 @@ void ColorMap::BakeMap(int idx)
 {
     if (idx < 0 || idx >= kNumMaps) return;
 
-    std::vector<ColorMapStop> sorted = Cfg.Maps[idx].Stops;
+    std::vector<ColorMapStop> sorted = Maps[idx].Stops;
     if (sorted.empty()) return;
     std::stable_sort(sorted.begin(), sorted.end(),
                      [](const ColorMapStop& a, const ColorMapStop& b) {
@@ -65,65 +66,68 @@ void ColorMap::BakeAll()
     for (int i = 0; i < kNumMaps; ++i) BakeMap(i);
 }
 
-// ── GetConfig / SetConfig ─────────────────────────────────────────────────────
+// ── Serialize / Deserialize ───────────────────────────────────────────────────
 
-nlohmann::json ColorMap::GetConfig() const
+nlohmann::json ColorMap::Serialize() const
 {
-    nlohmann::json j = ReflectedEffect<ColorMapConfig>::GetConfig();
-    j["currentMap"] = Cfg.CurrentMap;
+    nlohmann::json j = {
+        { kColorKey,          ColorKey          },
+        { kBlendMode,         BlendMode         },
+        { kAdjustableAlpha,   AdjustableAlpha   },
+        { kMapCycleMode,      MapCycleMode      },
+        { kMapCycleSpeed,     MapCycleSpeed     },
+        { kDontSkipFastBeats, DontSkipFastBeats },
+        { kCurrentMap,        CurrentMap        },
+    };
 
     nlohmann::json maps = nlohmann::json::array();
-    for (const ColorMapEntry& m : Cfg.Maps) {
+    for (const ColorMapEntry& m : Maps) {
         nlohmann::json colors = nlohmann::json::array();
         for (const ColorMapStop& s : m.Stops)
             colors.push_back({ { "position", s.Position },
                                { "color", { s.Color[0], s.Color[1], s.Color[2] } } });
         maps.push_back({ { "enabled", m.Enabled }, { "colors", colors } });
     }
-    j["maps"] = maps;
+    j[kMaps] = maps;
     return j;
 }
 
-void ColorMap::SetConfig(const nlohmann::json& cfg)
+void ColorMap::Deserialize(const nlohmann::json& j)
 {
-    ReflectedEffect<ColorMapConfig>::SetConfig(cfg);
+    JsonUtil::ReadInt (j, kColorKey,          ColorKey);
+    JsonUtil::ReadInt (j, kBlendMode,         BlendMode);
+    JsonUtil::ReadInt (j, kAdjustableAlpha,   AdjustableAlpha);
+    JsonUtil::ReadInt (j, kMapCycleMode,      MapCycleMode);
+    JsonUtil::ReadInt (j, kMapCycleSpeed,     MapCycleSpeed);
+    JsonUtil::ReadBool(j, kDontSkipFastBeats, DontSkipFastBeats);
+    JsonUtil::ReadInt (j, kCurrentMap,        CurrentMap);
 
-    if (cfg.contains("currentMap") && cfg["currentMap"].is_number())
-        Cfg.CurrentMap = std::clamp(cfg["currentMap"].get<int>(), 0, kNumMaps - 1);
-
-    if (cfg.contains("maps") && cfg["maps"].is_array()) {
-        const auto& maps = cfg["maps"];
+    if (j.contains(kMaps) && j[kMaps].is_array()) {
+        const auto& maps = j[kMaps];
         for (int i = 0; i < kNumMaps && i < (int)maps.size(); ++i) {
             const auto& m = maps[i];
-            Cfg.Maps[i].Enabled = m.value("enabled", false);
+            Maps[i].Enabled = m.value("enabled", false);
             if (m.contains("colors") && m["colors"].is_array()) {
                 std::vector<ColorMapStop> stops;
                 for (const auto& c : m["colors"]) {
                     ColorMapStop s;
-                    s.Position = std::clamp(c.value("position", 0), 0, 255);
+                    s.Position = c.value("position", 0);
                     const auto& col = c["color"];
                     if (col.is_array() && col.size() == 3)
-                        s.Color = { (uint8_t)std::clamp(col[0].get<int>(), 0, 255),
-                                    (uint8_t)std::clamp(col[1].get<int>(), 0, 255),
-                                    (uint8_t)std::clamp(col[2].get<int>(), 0, 255) };
+                        s.Color = { (uint8_t)col[0].get<int>(),
+                                    (uint8_t)col[1].get<int>(),
+                                    (uint8_t)col[2].get<int>() };
                     stops.push_back(s);
                 }
                 if (!stops.empty())
-                    Cfg.Maps[i].Stops = std::move(stops);
+                    Maps[i].Stops = std::move(stops);
             }
         }
     }
 
-    m_nextMap = Cfg.CurrentMap;
+    m_nextMap = CurrentMap;
     BakeAll();
     ++m_configVersion;
-}
-
-void ColorMap::OnConfigChanged(const std::vector<std::string>& changed)
-{
-    // The UI edits Maps directly then notifies with "maps"; re-bake on any such change.
-    if (std::find(changed.begin(), changed.end(), "maps") != changed.end())
-        BakeAll();
 }
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
@@ -165,7 +169,7 @@ void ColorMap::Destroy()
 
 bool ColorMap::AnyEnabled() const
 {
-    for (const ColorMapEntry& m : Cfg.Maps)
+    for (const ColorMapEntry& m : Maps)
         if (m.Enabled) return true;
     return false;
 }
@@ -175,25 +179,25 @@ void ColorMap::AdvanceNextMap()
     if (!AnyEnabled()) return;
     const int start = m_nextMap;
     do {
-        if (Cfg.MapCycleMode == 1)
+        if (MapCycleMode == 1)
             m_nextMap = std::rand() % kNumMaps;
         else
             m_nextMap = (m_nextMap + 1) % kNumMaps;
-    } while (!Cfg.Maps[m_nextMap].Enabled && m_nextMap != start);
+    } while (!Maps[m_nextMap].Enabled && m_nextMap != start);
 }
 
 const uint8_t* ColorMap::SelectLUT(bool isBeat)
 {
-    const int cur = std::clamp(Cfg.CurrentMap, 0, kNumMaps - 1);
+    const int cur = std::clamp(CurrentMap, 0, kNumMaps - 1);
 
-    if (Cfg.MapCycleMode == 0) {
+    if (MapCycleMode == 0) {
         m_changeStep = 0;
         return m_baked[cur].data();
     }
 
-    m_changeStep = std::min(m_changeStep + Cfg.MapCycleSpeed, kLutSize);
+    m_changeStep = std::min(m_changeStep + MapCycleSpeed, kLutSize);
 
-    if (isBeat && (!Cfg.DontSkipFastBeats || m_changeStep == kLutSize)) {
+    if (isBeat && (!DontSkipFastBeats || m_changeStep == kLutSize)) {
         AdvanceNextMap();
         m_changeStep = 0;
     }
@@ -202,7 +206,7 @@ const uint8_t* ColorMap::SelectLUT(bool isBeat)
         return m_baked[cur].data();
 
     if (m_changeStep >= kLutSize) {
-        Cfg.CurrentMap = m_nextMap;
+        CurrentMap = m_nextMap;
         return m_baked[m_nextMap].data();
     }
 
@@ -230,9 +234,9 @@ void ColorMap::Render(const RenderContext& Ctx)
                           bgfx::copy(lut, kLutSize * 4));
 
     float params[4] = {
-        (float)Cfg.ColorKey,
-        (float)Cfg.BlendMode,
-        (float)Cfg.AdjustableAlpha / 255.0f,
+        (float)ColorKey,
+        (float)BlendMode,
+        (float)AdjustableAlpha / 255.0f,
         0.0f,
     };
 

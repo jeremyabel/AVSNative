@@ -1,6 +1,7 @@
 #include "Multiplier.h"
 
 #include "engine/FBOManager.h"
+#include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_multiplier.sc.bin.h"
@@ -17,7 +18,7 @@ void Multiplier::Init()
 
 void Multiplier::Render(const RenderContext& Context)
 {
-    const float Params[4] = { float(Cfg.Mode), 0.f, 0.f, 0.f };
+    const float Params[4] = { float(Mode), 0.f, 0.f, 0.f };
 
     bgfx::setUniform(ParamsUniform, Params);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
@@ -42,4 +43,16 @@ void Multiplier::Destroy()
     ParamsUniform = BGFX_INVALID_HANDLE;
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json Multiplier::Serialize() const
+{
+    return {
+        { kMode, Mode },
+    };
+}
+
+void Multiplier::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt(j, kMode, Mode);
 }
