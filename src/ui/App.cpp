@@ -157,11 +157,14 @@ void App::Init(const char* PresetPath)
     }
 
     // Editor window — hosts ImGui panels; this is the bgfx primary surface.
-    // HIGH_PIXEL_DENSITY requests a native-resolution backing on HiDPI displays
-    // (Retina etc.) so the UI renders crisply rather than being upscaled by the OS.
+    // NOTE: SDL_WINDOW_HIGH_PIXEL_DENSITY is intentionally NOT set. On macOS it makes
+    // SDL set up the NSView's layer, which collides with bgfx attaching its own
+    // CAMetalLayer to the content view → both windows render solid white. True native
+    // HiDPI needs a Mac-side fix (pass SDL's CAMetalLayer to bgfx); until then the UI
+    // scales via ImGui content scaling (View → UI Scale) instead.
     m_editorWin = SDL_CreateWindow("AVS Editor",
                                    m_editorWidth, m_editorHeight,
-                                   SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+                                   SDL_WINDOW_RESIZABLE);
     if (!m_editorWin)
     {
         fprintf(stderr, "SDL_CreateWindow (editor) failed: %s\n", SDL_GetError());
@@ -169,10 +172,11 @@ void App::Init(const char* PresetPath)
         return;
     }
 
-    // Output window — shows the AVS renderer output.
+    // Output window — shows the AVS renderer output. (No HIGH_PIXEL_DENSITY — see the
+    // editor window note above; it turns the Metal swapchain white on macOS.)
     m_outputWin = SDL_CreateWindow("AVS Output",
                                    m_outputWidth, m_outputHeight,
-                                   SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+                                   SDL_WINDOW_RESIZABLE);
     if (!m_outputWin)
     {
         fprintf(stderr, "SDL_CreateWindow (output) failed: %s\n", SDL_GetError());
