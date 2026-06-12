@@ -1,6 +1,7 @@
 #include "EffectChain.h"
 
 #include "FBOManager.h"
+#include "LuaRuntime.h"
 
 // Monotonic effect-id source. Starts at 1 so 0 always means "unassigned".
 static uint32_t g_nextEffectId = 1;
@@ -20,6 +21,13 @@ void EffectChain::Render(RenderContext Context)
 {
     for (auto& Entry : Entries)
     {
+        // Ensure every effect has a stable, unique id (loaded effects without a
+        // serialized id arrive here as 0). Assigned after load, so it never clashes
+        // with a noted id, and persists once serialized. Exposed to Lua as getId().
+        if (Entry.Id == 0)
+            Entry.Id = AllocEffectId();
+        LuaRuntime::SetCurrentEffectId(Entry.Id);
+
         const bool isContainer = (Entry.Effect->GetInnerChain() != nullptr);
 
         if (isContainer)

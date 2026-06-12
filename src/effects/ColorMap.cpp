@@ -1,6 +1,7 @@
 #include "effects/ColorMap.h"
 #include "engine/FBOManager.h"
 #include "engine/JsonUtil.h"
+#include "engine/KeyInput.h"
 
 #include <bgfx/bgfx.h>
 
@@ -88,7 +89,8 @@ nlohmann::json ColorMap::Serialize() const
                                { "color", { s.Color[0], s.Color[1], s.Color[2] } } });
         maps.push_back({ { "enabled", m.Enabled }, { "colors", colors } });
     }
-    j[kMaps] = maps;
+    j[kMaps]    = maps;
+    j[kMapKeys] = MapKeys;
     return j;
 }
 
@@ -123,6 +125,13 @@ void ColorMap::Deserialize(const nlohmann::json& j)
                     Maps[i].Stops = std::move(stops);
             }
         }
+    }
+
+    if (j.contains(kMapKeys) && j[kMapKeys].is_array())
+    {
+        const auto& mk = j[kMapKeys];
+        for (int i = 0; i < kNumMaps && i < (int)mk.size(); ++i)
+            MapKeys[i] = mk[i].get<uint32_t>();
     }
 
     m_nextMap = CurrentMap;
@@ -229,6 +238,19 @@ const uint8_t* ColorMap::SelectLUT(bool isBeat)
 
 void ColorMap::Render(const RenderContext& Ctx)
 {
+    // Keyboard map switching: a bound key force-selects its map for display.
+    for (int i = 0; i < kNumMaps; ++i)
+    {
+        if (MapKeys[i] != 0 && avs::KeyInput::WasKeyPressed(MapKeys[i]))
+        {
+            CurrentMap   = i;
+            m_nextMap    = i;
+            m_changeStep = kLutSize;   // settle immediately on the new map
+            ++m_keySelectVersion;
+            break;
+        }
+    }
+
     const uint8_t* lut = SelectLUT(Ctx.IsBeat());
     bgfx::updateTexture2D(m_lutTex, 0, 0, 0, 0, kLutSize, 1,
                           bgfx::copy(lut, kLutSize * 4));

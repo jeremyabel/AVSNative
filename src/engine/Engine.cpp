@@ -1,6 +1,7 @@
 #include "Engine.h"
 
 #include "engine/AudioAnalyzer.h"
+#include "engine/LuaRuntime.h"
 
 #include <algorithm>
 
@@ -8,6 +9,7 @@
 #include "effects/BufferSave.h"
 #include "effects/ChannelShift.h"
 #include "effects/Clear.h"
+#include "effects/Strobe.h"
 #include "effects/Grain.h"
 #include "effects/Invert.h"
 #include "effects/Scatter.h"
@@ -53,6 +55,7 @@
 #include "effects/ImageGrid.h"
 #include "effects/Convolution.h"
 #include "effects/ColorMap.h"
+#include "effects/Ramp.h"
 #include "effects/CustomBpm.h"
 #include "effects/MultiDelay.h"
 #include "effects/Triangle.h"
@@ -90,6 +93,7 @@ bool Engine::Init(const EngineConfig& Config, bgfx::RendererType::Enum Renderer)
     EffectRegistry.Register("Buffer Save",    []() { return std::make_unique<BufferSave>(); });
     EffectRegistry.Register("Channel Shift",  []() { return std::make_unique<ChannelShift>(); });
     EffectRegistry.Register("Clear",          []() { return std::make_unique<Clear>(); });
+    EffectRegistry.Register("Strobe",         []() { return std::make_unique<Strobe>(); });
     EffectRegistry.Register("Grain",          []() { return std::make_unique<Grain>(); });
     EffectRegistry.Register("Invert",         []() { return std::make_unique<Invert>(); });
     EffectRegistry.Register("Scatter",        []() { return std::make_unique<Scatter>(); });
@@ -131,6 +135,7 @@ bool Engine::Init(const EngineConfig& Config, bgfx::RendererType::Enum Renderer)
     EffectRegistry.Register("Picture II",         []() { return std::make_unique<Picture2>(); });
     EffectRegistry.Register("Convolution Filter", []() { return std::make_unique<Convolution>(); });
     EffectRegistry.Register("Color Map",          []() { return std::make_unique<ColorMap>(); });
+    EffectRegistry.Register("Ramp",               []() { return std::make_unique<Ramp>(); });
     EffectRegistry.Register("Custom BPM",         []() { return std::make_unique<CustomBpm>(); });
     EffectRegistry.Register("Dynamic Shift",      []() { return std::make_unique<DynamicShift>(); });
     EffectRegistry.Register("Texer",              []() { return std::make_unique<Texer>(); });
@@ -178,6 +183,19 @@ void Engine::Tick()
         return;
 
     Frame++;
+
+    // Delta time since the previous frame (seconds), clamped so a stall (window
+    // unfocused, breakpoint) can't inject a huge jump into scripts. Exposed to all
+    // Lua blocks as `dt`.
+    const auto now = std::chrono::steady_clock::now();
+    double dt = 0.0;
+    if (HaveTick)
+        dt = std::min(std::chrono::duration<double>(now - LastTick).count(), 0.25);
+    LastTick = now;
+    HaveTick = true;
+    Time += dt;
+    LuaRuntime::SetFrameDelta(dt);
+    LuaRuntime::SetSliders(Sliders);
 
     Audio.Update();
     UploadAudioTex();

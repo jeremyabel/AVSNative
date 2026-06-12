@@ -224,6 +224,8 @@ void Texer::Stamp(int cx, int cy, uint8_t cr, uint8_t cg, uint8_t cb, int fbW, i
         for (int ix = imgStartX, fbx = fbx0; ix < imgEndX; ix++, fbx++)
         {
             const int si = (imgRow + ix) * 4;
+            const int sa = m_imgPixels[si + 3];
+            if (sa == 0) continue;          // respect image alpha: transparent texels add nothing
             int sr = m_imgPixels[si];
             int sg = m_imgPixels[si + 1];
             int sb = m_imgPixels[si + 2];
@@ -231,6 +233,11 @@ void Texer::Stamp(int cx, int cy, uint8_t cr, uint8_t cg, uint8_t cb, int fbW, i
                 sr = (sr * cr) >> 8;
                 sg = (sg * cg) >> 8;
                 sb = (sb * cb) >> 8;
+            }
+            if (sa != 255) {                 // scale the additive contribution by alpha
+                sr = (sr * sa) / 255;
+                sg = (sg * sa) / 255;
+                sb = (sb * sa) / 255;
             }
             const int di = (outRow + fbx) * 4;
             m_outBuf[di]     = (uint8_t)std::min(255, (int)m_outBuf[di]     + sr);

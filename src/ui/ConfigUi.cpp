@@ -171,6 +171,57 @@ bool PickImageInto(Effect* effect, const char* configKey)
     return true;
 }
 
+bool KeyCaptureButton(const char* id, const void* owner, int index, uint32_t& keycode)
+{
+    // Only one button is armed at a time, bound to a specific (owner, index) so it
+    // can never write a different binding.
+    static const void* s_owner = nullptr;
+    static int         s_index = -1;
+
+    bool changed = false;
+    const bool capturing = (s_owner == owner && s_index == index);
+
+    if (capturing)
+    {
+        if (const uint32_t k = avs::KeyInput::LastKeyPressed(); k != 0)
+        {
+            keycode  = k;
+            s_owner  = nullptr;
+            s_index  = -1;
+            changed  = true;
+        }
+    }
+
+    std::string name;
+    const char* label = "(unset)";
+    if (capturing)
+        label = "press a key...";
+    else if (keycode != 0)
+    {
+        name  = SDL_GetKeyName((SDL_Keycode)keycode);
+        label = name.empty() ? "(unknown)" : name.c_str();
+    }
+
+    char btn[96];
+    std::snprintf(btn, sizeof(btn), "Key: %s###%s", label, id);
+    if (ImGui::Button(btn))
+    {
+        s_owner = owner;
+        s_index = index;
+    }
+    // Right-click clears the binding.
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && keycode != 0)
+    {
+        keycode = 0;
+        if (capturing) { s_owner = nullptr; s_index = -1; }
+        changed = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Click to bind a key; right-click to clear.");
+
+    return changed;
+}
+
 bool KeyedImageListEditor(Effect* effect, KeyedImageList& list)
 {
     // Press-to-capture target. Only one capture is armed at a time (you press one

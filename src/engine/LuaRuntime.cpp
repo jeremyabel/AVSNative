@@ -1,5 +1,7 @@
 #include "LuaRuntime.h"
 #include "AudioAnalyzer.h"
+#include "GlobalSlider.h"
+#include "KeyInput.h"
 
 extern "C" {
 #include <lua.h>
@@ -7,20 +9,79 @@ extern "C" {
 #include <lualib.h>
 }
 
+#include <SDL3/SDL_keyboard.h>
+
 #include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <cstdio>
+#include <random>
 #include <regex>
+#include <string>
 
 static const char* k_mathAliases[] = {
     "sin","cos","tan","asin","acos","atan","atan2",
-    "sqrt","abs","floor","ceil","pow","log","exp","max","min",nullptr
+    "sqrt","abs","floor","ceil","pow","log","exp","max","min",
+    "random","randomseed",nullptr
 };
 
 // Reserved env names that ScanVarDecls and GetUserVars must skip.
 static const char* k_reservedEnv[] = {
     "sin","cos","tan","asin","acos","atan","atan2","sqrt","abs","floor","ceil",
-    "pow","log","exp","max","min","pi","getspec","getosc",nullptr
+    "pow","log","exp","max","min","pi","random","randomseed",
+    "getspec","getosc","key","slider","getId","rand","dt",nullptr
 };
+
+// One process-global PRNG shared by every effect's rand(). Because the stream is
+// shared (not per-effect), two effects calling rand() naturally diverge with no
+// seeding needed. Seeded once from a high-entropy source on first use.
+static std::mt19937_64& Rng()
+{
+    static std::mt19937_64 rng{ std::random_device{}() };
+    return rng;
+}
+
+// Per-frame delta time (seconds), set once per frame by Engine, read by every
+// LuaRuntime when seeding the `dt` env var before running a block.
+static double s_frameDelta = 0.0;
+
+// Preset-global slider values, keyed by name. Refreshed once per frame by Engine
+// (SetSliders), read by the slider() closure in every LuaRuntime.
+static std::unordered_map<std::string, float> s_sliders;
+
+// Id of the effect currently rendering, set by EffectChain before each effect's
+// Render and read by the getId() closure in every LuaRuntime.
+static uint32_t s_currentEffectId = 0;
+
+// Resolve a key() string argument to an SDL keycode (0 = unknown). Cross-platform:
+// SDL keycodes are platform-independent and match what KeyInput is fed.
+//   - a single printable ASCII char ("a", "1", " ") → its keycode directly
+//     (SDL letter keycodes are the lowercase ASCII value);
+//   - a named key ("Space", "Left", "Return", "F1") → SDL's name table, with a
+//     capitalized fallback so "space"/"left" also resolve.
+static uint32_t ResolveKeyName(const char* name)
+{
+    if (!name || !name[0]) return 0;
+
+    if (name[1] == '\0')
+    {
+        unsigned char c = (unsigned char)name[0];
+        if (c >= 'A' && c <= 'Z') c = (unsigned char)(c - 'A' + 'a');
+        if (c >= 32 && c < 127) return (uint32_t)c;
+    }
+
+    if (SDL_Keycode k = SDL_GetKeyFromName(name); k != SDLK_UNKNOWN)
+        return (uint32_t)k;
+
+    std::string cap(name);
+    cap[0] = (char)std::toupper((unsigned char)cap[0]);
+    for (size_t i = 1; i < cap.size(); ++i)
+        cap[i] = (char)std::tolower((unsigned char)cap[i]);
+    if (SDL_Keycode k = SDL_GetKeyFromName(cap.c_str()); k != SDLK_UNKNOWN)
+        return (uint32_t)k;
+
+    return 0;
+}
 
 const std::string LuaRuntime::s_empty = {};
 
@@ -34,6 +95,10 @@ LuaRuntime::LuaRuntime()
     SetupEnv();
     SetupMathAliases();
     SetupAudioFunctions();
+    SetupKeyFunction();
+    SetupSliderFunction();
+    SetupIdFunction();
+    SetupRandFunction();
 }
 
 LuaRuntime::~LuaRuntime()
@@ -90,6 +155,110 @@ void LuaRuntime::SetupAudioFunctions()
     lua_setfield(m_L, -2, "getosc");
 
     lua_pop(m_L, 1);
+}
+
+void LuaRuntime::SetupKeyFunction()
+{
+    lua_rawgeti(m_L, LUA_REGISTRYINDEX, m_envRef);
+    lua_pushcclosure(m_L, l_key, 0);
+    lua_setfield(m_L, -2, "key");
+    lua_pop(m_L, 1);
+}
+
+void LuaRuntime::SetupSliderFunction()
+{
+    lua_rawgeti(m_L, LUA_REGISTRYINDEX, m_envRef);
+    lua_pushcclosure(m_L, l_slider, 0);
+    lua_setfield(m_L, -2, "slider");
+    lua_pop(m_L, 1);
+}
+
+void LuaRuntime::SetSliders(const std::vector<GlobalSlider>& sliders)
+{
+    s_sliders.clear();
+    for (const GlobalSlider& s : sliders)
+        s_sliders[s.Name] = s.Value;
+}
+
+void LuaRuntime::SetupIdFunction()
+{
+    lua_rawgeti(m_L, LUA_REGISTRYINDEX, m_envRef);
+    lua_pushcclosure(m_L, l_getId, 0);
+    lua_setfield(m_L, -2, "getId");
+    lua_pop(m_L, 1);
+}
+
+void LuaRuntime::SetCurrentEffectId(uint32_t id)
+{
+    s_currentEffectId = id;
+}
+
+void LuaRuntime::SetupRandFunction()
+{
+    lua_rawgeti(m_L, LUA_REGISTRYINDEX, m_envRef);
+    lua_pushcclosure(m_L, l_rand, 0);
+    lua_setfield(m_L, -2, "rand");
+    lua_pop(m_L, 1);
+}
+
+// key(code) -> bool: true if the key is held down this frame. `code` is either a
+// number (raw SDL keycode) or a key name string ("a", "Space", "Left", "F1", ...).
+int LuaRuntime::l_key(lua_State* L)
+{
+    uint32_t keycode = 0;
+    if (lua_type(L, 1) == LUA_TNUMBER)
+        keycode = (uint32_t)lua_tonumber(L, 1);
+    else if (lua_type(L, 1) == LUA_TSTRING)
+        keycode = ResolveKeyName(lua_tostring(L, 1));
+
+    lua_pushboolean(L, keycode != 0 && avs::KeyInput::IsKeyDown(keycode));
+    return 1;
+}
+
+// slider(name) -> number: the current raw value of the preset-global slider named
+// `name` (in its [min, max] range). Raises a Lua error if no such slider exists.
+int LuaRuntime::l_slider(lua_State* L)
+{
+    const char* name = luaL_checkstring(L, 1);
+    auto it = s_sliders.find(name);
+    if (it == s_sliders.end())
+        return luaL_error(L, "slider('%s'): no such slider", name);
+    lua_pushnumber(L, it->second);
+    return 1;
+}
+
+// getId() -> number: the stable, unique id of the effect currently rendering.
+// Useful as a per-effect random seed, e.g. randomseed(getId()).
+int LuaRuntime::l_getId(lua_State* L)
+{
+    lua_pushnumber(L, (double)s_currentEffectId);
+    return 1;
+}
+
+// rand([a[, b]]) -> number, drawn from the shared global PRNG:
+//   rand()      -> float in [0, 1)
+//   rand(x)     -> float in [0, x)
+//   rand(x, y)  -> float in [x, y)
+int LuaRuntime::l_rand(lua_State* L)
+{
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+    const double r = unit(Rng());
+
+    const int n = lua_gettop(L);
+    if (n <= 0)
+    {
+        lua_pushnumber(L, r);
+        return 1;
+    }
+    const double a = lua_tonumber(L, 1);
+    if (n == 1)
+    {
+        lua_pushnumber(L, r * a);          // [0, a)
+        return 1;
+    }
+    const double b = lua_tonumber(L, 2);
+    lua_pushnumber(L, a + r * (b - a));    // [a, b)
+    return 1;
 }
 
 int LuaRuntime::l_getspec(lua_State* L)
@@ -178,6 +347,9 @@ double LuaRuntime::GetEnvNumber(const std::string& name) const
     return val;
 }
 
+void LuaRuntime::SetFrameDelta(double seconds) { s_frameDelta = seconds; }
+double LuaRuntime::GetFrameDelta()             { return s_frameDelta; }
+
 std::vector<std::string> LuaRuntime::GetUserVars() const
 {
     std::vector<std::string> vars;
@@ -236,6 +408,7 @@ bool LuaRuntime::CompileBlock(const std::string& code, const std::string& blockN
 void LuaRuntime::RunBlock(int ref, const std::string& blockName)
 {
     if (ref == -1) return;
+    SetEnvNumber("dt", s_frameDelta);   // expose delta time to the block
     lua_rawgeti(m_L, LUA_REGISTRYINDEX, ref);
     const int tp = lua_type(m_L, -1);
     if (tp != LUA_TFUNCTION)
@@ -351,6 +524,7 @@ void LuaRuntime::RunPointLoop(int ref, int n, bool isBeat, int width, int height
                                const std::string& blockName)
 {
     if (ref == -1) return;
+    SetEnvNumber("dt", s_frameDelta);   // expose delta time to the point loop
     lua_rawgeti(m_L, LUA_REGISTRYINDEX, ref);
     const int tp = lua_type(m_L, -1);
     if (tp != LUA_TFUNCTION)
@@ -460,6 +634,7 @@ bool LuaRuntime::CompileTriangleLoop(const std::string& triangleCode, int& refOu
 void LuaRuntime::RunTriangleLoop(int ref, int n, float* outBuf, const std::string& blockName)
 {
     if (ref == -1) return;
+    SetEnvNumber("dt", s_frameDelta);   // expose delta time to the triangle loop
     lua_rawgeti(m_L, LUA_REGISTRYINDEX, ref);
     const int tp = lua_type(m_L, -1);
     if (tp != LUA_TFUNCTION)

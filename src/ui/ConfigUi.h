@@ -52,6 +52,13 @@ bool ColorsEdit(const char* id, std::vector<std::array<uint8_t, 3>>& colors);
 // raw bytes are bundled into the preset on save. Returns true if an image loaded.
 bool PickImageInto(Effect* effect, const char* configKey);
 
+// Press-to-capture key-binding button for a single SDL keycode (0 = unbound).
+// `owner`+`index` scope the armed capture so only one button captures at a time and
+// it can never write another binding. Left-click arms capture (the next key pressed
+// binds); right-click clears the binding. Shows the bound key's name via
+// SDL_GetKeyName. Returns true if the keycode changed this frame.
+bool KeyCaptureButton(const char* id, const void* owner, int index, uint32_t& keycode);
+
 // Editor for a keyed image list (per-instance image→key mappings). Per entry: a
 // "Load…" button (with loaded/empty hint), a "Set key" press-to-capture button
 // showing the bound key's name, and a remove button; plus an "Add image" button.

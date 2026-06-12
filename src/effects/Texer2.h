@@ -10,8 +10,9 @@
 #include <vector>
 
 // Texer II: Lua-scripted particle stamping. Each frame, Lua point code runs n times;
-// each particle sets (x,y,sizex,sizey,red,green,blue) to place a scaled, colorized copy
-// of the loaded image. Particles accumulate into a CPU overlay buffer, which is uploaded
+// each particle sets (x,y,sizex,sizey,r,red,green,blue) to place a scaled, rotated,
+// colorized copy of the loaded image (r = rotation in radians, default 0). Particles
+// accumulate into a CPU overlay buffer, which is uploaded
 // to a texture and composited onto the input via the global line blend mode.
 // See ref/AVSWeb/src/effects/texer2.js.
 class Texer2 : public Effect
@@ -80,21 +81,30 @@ private:
     void MakeDefaultImage();
     void ResetAnimation();
     void AdvanceAnimation();   // advance m_curFrame by wall-clock time, refresh m_imgPixels
-    void EnsureOverlay(int w, int h);
     void RescanAndSeed();
     void CompileAll();
     void RunInit();
-    void StampParticle(int cx, int cy, double sizex, double sizey,
-                       float cr, float cg, float cb, int blendMode, float alpha,
-                       int bufW, int bufH);
+    void EnsureImageTex();   // (re)create the GPU sprite texture when the image size changes
 
-    bgfx::ProgramHandle m_prog        = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_inputUnif   = BGFX_INVALID_HANDLE;   // s_input
-    bgfx::UniformHandle m_overlayUnif = BGFX_INVALID_HANDLE;   // s_overlay
-    bgfx::UniformHandle m_paramsUnif  = BGFX_INVALID_HANDLE;   // u_t2params
-    bgfx::TextureHandle m_overlayTex  = BGFX_INVALID_HANDLE;
+    // Seed pass: copy the input into the output FBO (vs_fullscreen + fs_blit).
+    bgfx::ProgramHandle m_blitProg   = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_blitTex    = BGFX_INVALID_HANDLE;   // s_texColor
 
-    std::vector<uint8_t> m_imgPixels;   // current frame, RGBA8 (what StampParticle() reads)
+    // Sprite pass: one quad per particle (vs_texer2_sprite + fs_texer2_sprite).
+    bgfx::ProgramHandle m_spriteProg = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_spriteTexU = BGFX_INVALID_HANDLE;   // s_sprite
+    bgfx::UniformHandle m_xformU     = BGFX_INVALID_HANDLE;   // u_xform (center.xy, half.zw)
+    bgfx::UniformHandle m_rotU       = BGFX_INVALID_HANDLE;   // u_rot   (cos, sin, flipX, flipY)
+    bgfx::UniformHandle m_colorU     = BGFX_INVALID_HANDLE;   // u_color
+    bgfx::UniformHandle m_styleU     = BGFX_INVALID_HANDLE;   // u_style (style, param)
+    bgfx::UniformHandle m_screenU    = BGFX_INVALID_HANDLE;   // u_screen (w, h)
+
+    bgfx::VertexBufferHandle m_quadVB = BGFX_INVALID_HANDLE;  // static unit quad [-1,1]
+    bgfx::TextureHandle      m_imageTex = BGFX_INVALID_HANDLE; // current sprite image, RGBA8
+    int  m_texW = 0, m_texH = 0;     // size of m_imageTex
+    bool m_spriteDirty = true;       // re-upload m_imgPixels to m_imageTex
+
+    std::vector<uint8_t> m_imgPixels;   // current frame, RGBA8 (uploaded to m_imageTex)
     std::vector<uint8_t> m_raw;         // original image bytes (for re-bundling)
     std::string          m_name;        // original filename
     int m_imgW = 0, m_imgH = 0;
@@ -108,9 +118,6 @@ private:
     double m_frameAccumMs  = 0.0;                      // time accumulated toward next frame
     std::chrono::steady_clock::time_point m_lastTick{};
     bool   m_haveTick      = false;
-
-    std::vector<uint8_t> m_overlayBuf;
-    int m_bufW = 0, m_bufH = 0;
 
     LuaRuntime m_lua;
     int  m_initRef  = -1;  // LUA_NOREF = -1

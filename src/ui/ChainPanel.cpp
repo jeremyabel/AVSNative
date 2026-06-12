@@ -3,6 +3,7 @@
 #include "engine/Effect.h"
 #include "engine/EffectChain.h"
 #include "engine/Engine.h"
+#include "engine/Preset.h"
 #include "engine/Registry.h"
 
 #include <imgui.h>
@@ -363,7 +364,7 @@ void ChainPanel::Render(Engine& engine,
     static int32_t s_addIndex = 0;
     if (s_addIndex >= (int32_t)names.size()) s_addIndex = 0;
 
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 60.0f);
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 96.0f);
     if (ImGui::BeginCombo("##add", names.empty() ? "(none)" : names[s_addIndex].c_str()))
     {
         for (int32_t i = 0; i < (int32_t)names.size(); ++i)
@@ -397,6 +398,28 @@ void ChainPanel::Render(Engine& engine,
             selectedIdx   = insertAt;
         }
     }
+
+    // ── Duplicate (x2) ──────────────────────────────────────────────────────────
+    // Deep-clones the selected effect (all params, assets, inner chain) and inserts
+    // the copy right after it.
+    ImGui::SameLine();
+    const bool canDup = selectedChain && selectedIdx >= 0 &&
+                        selectedIdx < selectedChain->Count();
+    ImGui::BeginDisabled(!canDup);
+    if (ImGui::Button("x2") && canDup)
+    {
+        EffectEntry& src = selectedChain->GetEntry(selectedIdx);
+        const bool en = src.Enabled;
+        if (std::unique_ptr<Effect> clone = Preset::CloneEffect(engine, *src.Effect))
+        {
+            const int32_t insertAt = selectedIdx + 1;
+            selectedChain->Insert(insertAt, { std::move(clone), en });
+            selectedIdx = insertAt;
+        }
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Duplicate the selected effect");
 
     ImGui::End();
 }

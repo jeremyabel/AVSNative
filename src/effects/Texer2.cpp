@@ -7,7 +7,9 @@
 #include <stb/stb_image.h>
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
-#include "generated/spirv/fs_texer2_comp.sc.bin.h"
+#include "generated/spirv/fs_blit.sc.bin.h"
+#include "generated/spirv/vs_texer2_sprite.sc.bin.h"
+#include "generated/spirv/fs_texer2_sprite.sc.bin.h"
 
 #include <algorithm>
 #include <chrono>
@@ -24,7 +26,7 @@
 
 const std::vector<std::string> Texer2::k_builtins = {
     "n","i","x","y","v","b","w","h","iw","ih",
-    "sizex","sizey","red","green","blue","skip",
+    "sizex","sizey","r","red","green","blue","skip",
 };
 
 // ── $pi substitution ─────────────────────────────────────────────────────────
@@ -190,6 +192,7 @@ void Texer2::MakeDefaultImage()
             m_imgPixels[i+3] = 255;
         }
     }
+    m_spriteDirty = true;
 }
 
 // ── Animation state ───────────────────────────────────────────────────────────
@@ -225,7 +228,10 @@ void Texer2::AdvanceAnimation()
         m_curFrame = (m_curFrame + 1) % m_frames.size();
     }
     if (m_curFrame != prev)
+    {
         m_imgPixels = m_frames[m_curFrame];
+        m_spriteDirty = true;
+    }
 }
 
 // ── BuildFromRaw ──────────────────────────────────────────────────────────────
@@ -233,6 +239,7 @@ void Texer2::AdvanceAnimation()
 void Texer2::BuildFromRaw(const std::vector<uint8_t>& raw)
 {
     ResetAnimation();
+    m_spriteDirty = true;
 
     if (raw.empty()) { MakeDefaultImage(); return; }
 
@@ -280,24 +287,25 @@ void Texer2::BuildFromRaw(const std::vector<uint8_t>& raw)
     stbi_image_free(pixels);
 }
 
-// ── GPU overlay buffer ────────────────────────────────────────────────────────
+// ── GPU sprite texture ──────────────────────────────────────────────────────────
 
-void Texer2::EnsureOverlay(int w, int h)
+void Texer2::EnsureImageTex()
 {
-    if (m_bufW == w && m_bufH == h) return;
+    if (m_imgW <= 0 || m_imgH <= 0) return;
+    if (bgfx::isValid(m_imageTex) && m_texW == m_imgW && m_texH == m_imgH) return;
 
-    if (bgfx::isValid(m_overlayTex)) {
-        bgfx::destroy(m_overlayTex);
-        m_overlayTex = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(m_imageTex)) {
+        bgfx::destroy(m_imageTex);
+        m_imageTex = BGFX_INVALID_HANDLE;
     }
 
-    m_bufW = w; m_bufH = h;
-    m_overlayBuf.assign(w * h * 4, 0);
-
-    m_overlayTex = bgfx::createTexture2D(
-        (uint16_t)w, (uint16_t)h, false, 1, bgfx::TextureFormat::RGBA8,
-        BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP |
-        BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
+    m_texW = m_imgW; m_texH = m_imgH;
+    // Filtering (bilinear vs nearest) is chosen at bind time via sampler flags; the
+    // texture itself just clamps.
+    m_imageTex = bgfx::createTexture2D(
+        (uint16_t)m_imgW, (uint16_t)m_imgH, false, 1, bgfx::TextureFormat::RGBA8,
+        BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+    m_spriteDirty = true;
 }
 
 // ── Lua helpers ───────────────────────────────────────────────────────────────
@@ -307,7 +315,7 @@ void Texer2::RescanAndSeed()
     // Seed built-in vars that the engine sets per-frame/per-particle.
     static const char* kVars[] = {
         "n","i","x","y","v","b","w","h","iw","ih",
-        "sizex","sizey","red","green","blue","skip", nullptr
+        "sizex","sizey","r","red","green","blue","skip", nullptr
     };
     for (int k = 0; kVars[k]; k++)
         m_lua.SeedVar(kVars[k]);
@@ -333,134 +341,64 @@ void Texer2::RunInit()
     m_lua.RunBlock(m_initRef, "initCode");
 }
 
-// ── CPU stamp ─────────────────────────────────────────────────────────────────
-// Inline blend function. If the destination pixel is unpainted (alpha=0), writes
-// directly. Otherwise blends according to the current line blend mode.
-
-static inline void BlendPx(uint8_t* dst, bool painted,
-                            float sr, float sg, float sb,
-                            int mode, float alpha)
+// ── Per-mode GPU blend ──────────────────────────────────────────────────────────
+// Maps the line blend mode to a bgfx blend state + a fragment "style" (how the sprite
+// shader shapes its premultiplied output). The mode is constant for the whole frame,
+// so this is computed once and reused for every particle draw. Two accepted GPU
+// approximations: XOR (8) ≈ Replace, and Subtractive-2 (5) darkens transparent texels.
+static void ModeBlendState(int mode, float adjAlpha,
+                           uint64_t& blendOut, float& styleOut, float& paramOut)
 {
-    auto clamp01 = [](float v) -> uint8_t {
-        return (uint8_t)(std::min(1.0f, std::max(0.0f, v)) * 255.0f + 0.5f);
-    };
-
-    if (!painted) {
-        dst[0] = clamp01(sr); dst[1] = clamp01(sg); dst[2] = clamp01(sb);
-        dst[3] = 255;
-        return;
-    }
-
-    const float dr = dst[0] / 255.0f, dg = dst[1] / 255.0f, db = dst[2] / 255.0f;
-    float or_, og, ob;
-
-    switch (mode) {
-    case 1: or_=std::min(1.0f,dr+sr); og=std::min(1.0f,dg+sg); ob=std::min(1.0f,db+sb); break;
-    case 2: or_=std::max(dr,sr); og=std::max(dg,sg); ob=std::max(db,sb); break;
-    case 3: or_=(dr+sr)*0.5f; og=(dg+sg)*0.5f; ob=(db+sb)*0.5f; break;
-    case 4: or_=std::max(0.0f,dr-sr); og=std::max(0.0f,dg-sg); ob=std::max(0.0f,db-sb); break;
-    case 5: or_=std::max(0.0f,sr-dr); og=std::max(0.0f,sg-dg); ob=std::max(0.0f,sb-db); break;
-    case 6: or_=dr*sr; og=dg*sg; ob=db*sb; break;
-    case 7: or_=dr*(1.0f-alpha)+sr*alpha; og=dg*(1.0f-alpha)+sg*alpha; ob=db*(1.0f-alpha)+sb*alpha; break;
-    case 8: {
-        int a=(int)(dr*255+0.5f),b=(int)(dg*255+0.5f),c=(int)(db*255+0.5f);
-        int x=(int)(sr*255+0.5f),y=(int)(sg*255+0.5f),z=(int)(sb*255+0.5f);
-        or_=(float)(a^x)/255.0f; og=(float)(b^y)/255.0f; ob=(float)(c^z)/255.0f; break;
-    }
-    case 9: or_=std::min(dr,sr); og=std::min(dg,sg); ob=std::min(db,sb); break;
-    default: or_=sr; og=sg; ob=sb; break;
-    }
-
-    dst[0]=clamp01(or_); dst[1]=clamp01(og); dst[2]=clamp01(ob); dst[3]=255;
-}
-
-void Texer2::StampParticle(int cx, int cy, double sizex_raw, double sizey_raw,
-                            float cr, float cg, float cb, int blendMode, float alpha,
-                            int bufW, int bufH)
-{
-    const bool flipX = sizex_raw < 0, flipY = sizey_raw < 0;
-    const double szx = std::abs(sizex_raw), szy = std::abs(sizey_raw);
-
-    int left, top, destW, destH;
-    if (Resize) {
-        destW = std::max(1, (int)std::round(m_imgW * szx));
-        destH = std::max(1, (int)std::round(m_imgH * szy));
-        left  = (int)std::round(cx - destW * 0.5);
-        top   = (int)std::round(cy - destH * 0.5);
-    } else {
-        destW = m_imgW; destH = m_imgH;
-        left  = cx - (m_imgW >> 1);
-        top   = cy - (m_imgH >> 1);
-    }
-
-    for (int dy = 0; dy < destH; dy++)
+    styleOut = 0.0f;   // 0 = premultiply by coverage
+    paramOut = 0.0f;
+    switch (mode)
     {
-        const int sy = top + dy;
-        if (sy < 0 || sy >= bufH) continue;
-
-        float fv = (destH > 1) ? (float)dy / (float)(destH - 1) : 0.0f;
-        if (flipY) fv = 1.0f - fv;
-
-        for (int dx = 0; dx < destW; dx++)
-        {
-            const int sx = left + dx;
-            if (sx < 0 || sx >= bufW) continue;
-
-            float fu = (destW > 1) ? (float)dx / (float)(destW - 1) : 0.0f;
-            if (flipX) fu = 1.0f - fu;
-
-            float ir, ig, ib;
-            if (Resize)
-            {
-                // bilinear sample
-                const float tx = fu * (float)(m_imgW - 1);
-                const float ty = fv * (float)(m_imgH - 1);
-                const int x0 = std::max(0, (int)std::floor(tx));
-                const int y0 = std::max(0, (int)std::floor(ty));
-                const int x1 = std::min(x0 + 1, m_imgW - 1);
-                const int y1 = std::min(y0 + 1, m_imgH - 1);
-                const float ffx = tx - (float)x0, ffy = ty - (float)y0;
-
-                auto spx = [&](int py, int px) {
-                    struct { float r,g,b; } ret;
-                    const int ii = (py * m_imgW + px) * 4;
-                    ret.r = m_imgPixels[ii]   / 255.0f;
-                    ret.g = m_imgPixels[ii+1] / 255.0f;
-                    ret.b = m_imgPixels[ii+2] / 255.0f;
-                    return ret;
-                };
-                const auto a=spx(y0,x0), b=spx(y0,x1), c=spx(y1,x0), d=spx(y1,x1);
-                const float w00=(1-ffx)*(1-ffy), w10=ffx*(1-ffy), w01=(1-ffx)*ffy, w11=ffx*ffy;
-                ir = a.r*w00 + b.r*w10 + c.r*w01 + d.r*w11;
-                ig = a.g*w00 + b.g*w10 + c.g*w01 + d.g*w11;
-                ib = a.b*w00 + b.b*w10 + c.b*w01 + d.b*w11;
-            }
-            else
-            {
-                // nearest-neighbor
-                const int ix = (int)std::round(fu * (float)(m_imgW - 1));
-                const int iy = (int)std::round(fv * (float)(m_imgH - 1));
-                const int si = (iy * m_imgW + ix) * 4;
-                ir = m_imgPixels[si]   / 255.0f;
-                ig = m_imgPixels[si+1] / 255.0f;
-                ib = m_imgPixels[si+2] / 255.0f;
-            }
-
-            const float sr = ir * (Colorize ? cr : 1.0f);
-            const float sg = ig * (Colorize ? cg : 1.0f);
-            const float sb = ib * (Colorize ? cb : 1.0f);
-
-            const int di = (sy * bufW + sx) * 4;
-            BlendPx(&m_overlayBuf[di], m_overlayBuf[di + 3] > 0, sr, sg, sb, blendMode, alpha);
-        }
+    case 1: // Additive
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE);
+        break;
+    case 2: // Maximum
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE)
+                 | BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MAX);
+        break;
+    case 3: // 50/50 (= adjustable at alpha 0.5)
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+        styleOut = 2.0f; paramOut = 0.5f;
+        break;
+    case 4: // Subtractive 1 (dst - src)
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE)
+                 | BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_REVSUB);
+        break;
+    case 5: // Subtractive 2 (src - dst) — approx (transparent texels darken)
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE)
+                 | BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_SUB);
+        break;
+    case 6: // Multiply
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_DST_COLOR, BGFX_STATE_BLEND_ZERO);
+        styleOut = 1.0f; // mix toward white by coverage
+        break;
+    case 7: // Adjustable
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+        styleOut = 2.0f; paramOut = adjAlpha;
+        break;
+    case 9: // Minimum
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE)
+                 | BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN);
+        styleOut = 1.0f;
+        break;
+    case 0: // Replace
+    case 8: // XOR — approximated as alpha-over Replace
+    default:
+        blendOut = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+        break;
     }
 }
 
 // ── Init / Destroy ────────────────────────────────────────────────────────────
 
 // Extra Lua built-ins not in LuaRuntime's default math aliases.
+// (rand is provided globally by LuaRuntime — float [0,1)/[0,x)/[x,y) — so it is
+// intentionally not redefined here.)
 static const char k_setupCode[] = R"(
-rand  = function(n) return math.floor(math.random() * n) end
 above = function(a,b) return (a > b) and 1 or 0 end
 below = function(a,b) return (a < b) and 1 or 0 end
 equal = function(a,b) return (a == b) and 1 or 0 end
@@ -471,13 +409,31 @@ atan  = function(a,b) if b ~= nil then return math.atan2(a,b) else return math.a
 
 void Texer2::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,   sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_texer2_comp_spv,  sizeof(fs_texer2_comp_spv)));
-    m_prog = bgfx::createProgram(VS, FS, true);
+    // Seed program: copy the input into the output FBO each frame (vs_fullscreen + fs_blit).
+    bgfx::ShaderHandle bvs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    bgfx::ShaderHandle bfs = bgfx::createShader(bgfx::copy(fs_blit_spv,       sizeof(fs_blit_spv)));
+    m_blitProg = bgfx::createProgram(bvs, bfs, true);
+    m_blitTex  = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
-    m_inputUnif   = bgfx::createUniform("s_input",   bgfx::UniformType::Sampler);
-    m_overlayUnif = bgfx::createUniform("s_overlay", bgfx::UniformType::Sampler);
-    m_paramsUnif  = bgfx::createUniform("u_t2params", bgfx::UniformType::Vec4);
+    // Sprite program: one transformed quad per particle.
+    bgfx::ShaderHandle svs = bgfx::createShader(bgfx::copy(vs_texer2_sprite_spv, sizeof(vs_texer2_sprite_spv)));
+    bgfx::ShaderHandle sfs = bgfx::createShader(bgfx::copy(fs_texer2_sprite_spv, sizeof(fs_texer2_sprite_spv)));
+    m_spriteProg = bgfx::createProgram(svs, sfs, true);
+    m_spriteTexU = bgfx::createUniform("s_sprite", bgfx::UniformType::Sampler);
+    m_xformU     = bgfx::createUniform("u_xform",  bgfx::UniformType::Vec4);
+    m_rotU       = bgfx::createUniform("u_rot",    bgfx::UniformType::Vec4);
+    m_colorU     = bgfx::createUniform("u_color",  bgfx::UniformType::Vec4);
+    m_styleU     = bgfx::createUniform("u_style",  bgfx::UniformType::Vec4);
+    m_screenU    = bgfx::createUniform("u_screen", bgfx::UniformType::Vec4);
+
+    // Static unit quad ([-1,1] corners, two triangles); the VS scales/rotates it.
+    static const float k_unitQuad[] = {
+        -1.0f,-1.0f,  1.0f,-1.0f,  1.0f, 1.0f,
+        -1.0f,-1.0f,  1.0f, 1.0f, -1.0f, 1.0f,
+    };
+    bgfx::VertexLayout layout;
+    layout.begin().add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float).end();
+    m_quadVB = bgfx::createVertexBuffer(bgfx::copy(k_unitQuad, sizeof(k_unitQuad)), layout);
 
     // Seed extra Lua built-ins (rand, above, below, equal, sign, int, atan 2-arg)
     int setupRef = -1;
@@ -494,20 +450,33 @@ void Texer2::Init()
 
 void Texer2::Destroy()
 {
-    if (bgfx::isValid(m_overlayTex))  bgfx::destroy(m_overlayTex);
-    if (bgfx::isValid(m_paramsUnif))  bgfx::destroy(m_paramsUnif);
-    if (bgfx::isValid(m_overlayUnif)) bgfx::destroy(m_overlayUnif);
-    if (bgfx::isValid(m_inputUnif))   bgfx::destroy(m_inputUnif);
-    if (bgfx::isValid(m_prog))        bgfx::destroy(m_prog);
+    if (bgfx::isValid(m_imageTex))   bgfx::destroy(m_imageTex);
+    if (bgfx::isValid(m_quadVB))     bgfx::destroy(m_quadVB);
+    if (bgfx::isValid(m_screenU))    bgfx::destroy(m_screenU);
+    if (bgfx::isValid(m_styleU))     bgfx::destroy(m_styleU);
+    if (bgfx::isValid(m_colorU))     bgfx::destroy(m_colorU);
+    if (bgfx::isValid(m_rotU))       bgfx::destroy(m_rotU);
+    if (bgfx::isValid(m_xformU))     bgfx::destroy(m_xformU);
+    if (bgfx::isValid(m_spriteTexU)) bgfx::destroy(m_spriteTexU);
+    if (bgfx::isValid(m_spriteProg)) bgfx::destroy(m_spriteProg);
+    if (bgfx::isValid(m_blitTex))    bgfx::destroy(m_blitTex);
+    if (bgfx::isValid(m_blitProg))   bgfx::destroy(m_blitProg);
 
-    m_overlayTex  = BGFX_INVALID_HANDLE;
-    m_paramsUnif  = BGFX_INVALID_HANDLE;
-    m_overlayUnif = BGFX_INVALID_HANDLE;
-    m_inputUnif   = BGFX_INVALID_HANDLE;
-    m_prog        = BGFX_INVALID_HANDLE;
+    m_imageTex   = BGFX_INVALID_HANDLE;
+    m_quadVB     = BGFX_INVALID_HANDLE;
+    m_screenU    = BGFX_INVALID_HANDLE;
+    m_styleU     = BGFX_INVALID_HANDLE;
+    m_colorU     = BGFX_INVALID_HANDLE;
+    m_rotU       = BGFX_INVALID_HANDLE;
+    m_xformU     = BGFX_INVALID_HANDLE;
+    m_spriteTexU = BGFX_INVALID_HANDLE;
+    m_spriteProg = BGFX_INVALID_HANDLE;
+    m_blitTex    = BGFX_INVALID_HANDLE;
+    m_blitProg   = BGFX_INVALID_HANDLE;
 
     Keyed.Images.clear();
-    m_bufW = m_bufH = 0;
+    m_texW = m_texH = 0;
+    m_spriteDirty = true;
     m_inited = false;
 }
 
@@ -522,7 +491,15 @@ void Texer2::Render(const RenderContext& Context)
     AdvanceAnimation();   // step animated GIF to the current frame (no-op for static images)
 
     const int w = Context.Width, h = Context.Height;
-    EnsureOverlay(w, h);
+
+    // Upload the current image to the GPU when it changed (image load / GIF frame).
+    EnsureImageTex();
+    if (m_spriteDirty && bgfx::isValid(m_imageTex) && !m_imgPixels.empty())
+    {
+        bgfx::updateTexture2D(m_imageTex, 0, 0, 0, 0, (uint16_t)m_imgW, (uint16_t)m_imgH,
+            bgfx::copy(m_imgPixels.data(), (uint32_t)(m_imgW * m_imgH * 4)));
+        m_spriteDirty = false;
+    }
 
     m_lua.SetAudioData(Context.AudioData);
     m_lua.SetEnvNumber("w",  (double)w);
@@ -537,16 +514,52 @@ void Texer2::Render(const RenderContext& Context)
 
     const int n = (int)std::clamp(m_lua.GetEnvNumber("n"), 0.0, (double)k_maxN);
 
-    const int   blendMode = (int)((*Context.LineBlendMode) & 0xFF);
+    const int   blendMode  = (int)((*Context.LineBlendMode) & 0xFF);
     const float blendAlpha = (float)(((*Context.LineBlendMode) >> 8) & 0xFF) / 255.0f;
 
-    // Clear overlay
-    std::fill(m_overlayBuf.begin(), m_overlayBuf.end(), (uint8_t)0);
+    // One sequential view: seed the output with the input, then blend each particle
+    // quad on top, in submission order, using the per-mode GPU blend.
+    const uint8_t view = Context.ViewId;
+    bgfx::setViewMode(view, bgfx::ViewMode::Sequential);
+    bgfx::setViewFrameBuffer(view, Context.OutputFBO);
+    bgfx::setViewRect(view, 0, 0, (uint16_t)w, (uint16_t)h);
+    bgfx::setViewClear(view, BGFX_CLEAR_NONE);
 
-    if (n > 0)
+    // Seed: input → output FBO.
+    bgfx::setTexture(0, m_blitTex, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(view, m_blitProg);
+
+    if (n > 0 && bgfx::isValid(m_imageTex))
     {
+        uint64_t blend; float style, styleParam;
+        ModeBlendState(blendMode, blendAlpha, blend, style, styleParam);
+        const uint64_t drawState = BGFX_STATE_WRITE_RGB | blend;
+        const uint32_t sampFlags = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP
+            | (Resize ? 0u : (BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT));
+
+        const float screen[4] = { (float)w, (float)h, 0.0f, 0.0f };
+        const float styleU[4] = { style, styleParam, 0.0f, 0.0f };
+
         const float* oscData = (Context.AudioData ? Context.AudioData->osc[0] : nullptr);
         const double step = (n > 1) ? 1.0 / (double)(n - 1) : 0.0;
+
+        // Submit one particle quad centered at pixel (ccx, ccy).
+        auto drawAt = [&](double ccx, double ccy, double destW, double destH,
+                          const float rotU[4], const float colU[4])
+        {
+            const float xf[4] = { (float)ccx, (float)ccy, (float)(destW * 0.5), (float)(destH * 0.5) };
+            bgfx::setUniform(m_xformU,  xf);
+            bgfx::setUniform(m_rotU,    rotU);
+            bgfx::setUniform(m_colorU,  colU);
+            bgfx::setUniform(m_styleU,  styleU);
+            bgfx::setUniform(m_screenU, screen);
+            bgfx::setTexture(0, m_spriteTexU, m_imageTex, sampFlags);
+            bgfx::setState(drawState);
+            bgfx::setVertexBuffer(0, m_quadVB);
+            bgfx::submit(view, m_spriteProg);
+        };
 
         for (int j = 0; j < n; j++)
         {
@@ -555,6 +568,7 @@ void Texer2::Render(const RenderContext& Context)
             m_lua.SetEnvNumber("y",     0.0);
             m_lua.SetEnvNumber("sizex", 1.0);
             m_lua.SetEnvNumber("sizey", 1.0);
+            m_lua.SetEnvNumber("r",     0.0);
             m_lua.SetEnvNumber("red",   1.0);
             m_lua.SetEnvNumber("green", 1.0);
             m_lua.SetEnvNumber("blue",  1.0);
@@ -562,8 +576,8 @@ void Texer2::Render(const RenderContext& Context)
 
             // Map particle index to audio waveform sample [−1, 1].
             const int aIdx = std::min((int)((double)j * 575.0 / (double)std::max(1, n)), 575);
-            const double v = oscData ? (oscData[aIdx] / 128.0 - 1.0) : 0.0;
-            m_lua.SetEnvNumber("v", v);
+            const double vv = oscData ? (oscData[aIdx] / 128.0 - 1.0) : 0.0;
+            m_lua.SetEnvNumber("v", vv);
 
             m_lua.RunBlock(m_pointRef, "pointCode");
 
@@ -573,9 +587,10 @@ void Texer2::Render(const RenderContext& Context)
             const double szy = m_lua.GetEnvNumber("sizey");
             if (std::abs(szx) < 0.01 || std::abs(szy) < 0.01) continue;
 
+            const double rot = m_lua.GetEnvNumber("r");   // sprite rotation, radians
+
             double nx = m_lua.GetEnvNumber("x");
             double ny = m_lua.GetEnvNumber("y");
-
             if (Wrap) {
                 nx -= std::round(nx / 2.0) * 2.0;
                 ny -= std::round(ny / 2.0) * 2.0;
@@ -584,43 +599,35 @@ void Texer2::Render(const RenderContext& Context)
             const float cr = std::clamp((float)m_lua.GetEnvNumber("red"),   0.0f, 1.0f);
             const float cg = std::clamp((float)m_lua.GetEnvNumber("green"), 0.0f, 1.0f);
             const float cb = std::clamp((float)m_lua.GetEnvNumber("blue"),  0.0f, 1.0f);
+            const float colU[4] = { Colorize ? cr : 1.0f, Colorize ? cg : 1.0f,
+                                    Colorize ? cb : 1.0f, 1.0f };
 
-            // Normalize to pixel coords.
-            // ny=+1 → bottom (row h-1), ny=−1 → top (row 0) — matches original AVS convention.
-            // bgfx overlay buffer is top-to-bottom so no flip needed (unlike the JS WebGL path).
-            const int cx = (int)std::round((nx * 0.5 + 0.5) * (double)(w - 1));
-            const int cy = (int)std::round((ny * 0.5 + 0.5) * (double)(h - 1));
+            const double absSzx = std::abs(szx), absSzy = std::abs(szy);
+            const double destW = Resize ? std::max(1.0, m_imgW * absSzx) : (double)m_imgW;
+            const double destH = Resize ? std::max(1.0, m_imgH * absSzy) : (double)m_imgH;
+            const float rotU[4] = { (float)std::cos(rot), (float)std::sin(rot),
+                                    szx < 0 ? 1.0f : 0.0f, szy < 0 ? 1.0f : 0.0f };
 
-            StampParticle(cx, cy, szx, szy, cr, cg, cb, blendMode, blendAlpha, w, h);
+            // ny=+1 → bottom, ny=−1 → top (AVS convention); the VS flips y for NDC.
+            const double cx = (nx * 0.5 + 0.5) * (double)w;
+            const double cy = (ny * 0.5 + 0.5) * (double)h;
+
+            drawAt(cx, cy, destW, destH, rotU, colU);
 
             if (Wrap)
             {
-                const double absSzx = std::abs(szx), absSzy = std::abs(szy);
                 const int spriteW = Resize ? std::max(1,(int)std::round(m_imgW*absSzx)) : m_imgW;
                 const int spriteH = Resize ? std::max(1,(int)std::round(m_imgH*absSzy)) : m_imgH;
-                const bool ovX = (cx - spriteW/2 < 0) || (cx + spriteW/2 >= w);
-                const bool ovY = (cy - spriteH/2 < 0) || (cy + spriteH/2 >= h);
-                const int dX = (cx < w/2) ? w : -w;
-                const int dY = (cy < h/2) ? h : -h;
-                if (ovX)        StampParticle(cx+dX, cy,    szx, szy, cr, cg, cb, blendMode, blendAlpha, w, h);
-                if (ovY)        StampParticle(cx,    cy+dY, szx, szy, cr, cg, cb, blendMode, blendAlpha, w, h);
-                if (ovX && ovY) StampParticle(cx+dX, cy+dY, szx, szy, cr, cg, cb, blendMode, blendAlpha, w, h);
+                const bool ovX = (cx - spriteW/2.0 < 0) || (cx + spriteW/2.0 >= w);
+                const bool ovY = (cy - spriteH/2.0 < 0) || (cy + spriteH/2.0 >= h);
+                const double dX = (cx < w/2.0) ? (double)w : -(double)w;
+                const double dY = (cy < h/2.0) ? (double)h : -(double)h;
+                if (ovX)        drawAt(cx+dX, cy,    destW, destH, rotU, colU);
+                if (ovY)        drawAt(cx,    cy+dY, destW, destH, rotU, colU);
+                if (ovX && ovY) drawAt(cx+dX, cy+dY, destW, destH, rotU, colU);
             }
         }
     }
-
-    // Upload overlay to GPU
-    bgfx::updateTexture2D(m_overlayTex, 0, 0, 0, 0, (uint16_t)w, (uint16_t)h,
-        bgfx::copy(m_overlayBuf.data(), (uint32_t)(w * h * 4)));
-
-    // Composite: background (input) + overlay → output FBO
-    float params[4] = { (float)blendMode, blendAlpha, 0.0f, 0.0f };
-    bgfx::setUniform(m_paramsUnif, params);
-    bgfx::setTexture(0, m_inputUnif,   Context.InputTexture);
-    bgfx::setTexture(1, m_overlayUnif, m_overlayTex);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, m_prog);
 
     Context.FboManager->Swap();
 }

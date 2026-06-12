@@ -9,6 +9,7 @@
 #include "ui/ChainPanel.h"
 #include "ui/ConfigPanel.h"
 #include "ui/ConfigUi.h"
+#include "ui/SlidersPanel.h"
 #include "ui/FileDialog.h"
 
 // Self-hosted Dear ImGui (docking) + our own backends.
@@ -389,14 +390,37 @@ void App::ProcessEvents()
             // editor window because keyboard nav is enabled, which would block every
             // key. WantTextInput keeps keys typed into code editors from triggering
             // swaps while still letting hotkeys and press-to-capture through.
-            if (!event.key.repeat && !ImGui::GetIO().WantTextInput)
-                avs::KeyInput::PushKeyDown((uint32_t)event.key.key);
+            if (!ImGui::GetIO().WantTextInput)
+            {
+                if (!event.key.repeat)
+                    avs::KeyInput::PushKeyDown((uint32_t)event.key.key);
+                // Held state (for hold-to-trigger effects like Strobe). Repeats are
+                // harmless here — already held.
+                avs::KeyInput::SetKeyDown((uint32_t)event.key.key, true);
+            }
+            break;
+
+        case SDL_EVENT_KEY_UP:
+            // Always release, even while a text field is focused, so a key can never
+            // get stuck "held".
+            avs::KeyInput::SetKeyDown((uint32_t)event.key.key, false);
+            break;
+
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+            // The OS delivers key-up to whoever has focus, so a key held as we lose
+            // focus would otherwise stay stuck. Drop all held keys.
+            avs::KeyInput::ClearHeld();
             break;
 
         default:
             break;
         }
     }
+
+    // Remember the most recent key for the status-bar reference readout (same keys
+    // KeyInput exposes to scripts/bindings — i.e. gated by !WantTextInput above).
+    if (uint32_t k = avs::KeyInput::LastKeyPressed(); k != 0)
+        m_lastKey = k;
 
     // Begin the ImGui frame (renderer first, then platform, then ImGui core).
     ImGui_ImplBgfx_NewFrame();
@@ -445,6 +469,12 @@ void App::RenderUI()
                 m_pendingOutputH = m_outputHeight;
                 RefreshAudioDevices();
             }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("View"))
+        {
+            ImGui::MenuItem("Sliders", nullptr, &m_showSliders);
             ImGui::EndMenu();
         }
 
@@ -533,6 +563,9 @@ void App::RenderUI()
     ConfigPanel::Render(m_engine, Selected);
     ConfigPanel::RenderLockedPanels(m_engine, m_engine.GetChain());
 
+    if (m_showSliders)
+        SlidersPanel::Render(m_engine, &m_showSliders);
+
     // Drop editor state for any effect that wasn't drawn this frame.
     ConfigUi::EndFramePrune();
 
@@ -554,9 +587,12 @@ void App::BuildDefaultDockLayout(unsigned int dockId)
     ImGuiID center = dockId;
     const ImGuiID left = ImGui::DockBuilderSplitNode(
         center, ImGuiDir_Left, 0.30f, nullptr, &center);
+    const ImGuiID bottom = ImGui::DockBuilderSplitNode(
+        center, ImGuiDir_Down, 0.25f, nullptr, &center);
 
     ImGui::DockBuilderDockWindow("Effect Chain", left);
     ImGui::DockBuilderDockWindow("Properties",   center);
+    ImGui::DockBuilderDockWindow("Sliders",      bottom);
     ImGui::DockBuilderFinish(dockId);
 }
 
@@ -579,6 +615,18 @@ void App::RenderStatusBar()
             const ImGuiIO& io = ImGui::GetIO();
             const float ms = (io.Framerate > 0.0f) ? 1000.0f / io.Framerate : 0.0f;
             ImGui::Text("FPS: %.1f  (%.2f ms/frame)", io.Framerate, ms);
+
+            // Last-pressed key (for reference when binding keys / using key() in scripts).
+            ImGui::SameLine();
+            if (m_lastKey != 0)
+            {
+                const char* name = SDL_GetKeyName((SDL_Keycode)m_lastKey);
+                ImGui::Text("   |   Last key: %s (%u)", (name && name[0]) ? name : "?", m_lastKey);
+            }
+            else
+            {
+                ImGui::TextDisabled("   |   Last key: (none)");
+            }
             ImGui::EndMenuBar();
         }
     }

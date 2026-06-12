@@ -3,8 +3,11 @@
 #include "AudioAnalyzer.h"
 #include "EffectChain.h"
 #include "FBOManager.h"
+#include "GlobalSlider.h"
 #include "Registry.h"
 #include <bgfx/bgfx.h>
+#include <chrono>
+#include <vector>
 
 struct EngineConfig
 {
@@ -36,6 +39,10 @@ public:
     Registry& GetRegistry();
     AudioAnalyzer& GetAudio();
 
+    // Preset-global named sliders (read from Lua via slider("name")), edited in the
+    // Sliders panel and serialized with the preset.
+    std::vector<GlobalSlider>& GetSliders() { return Sliders; }
+
     bgfx::RendererType::Enum GetRendererType() const;
     int32_t GetWidth() const;
     int32_t GetHeight() const;
@@ -47,6 +54,7 @@ private:
     void SubmitBlit(uint8_t ViewId);
 
     EffectChain Chain;
+    std::vector<GlobalSlider> Sliders;
     FBOManager FboManager;
     Registry EffectRegistry;
     AudioAnalyzer Audio;
@@ -56,6 +64,10 @@ private:
     int32_t Frame = 0;
     double Time = 0.0;
     bool Initialized = false;
+
+    // Wall-clock delta-time tracking (drives the Lua `dt` variable).
+    std::chrono::steady_clock::time_point LastTick;
+    bool HaveTick = false;
 
     bgfx::FrameBufferHandle OutputFbo = BGFX_INVALID_HANDLE; // set by App for the output window
 

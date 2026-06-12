@@ -42,6 +42,9 @@ private:
     int32_t      m_selectedEffect = -1;
 
     bool     m_buildDefaultLayout = false;  // build the dock layout on first frame (no imgui.ini)
+    bool     m_showSliders        = true;   // Sliders panel visibility (View menu toggle)
+
+    uint32_t m_lastKey = 0;   // most recent key seen by KeyInput (shown in the status bar)
 
     std::string m_presetPath;
     bool        m_pendingLoad         = false;

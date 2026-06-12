@@ -347,7 +347,6 @@ void ImageGrid::RunInit()
 
 // Extra Lua built-ins not in LuaRuntime's default math aliases (matches Texer2).
 static const char k_setupCode[] = R"(
-rand  = function(n) return math.floor(math.random() * n) end
 above = function(a,b) return (a > b) and 1 or 0 end
 below = function(a,b) return (a < b) and 1 or 0 end
 equal = function(a,b) return (a == b) and 1 or 0 end

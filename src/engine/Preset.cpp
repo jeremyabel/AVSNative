@@ -3,6 +3,8 @@
 #include "Effect.h"
 #include "EffectChain.h"
 #include "Engine.h"
+#include "GlobalSlider.h"
+#include "JsonUtil.h"
 #include "Registry.h"
 #include "ZipArchive.h"
 
@@ -121,6 +123,37 @@ static void LoadChain(EffectChain& Chain,
     }
 }
 
+// ── Global sliders ────────────────────────────────────────────────────────────
+// Preset-global named sliders live as a top-level "sliders" array, a sibling of
+// "effects". They are not per-effect, so they serialize outside the chain walk.
+
+static nlohmann::json SerialiseSliders(const std::vector<GlobalSlider>& sliders)
+{
+    nlohmann::json arr = nlohmann::json::array();
+    for (const GlobalSlider& s : sliders)
+        arr.push_back({ { "name", s.Name }, { "min", s.Min },
+                        { "max", s.Max }, { "value", s.Value } });
+    return arr;
+}
+
+static void LoadSliders(const nlohmann::json& arr, std::vector<GlobalSlider>& out)
+{
+    out.clear();
+    if (!arr.is_array())
+        return;
+    for (const nlohmann::json& j : arr)
+    {
+        if (!j.is_object())
+            continue;
+        GlobalSlider s;
+        JsonUtil::ReadString(j, "name", s.Name);
+        JsonUtil::ReadFloat(j, "min", s.Min);
+        JsonUtil::ReadFloat(j, "max", s.Max);
+        JsonUtil::ReadFloat(j, "value", s.Value);
+        out.push_back(std::move(s));
+    }
+}
+
 bool Preset::Load(const char* Path, Engine& Engine)
 {
     // Detect bundle (.avsz zip) vs plain JSON by the leading magic bytes.
@@ -184,6 +217,10 @@ bool Preset::Load(const char* Path, Engine& Engine)
         }
     }
 
+    // Global sliders replace any existing list (cleared even when the key is absent).
+    LoadSliders(Json.contains("sliders") ? Json["sliders"] : nlohmann::json::array(),
+                Engine.GetSliders());
+
     if (!Json.contains("effects"))
         return true;
 
@@ -233,6 +270,47 @@ static nlohmann::json SerialiseChain(EffectChain& Chain,
     return effects;
 }
 
+// ── Clone ───────────────────────────────────────────────────────────────────────
+
+// Deep-clone one effect (config + assets + inner chain) using the same building
+// blocks as load: Deserialize for params, ApplyAsset for raw bytes (after
+// Deserialize, as LoadChain does), and recursion for an inner chain.
+static std::unique_ptr<Effect> CloneEffectInto(Effect& Src, Registry& Reg)
+{
+    std::unique_ptr<Effect> Dst = Reg.Create(Src.Name());
+    if (!Dst)
+        return nullptr;
+
+    Dst->Init();
+    Dst->Deserialize(Src.Serialize());
+
+    for (PresetAsset& a : Src.CollectAssets())
+        Dst->ApplyAsset(a.Key, a.Name, std::move(a.Bytes));
+
+    if (EffectChain* SrcInner = Src.GetInnerChain())
+    {
+        if (EffectChain* DstInner = Dst->GetInnerChain())
+        {
+            for (int32_t i = 0; i < SrcInner->Count(); ++i)
+            {
+                EffectEntry& E = SrcInner->GetEntry(i);
+                if (std::unique_ptr<Effect> Child = CloneEffectInto(*E.Effect, Reg))
+                {
+                    DstInner->Add(std::move(Child));
+                    DstInner->GetEntry(DstInner->Count() - 1).Enabled = E.Enabled;
+                }
+            }
+        }
+    }
+
+    return Dst;
+}
+
+std::unique_ptr<Effect> Preset::CloneEffect(Engine& Engine, Effect& Src)
+{
+    return CloneEffectInto(Src, Engine.GetRegistry());
+}
+
 bool Preset::Save(const char* Path, Engine& Engine)
 {
     std::vector<ZipArchive::Entry> assets;
@@ -240,6 +318,7 @@ bool Preset::Save(const char* Path, Engine& Engine)
 
     nlohmann::json Json;
     Json["effects"] = SerialiseChain(Engine.GetChain(), assets, usedNames);
+    Json["sliders"] = SerialiseSliders(Engine.GetSliders());
 
     const std::string dumped = Json.dump(2);
 

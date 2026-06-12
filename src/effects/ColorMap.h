@@ -38,6 +38,10 @@ public:
     // 8 maps, edited by the bespoke gradient UI.
     std::array<ColorMapEntry, kNumMaps> Maps;
 
+    // Per-map keyboard binding (SDL keycode; 0 = unbound). Pressing a bound key
+    // while the effect is enabled switches the displayed map to that index.
+    std::array<uint32_t, kNumMaps> MapKeys{};
+
     static constexpr const char* kColorKey          = "colorKey";
     static constexpr const char* kBlendMode         = "blendmode";
     static constexpr const char* kAdjustableAlpha   = "adjustableAlpha";
@@ -46,6 +50,7 @@ public:
     static constexpr const char* kDontSkipFastBeats = "dontSkipFastBeats";
     static constexpr const char* kCurrentMap        = "currentMap";
     static constexpr const char* kMaps              = "maps";
+    static constexpr const char* kMapKeys           = "mapKeys";
 
     ColorMap() { Maps[0].Enabled = true; }
 
@@ -63,6 +68,10 @@ public:
 
     // Incremented on Deserialize so the UI can resync its gradient widgets.
     uint64_t ConfigVersion() const { return m_configVersion; }
+
+    // Bumped when a bound key switches the current map, so the UI can resync its
+    // edit-selection radio to the newly displayed map.
+    uint64_t KeySelectVersion() const { return m_keySelectVersion; }
 
 private:
     bool        AnyEnabled() const;
@@ -83,5 +92,6 @@ private:
     int m_changeStep = kLutSize;   // fully transitioned
     int m_nextMap    = 0;
 
-    uint64_t m_configVersion = 0;
+    uint64_t m_configVersion    = 0;
+    uint64_t m_keySelectVersion = 0;
 };

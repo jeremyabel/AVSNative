@@ -6,10 +6,12 @@
 
 struct lua_State;
 struct VisData;
+struct GlobalSlider;
 
 // Sandboxed LuaJIT state for one scriptable effect instance.
 // All user code blocks run inside a shared env table (the _ENV / global table for chunks).
-// Math aliases (sin, cos, etc.) and audio functions (getspec, getosc) are pre-seeded.
+// Math aliases (sin, cos, etc.), audio functions (getspec, getosc), and a keyboard
+// query (key) are pre-seeded.
 class LuaRuntime
 {
 public:
@@ -22,6 +24,23 @@ public:
     bool IsValid() const { return m_L != nullptr; }
 
     void SetAudioData(const VisData* data) { m_audioData = data; }
+
+    // Per-frame delta time (seconds), shared by all scripted effects. Engine sets it
+    // once per Tick; every Lua block then sees it as the read-only `dt` variable
+    // (seeded into env before each block runs, so no per-effect wiring is needed).
+    static void   SetFrameDelta(double seconds);
+    static double GetFrameDelta();
+
+    // Preset-global named sliders. Engine pushes the current list once per Tick;
+    // every Lua block can then read a raw value via slider("name"). Unknown names
+    // raise a Lua error. Backed by a shared static store (like SetFrameDelta).
+    static void SetSliders(const std::vector<GlobalSlider>& sliders);
+
+    // Stable, unique id of the effect currently rendering. EffectChain sets it
+    // before each effect's Render; every Lua block can then read it via getId()
+    // (handy as a per-effect random seed: randomseed(getId())). Shared static, so
+    // it reflects whichever effect is mid-Render — valid inside all run-time blocks.
+    static void SetCurrentEffectId(uint32_t id);
 
     // Seed a variable into the env table at 0.0 if not already set.
     void SeedVar(const std::string& name);
@@ -79,9 +98,17 @@ private:
     void SetupEnv();
     void SetupMathAliases();
     void SetupAudioFunctions();
+    void SetupKeyFunction();
+    void SetupSliderFunction();
+    void SetupIdFunction();
+    void SetupRandFunction();
 
     static int l_getspec(lua_State* L);
     static int l_getosc(lua_State* L);
+    static int l_key(lua_State* L);
+    static int l_slider(lua_State* L);
+    static int l_getId(lua_State* L);
+    static int l_rand(lua_State* L);
 
     lua_State*     m_L        = nullptr;
     int            m_envRef   = -1;      // LUA_REGISTRYINDEX ref to env table

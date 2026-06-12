@@ -32,5 +32,13 @@ public:
     // The most recent keycode pressed this frame (0 if none). Polled by the config
     // UI for press-to-capture key binding.
     static uint32_t LastKeyPressed();
+
+    // ── Held-key state (persists across frames, unlike the edge set above) ────────
+    // The App updates this on every key-down/up (NOT cleared by BeginFrame), so
+    // effects can poll whether a key is currently held (e.g. hold-to-strobe). On
+    // focus loss the App clears all held keys to avoid a stuck key.
+    static void SetKeyDown(uint32_t keycode, bool down);
+    static bool IsKeyDown(uint32_t keycode);
+    static void ClearHeld();
 };
 } // namespace avs

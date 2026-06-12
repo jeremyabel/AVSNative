@@ -62,6 +62,7 @@ bgfx_compile_shaders(
     SHADERS
         src/shaders/vs_fullscreen.sc
         src/shaders/vs_starfield.sc
+        src/shaders/vs_texer2_sprite.sc
     VARYING_DEF ${VARYING_DEF}
     OUTPUT_DIR ${SHADER_OUTPUT_DIR}
     OUT_FILES_VAR VS_SHADER_HEADERS
@@ -76,6 +77,7 @@ bgfx_compile_shaders(
         src/shaders/fs_blit.sc
         src/shaders/fs_channelshift.sc
         src/shaders/fs_clear.sc
+        src/shaders/fs_strobe.sc
         src/shaders/fs_grain.sc
         src/shaders/fs_invert.sc
         src/shaders/fs_scatter.sc
@@ -109,8 +111,9 @@ bgfx_compile_shaders(
         src/shaders/fs_picture2.sc
         src/shaders/fs_convolution.sc
         src/shaders/fs_colormap.sc
+        src/shaders/fs_ramp.sc
         src/shaders/fs_dynamicshift.sc
-        src/shaders/fs_texer2_comp.sc
+        src/shaders/fs_texer2_sprite.sc
         src/shaders/fs_imagegrid.sc
         src/shaders/fs_dotplane.sc
         src/shaders/fs_timescope.sc
@@ -163,6 +166,7 @@ add_library(avs_engine STATIC
     src/effects/BufferSave.cpp
     src/effects/ChannelShift.cpp
     src/effects/Clear.cpp
+    src/effects/Strobe.cpp
     src/effects/Grain.cpp
     src/effects/Invert.cpp
     src/effects/Scatter.cpp
@@ -203,6 +207,7 @@ add_library(avs_engine STATIC
     src/effects/Picture2.cpp
     src/effects/Convolution.cpp
     src/effects/ColorMap.cpp
+    src/effects/Ramp.cpp
     src/effects/CustomBpm.cpp
     src/effects/DynamicDistanceModifier.cpp
     src/effects/DynamicShift.cpp
@@ -272,11 +277,13 @@ add_library(avs_ui STATIC
     src/ui/ConfigUi.cpp
     src/ui/ConfigUiRegistry.cpp
     src/ui/FileDialog.cpp
+    src/ui/SlidersPanel.cpp
     # per-effect bespoke config UIs (one file per effect)
     src/ui/effects/AddBordersUI.cpp
     src/ui/effects/BufferSaveUI.cpp
     src/ui/effects/ChannelShiftUI.cpp
     src/ui/effects/ClearUI.cpp
+    src/ui/effects/StrobeUI.cpp
     src/ui/effects/GrainUI.cpp
     src/ui/effects/InvertUI.cpp
     src/ui/effects/ScatterUI.cpp
@@ -317,6 +324,7 @@ add_library(avs_ui STATIC
     src/ui/effects/Picture2UI.cpp
     src/ui/effects/ConvolutionUI.cpp
     src/ui/effects/ColorMapUI.cpp
+    src/ui/effects/RampUI.cpp
     src/ui/effects/CustomBpmUI.cpp
     src/ui/effects/DynamicDistanceModifierUI.cpp
     src/ui/effects/DynamicShiftUI.cpp

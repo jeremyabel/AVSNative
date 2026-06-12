@@ -1,4 +1,5 @@
 #include "ui/ConfigUiRegistry.h"
+#include "ui/ConfigUi.h"
 #include "ui/FileDialog.h"
 
 #include "effects/ColorMap.h"
@@ -20,8 +21,9 @@
 
 struct ColorMapUiState
 {
-    int      Selected    = 0;
-    uint64_t LastVersion = (uint64_t)-1;   // force initial resync
+    int      Selected            = 0;
+    uint64_t LastVersion         = (uint64_t)-1;   // force initial resync
+    uint64_t LastKeySelectVersion = (uint64_t)-1;  // resync radio to key-chosen map
     std::array<ImGG::GradientWidget, ColorMap::kNumMaps> Widgets;
 };
 
@@ -161,7 +163,14 @@ static void DrawColorMapUI(Effect* effect)
         st.LastVersion = cm->ConfigVersion();
     }
 
-    // ── Map slots: enable checkbox + select radio ──
+    // Follow the displayed map onto the edit radio when a bound key switched it.
+    if (st.LastKeySelectVersion != cm->KeySelectVersion())
+    {
+        st.Selected             = std::clamp(cm->CurrentMap, 0, ColorMap::kNumMaps - 1);
+        st.LastKeySelectVersion = cm->KeySelectVersion();
+    }
+
+    // ── Map slots: enable checkbox + select radio + key binding ──
     ImGui::TextUnformatted("Maps");
     for (int i = 0; i < ColorMap::kNumMaps; ++i)
     {
@@ -174,10 +183,10 @@ static void DrawColorMapUI(Effect* effect)
         snprintf(lbl, sizeof(lbl), "Map %d", i + 1);
         if (ImGui::RadioButton(lbl, st.Selected == i))
             st.Selected = i;
+        ImGui::SameLine(110.0f);
+        ConfigUi::KeyCaptureButton("##key", cm, i, cm->MapKeys[i]);
         ImGui::PopID();
-        if ((i % 2) == 0) ImGui::SameLine(0.0f, 24.0f);
     }
-    ImGui::NewLine();
 
     const int sel = std::clamp(st.Selected, 0, ColorMap::kNumMaps - 1);
 
