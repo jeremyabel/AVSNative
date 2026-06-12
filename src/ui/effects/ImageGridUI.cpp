@@ -32,21 +32,26 @@ static void DrawImageGridUI(Effect* effect)
     else
         ImGui::TextUnformatted("No image loaded");
 
-    // Two image slots with an A/B toggle, for testing instant GIF switching.
-    ImGui::Text("Active: Image %d", grid->ActiveImage + 1);
+    // Image source: a single image, or a keyed array switchable by keyboard.
+    bool arrayMode = (grid->Mode == 1);
+    if (ImGui::Checkbox("Keyed image array", &arrayMode))
+    {
+        grid->Mode = arrayMode ? 1 : 0;
+        grid->LoadSelected();
+    }
 
-    if (ImGui::Button("Load Image 1..."))
-        ConfigUi::PickImageInto(effect, ImageGrid::kImageData);
-    ImGui::SameLine();
-    ImGui::TextDisabled(grid->ImageData.empty() ? "(empty)" : "(loaded)");
-
-    if (ImGui::Button("Load Image 2..."))
-        ConfigUi::PickImageInto(effect, ImageGrid::kImageData2);
-    ImGui::SameLine();
-    ImGui::TextDisabled(grid->ImageData2.empty() ? "(empty)" : "(loaded)");
-
-    if (ImGui::Button("Toggle Image"))
-        grid->SetActiveImage(grid->ActiveImage ^ 1);
+    if (grid->Mode == 0)
+    {
+        if (ImGui::Button("Load Image..."))
+            ConfigUi::PickImageInto(effect, ImageGrid::kImageData);
+        ImGui::SameLine();
+        ImGui::TextDisabled(grid->ImageData.empty() ? "(empty)" : "(loaded)");
+    }
+    else
+    {
+        if (ConfigUi::KeyedImageListEditor(effect, grid->Keyed))
+            grid->LoadSelected();
+    }
 
     ImGui::Spacing();
 
@@ -55,20 +60,33 @@ static void DrawImageGridUI(Effect* effect)
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::Combo("##blendMode", &grid->BlendMode, kBlends, IM_ARRAYSIZE(kBlends));
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("imagegrid.initCode", grid->InitCode, ConfigUi::Lang::Lua))
-        grid->RecompileInitCode();
-    ScriptError(grid, ImageGrid::kInitCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("imagegrid.initCode", grid->InitCode, ConfigUi::Lang::Lua))
+            grid->RecompileInitCode();
+        ScriptError(grid, ImageGrid::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("imagegrid.frameCode", grid->FrameCode, ConfigUi::Lang::Lua))
-        grid->RecompileFrameCode();
-    ScriptError(grid, ImageGrid::kFrameCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("imagegrid.beatCode", grid->BeatCode, ConfigUi::Lang::Lua))
-        grid->RecompileBeatCode();
-    ScriptError(grid, ImageGrid::kBeatCode);
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("imagegrid.frameCode", grid->FrameCode, ConfigUi::Lang::Lua))
+            grid->RecompileFrameCode();
+        ScriptError(grid, ImageGrid::kFrameCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("imagegrid.beatCode", grid->BeatCode, ConfigUi::Lang::Lua))
+            grid->RecompileBeatCode();
+        ScriptError(grid, ImageGrid::kBeatCode);
+        ImGui::TreePop();
+    }
 }
 
 void RegisterImageGridUI(ConfigUiRegistry& reg)

@@ -17,20 +17,33 @@ static void DrawDynamicShiftUI(Effect* base)
 {
     auto* fx = static_cast<DynamicShift*>(base);
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("dshift.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-        fx->RecompileInitCode();
-    ScriptError(fx, DynamicShift::kInitCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dshift.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+            fx->RecompileInitCode();
+        ScriptError(fx, DynamicShift::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("dshift.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-        fx->RecompileFrameCode();
-    ScriptError(fx, DynamicShift::kFrameCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("dshift.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-        fx->RecompileBeatCode();
-    ScriptError(fx, DynamicShift::kBeatCode);
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dshift.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->RecompileFrameCode();
+        ScriptError(fx, DynamicShift::kFrameCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dshift.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+            fx->RecompileBeatCode();
+        ScriptError(fx, DynamicShift::kBeatCode);
+        ImGui::TreePop();
+    }
 
     ImGui::Checkbox("Blend", &fx->Blend);
     ImGui::Checkbox("Subpixel", &fx->Subpixel);

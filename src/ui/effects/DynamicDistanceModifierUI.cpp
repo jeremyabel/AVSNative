@@ -24,25 +24,43 @@ static void DrawDynamicDistanceModifierUI(Effect* base)
     ImGui::Checkbox("Bilinear (precise)", &fx->Compat);
     ImGui::EndDisabled();
 
-    ImGui::TextUnformatted("Pixel (GLSL)");
-    if (ConfigUi::CodeEditor("ddm.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
-        fx->RecompileMain();
-    ScriptError(fx, DynamicDistanceModifier::kPixelCode);
+    if (ImGui::TreeNodeEx("Pixel (GLSL)", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("ddm.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
+            fx->RecompileMain();
+        ScriptError(fx, DynamicDistanceModifier::kPixelCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("ddm.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-        fx->RecompileMain();
-    ScriptError(fx, DynamicDistanceModifier::kInitCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("ddm.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-        fx->RecompileFrameCode();
-    ScriptError(fx, DynamicDistanceModifier::kFrameCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("ddm.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+            fx->RecompileMain();
+        ScriptError(fx, DynamicDistanceModifier::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("ddm.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-        fx->RecompileBeatCode();
-    ScriptError(fx, DynamicDistanceModifier::kBeatCode);
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("ddm.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->RecompileFrameCode();
+        ScriptError(fx, DynamicDistanceModifier::kFrameCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("ddm.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+            fx->RecompileBeatCode();
+        ScriptError(fx, DynamicDistanceModifier::kBeatCode);
+        ImGui::TreePop();
+    }
 }
 
 void RegisterDynamicDistanceModifierUI(ConfigUiRegistry& reg)

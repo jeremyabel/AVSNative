@@ -43,7 +43,8 @@ static std::string SubstitutePi(std::string code)
 
 nlohmann::json Texer2::Serialize() const
 {
-    return {
+    nlohmann::json j = {
+        { kMode,      Mode      },
         { kResize,    Resize    },
         { kWrap,      Wrap      },
         { kColorize,  Colorize  },
@@ -51,13 +52,17 @@ nlohmann::json Texer2::Serialize() const
         { kFrameCode, FrameCode },
         { kBeatCode,  BeatCode  },
         { kPointCode, PointCode },
-        // Bundle asset reference — raw bytes arrive via ApplyAsset.
+        // Single-mode bundle asset reference — raw bytes arrive via ApplyAsset.
         { kImageData, ImageData },
     };
+    // Keyed-array entries (imageCount / imageN / imageKeys / selectedImage).
+    Keyed.Serialize(j);
+    return j;
 }
 
 void Texer2::Deserialize(const nlohmann::json& j)
 {
+    JsonUtil::ReadInt   (j, kMode,      Mode);
     JsonUtil::ReadBool  (j, kResize,    Resize);
     JsonUtil::ReadBool  (j, kWrap,      Wrap);
     JsonUtil::ReadBool  (j, kColorize,  Colorize);
@@ -66,6 +71,11 @@ void Texer2::Deserialize(const nlohmann::json& j)
     JsonUtil::ReadString(j, kBeatCode,  BeatCode);
     JsonUtil::ReadString(j, kPointCode, PointCode);
     JsonUtil::ReadString(j, kImageData, ImageData);
+    // Keyed-array list (entries' raw bytes also arrive via ApplyAsset afterwards).
+    Keyed.Deserialize(j);
+
+    if (m_inited)
+        LoadSelected();
 
     RecompileInitCode();
 }
@@ -74,19 +84,56 @@ void Texer2::Deserialize(const nlohmann::json& j)
 
 std::vector<PresetAsset> Texer2::CollectAssets() const
 {
-    if (m_raw.empty())
-        return {};
-    return { { "imageData", m_name, m_raw } };
+    std::vector<PresetAsset> out;
+    if (Mode == 0)
+    {
+        if (!m_raw.empty())
+            out.push_back({ kImageData, m_name, m_raw });
+    }
+    else
+    {
+        Keyed.CollectAssets(out);
+    }
+    return out;
 }
 
-void Texer2::ApplyAsset(const std::string& /*key*/, const std::string& name,
+void Texer2::ApplyAsset(const std::string& key, const std::string& name,
                         std::vector<uint8_t> bytes)
 {
-    m_raw  = std::move(bytes);
-    m_name = name;
-    ImageData = name;
-    if (m_inited)
+    if (key == kImageData)
+    {
+        m_raw  = std::move(bytes);
+        m_name = name;
+        ImageData = name;
+        if (m_inited && Mode == 0)
+            LoadSelected();
+        return;
+    }
+
+    // Keyed-array entry ("imageN"): route bytes into the matching list slot.
+    if (Keyed.ApplyAsset(key, name, std::move(bytes)) && m_inited && Mode == 1)
+        LoadSelected();
+}
+
+// Picks the active source (single-mode image, or the selected keyed image) and
+// rebuilds the displayed image from it. Empty bytes → built-in soft-dot default.
+void Texer2::LoadSelected()
+{
+    if (!m_inited)
+        return;
+
+    if (Mode == 1)
+    {
+        Keyed.ClampSelected();
+        if (!Keyed.Images.empty())
+            BuildFromRaw(Keyed.Images[Keyed.Selected].Raw);
+        else
+            BuildFromRaw({});  // empty list → default soft-dot
+    }
+    else
+    {
         BuildFromRaw(m_raw);
+    }
 }
 
 // ── Recompile entry points ────────────────────────────────────────────────────
@@ -441,7 +488,7 @@ void Texer2::Init()
     CompileAll();
 
     m_inited = true;
-    MakeDefaultImage();  // soft-dot until ApplyAsset delivers a bundled image (if any)
+    LoadSelected();  // soft-dot until ApplyAsset delivers a bundled image (if any)
     RunInit();
 }
 
@@ -459,6 +506,7 @@ void Texer2::Destroy()
     m_inputUnif   = BGFX_INVALID_HANDLE;
     m_prog        = BGFX_INVALID_HANDLE;
 
+    Keyed.Images.clear();
     m_bufW = m_bufH = 0;
     m_inited = false;
 }
@@ -467,6 +515,10 @@ void Texer2::Destroy()
 
 void Texer2::Render(const RenderContext& Context)
 {
+    // Keyboard-driven image switching (key-down edge → switch selected image).
+    if (Mode == 1 && Keyed.UpdateSelection())
+        LoadSelected();
+
     AdvanceAnimation();   // step animated GIF to the current frame (no-op for static images)
 
     const int w = Context.Width, h = Context.Height;

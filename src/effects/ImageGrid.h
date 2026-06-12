@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/Effect.h"
+#include "engine/KeyedImageList.h"
 #include "engine/LuaRuntime.h"
 
 #include <bgfx/bgfx.h>
@@ -21,17 +22,18 @@ class ImageGrid : public Effect
 {
 public:
     // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    std::string ImageData  = "";  // slot 0 bundle asset ref/name; empty = built-in checkerboard
-    std::string ImageData2 = "";  // slot 1 bundle asset ref/name (for A/B toggle testing)
-    int         ActiveImage = 0;  // which slot is displayed (0 or 1)
+    int         Mode = 0;         // 0 = Single Image, 1 = Keyed Array
+    std::string ImageData  = "";  // single-mode bundle asset ref/name; empty = built-in checkerboard
     std::string InitCode  = "x=0; y=0; sizex=0.25; sizey=0.25; r=0;";
     std::string FrameCode = "";
     std::string BeatCode  = "";
     int         BlendMode = 0;    // 0=Replace, 1=Additive, 2=50/50, 3=Alpha
 
+    // Keyed-array mode: a per-instance list of images, each bound to a keyboard key.
+    KeyedImageList Keyed;
+
+    static constexpr const char* kMode        = "mode";
     static constexpr const char* kImageData   = "imageData";
-    static constexpr const char* kImageData2  = "imageData2";
-    static constexpr const char* kActiveImage = "activeImage";
     static constexpr const char* kInitCode    = "initCode";
     static constexpr const char* kFrameCode   = "frameCode";
     static constexpr const char* kBeatCode    = "beatCode";
@@ -54,9 +56,11 @@ public:
         return m_lua.GetError(paramName);
     }
 
-    // Switches the displayed slot (0/1) and rebuilds the texture from the cached
-    // raw bytes. Used by the UI's A/B toggle and by Deserialize.
-    void SetActiveImage(int slot);
+    // (Re)builds the displayed texture from the active source: the single-mode image
+    // in Single mode, or the currently-selected keyed image in Keyed Array mode.
+    // Called after Deserialize, after an image loads, and when the keyed selection
+    // changes (via a mapped key press or the UI).
+    void LoadSelected();
 
     // Recompile entry points. Called after Deserialize and by the UI when the
     // matching code editor changes.
@@ -69,7 +73,7 @@ public:
     int GetFrameCount() const { return (int)m_frames.size(); }
 
 private:
-    void LoadActiveImage();            // (re)build the texture from the active slot's raw bytes
+    void LoadImageFromRaw(const std::vector<uint8_t>& raw);  // decode raw bytes → m_imageTex
     void MakeDefaultImage();
     void ResetAnimation();
     void AdvanceAnimation();   // advance m_curFrame by wall-clock time, upload to m_imageTex
@@ -94,12 +98,13 @@ private:
     GifStream*                        m_gif = nullptr;   // open while frames remain to decode
     bool                              m_fullyCached = false;
 
-    // Raw image bytes per slot (delivered via ApplyAsset from the preset bundle or the
-    // UI file picker). Toggling/switching re-opens the GIF from these cached bytes — no
-    // decode of the preset itself on the hot path. m_slotName keeps the original
-    // filename so the asset re-bundles under the same name.
-    std::vector<uint8_t> m_slotRaw[2];
-    std::string          m_slotName[2];
+    // Single-mode raw image bytes (delivered via ApplyAsset from the preset bundle or
+    // the UI file picker). Switching re-opens the GIF from these cached bytes — no
+    // decode of the preset itself on the hot path. m_singleName keeps the original
+    // filename so the asset re-bundles under the same name. (Keyed-array bytes live
+    // in the per-entry KeyedImage::Raw inside `Keyed`.)
+    std::vector<uint8_t> m_singleRaw;
+    std::string          m_singleName;
     std::vector<std::vector<uint8_t>> m_frames;          // cached RGBA per decoded frame
     std::vector<int>                  m_frameDelaysMs;   // per-frame delay (ms)
     size_t m_curFrame      = 0;

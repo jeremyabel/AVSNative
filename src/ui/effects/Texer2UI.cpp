@@ -32,8 +32,24 @@ static void DrawTexer2UI(Effect* effect)
     else
         ImGui::TextUnformatted("No image loaded");
 
-    if (ImGui::Button("Load Image..."))
-        ConfigUi::PickImageInto(effect, Texer2::kImageData);
+    // Image source: a single image, or a keyed array switchable by keyboard.
+    bool arrayMode = (tex->Mode == 1);
+    if (ImGui::Checkbox("Keyed image array", &arrayMode))
+    {
+        tex->Mode = arrayMode ? 1 : 0;
+        tex->LoadSelected();
+    }
+
+    if (tex->Mode == 0)
+    {
+        if (ImGui::Button("Load Image..."))
+            ConfigUi::PickImageInto(effect, Texer2::kImageData);
+    }
+    else
+    {
+        if (ConfigUi::KeyedImageListEditor(effect, tex->Keyed))
+            tex->LoadSelected();
+    }
 
     ImGui::Spacing();
 
@@ -41,25 +57,43 @@ static void DrawTexer2UI(Effect* effect)
     ImGui::Checkbox("Wrap Around", &tex->Wrap);
     ImGui::Checkbox("Color Filtering", &tex->Colorize);
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("texer2.initCode", tex->InitCode, ConfigUi::Lang::Lua))
-        tex->RecompileInitCode();
-    ScriptError(tex, Texer2::kInitCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("texer2.initCode", tex->InitCode, ConfigUi::Lang::Lua))
+            tex->RecompileInitCode();
+        ScriptError(tex, Texer2::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("texer2.frameCode", tex->FrameCode, ConfigUi::Lang::Lua))
-        tex->RecompileFrameCode();
-    ScriptError(tex, Texer2::kFrameCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("texer2.beatCode", tex->BeatCode, ConfigUi::Lang::Lua))
-        tex->RecompileBeatCode();
-    ScriptError(tex, Texer2::kBeatCode);
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("texer2.frameCode", tex->FrameCode, ConfigUi::Lang::Lua))
+            tex->RecompileFrameCode();
+        ScriptError(tex, Texer2::kFrameCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Point");
-    if (ConfigUi::CodeEditor("texer2.pointCode", tex->PointCode, ConfigUi::Lang::Lua))
-        tex->RecompilePointCode();
-    ScriptError(tex, Texer2::kPointCode);
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("texer2.beatCode", tex->BeatCode, ConfigUi::Lang::Lua))
+            tex->RecompileBeatCode();
+        ScriptError(tex, Texer2::kBeatCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Point", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("texer2.pointCode", tex->PointCode, ConfigUi::Lang::Lua))
+            tex->RecompilePointCode();
+        ScriptError(tex, Texer2::kPointCode);
+        ImGui::TreePop();
+    }
 }
 
 void RegisterTexer2UI(ConfigUiRegistry& reg)

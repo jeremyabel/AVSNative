@@ -17,25 +17,43 @@ static void DrawSuperScopeUI(Effect* base)
 {
     auto* fx = static_cast<SuperScope*>(base);
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("sscope.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-        fx->Recompile();
-    ScriptError(fx, SuperScope::kInitCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("sscope.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+            fx->Recompile();
+        ScriptError(fx, SuperScope::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("sscope.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-        fx->Recompile();
-    ScriptError(fx, SuperScope::kFrameCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("sscope.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-        fx->Recompile();
-    ScriptError(fx, SuperScope::kBeatCode);
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("sscope.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->Recompile();
+        ScriptError(fx, SuperScope::kFrameCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Point");
-    if (ConfigUi::CodeEditor("sscope.pointCode", fx->PointCode, ConfigUi::Lang::Lua))
-        fx->Recompile();
-    ScriptError(fx, SuperScope::kPointCode);
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("sscope.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+            fx->Recompile();
+        ScriptError(fx, SuperScope::kBeatCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Point", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("sscope.pointCode", fx->PointCode, ConfigUi::Lang::Lua))
+            fx->Recompile();
+        ScriptError(fx, SuperScope::kPointCode);
+        ImGui::TreePop();
+    }
 
     ImGui::TextUnformatted("Color");
     ConfigUi::ColorsEdit("##colors", fx->Colors);

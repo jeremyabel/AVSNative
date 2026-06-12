@@ -10,6 +10,7 @@
 #include <vector>
 
 class Effect;
+class KeyedImageList;
 
 namespace ConfigUi
 {
@@ -41,4 +42,13 @@ bool ColorsEdit(const char* id, std::vector<std::array<uint8_t, 3>>& colors);
 // the effect via Effect::ApplyAsset(configKey, basename, bytes) — no base64. The
 // raw bytes are bundled into the preset on save. Returns true if an image loaded.
 bool PickImageInto(Effect* effect, const char* configKey);
+
+// Editor for a keyed image list (per-instance image→key mappings). Per entry: a
+// "Load…" button (with loaded/empty hint), a "Set key" press-to-capture button
+// showing the bound key's name, and a remove button; plus an "Add image" button.
+// The current selection is highlighted. Images load via Effect::ApplyAsset under
+// the per-index key "imageN". Returns true if the active image must be reloaded
+// (entry added/removed, image loaded, or selection changed); the caller then calls
+// the effect's LoadSelected().
+bool KeyedImageListEditor(Effect* effect, KeyedImageList& list);
 } // namespace ConfigUi

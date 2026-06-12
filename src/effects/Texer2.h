@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/Effect.h"
+#include "engine/KeyedImageList.h"
 #include "engine/LuaRuntime.h"
 
 #include <bgfx/bgfx.h>
@@ -17,7 +18,8 @@ class Texer2 : public Effect
 {
 public:
     // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    std::string ImageData  = "";         // bundle asset ref/name; empty = built-in soft-dot
+    int         Mode = 0;                // 0 = Single Image, 1 = Keyed Array
+    std::string ImageData  = "";         // single-mode bundle asset ref/name; empty = built-in soft-dot
     std::string InitCode   = "n=300";
     std::string FrameCode  = "";
     std::string BeatCode   = "";
@@ -26,6 +28,10 @@ public:
     bool Wrap     = false;   // wrap-around stamping at buffer edges
     bool Colorize = true;    // multiply image by red/green/blue
 
+    // Keyed-array mode: a per-instance list of images, each bound to a keyboard key.
+    KeyedImageList Keyed;
+
+    static constexpr const char* kMode      = "mode";
     static constexpr const char* kImageData = "imageData";
     static constexpr const char* kInitCode  = "initCode";
     static constexpr const char* kFrameCode = "frameCode";
@@ -51,6 +57,11 @@ public:
     {
         return m_lua.GetError(paramName);
     }
+
+    // (Re)builds the displayed image from the active source: the single-mode image in
+    // Single mode, or the currently-selected keyed image in Keyed Array mode. Called
+    // after an image loads and when the keyed selection changes (mapped key / UI).
+    void LoadSelected();
 
     // Recompile entry points. Called after Deserialize and by the UI when the
     // matching code editor changes.

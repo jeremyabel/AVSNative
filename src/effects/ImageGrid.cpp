@@ -38,44 +38,38 @@ static std::string SubstitutePi(std::string code)
 
 nlohmann::json ImageGrid::Serialize() const
 {
-    return {
+    nlohmann::json j = {
+        { kMode,        Mode        },
         { kBlendMode,   BlendMode   },
         { kInitCode,    InitCode    },
         { kFrameCode,   FrameCode   },
         { kBeatCode,    BeatCode    },
-        // Bundle asset references — raw bytes arrive via ApplyAsset.
+        // Single-mode bundle asset reference — raw bytes arrive via ApplyAsset.
         { kImageData,   ImageData   },
-        { kImageData2,  ImageData2  },
-        { kActiveImage, ActiveImage },
     };
+    // Keyed-array entries (imageCount / imageN / imageKeys / selectedImage).
+    Keyed.Serialize(j);
+    return j;
 }
 
 void ImageGrid::Deserialize(const nlohmann::json& j)
 {
+    JsonUtil::ReadInt   (j, kMode,      Mode);
     JsonUtil::ReadInt   (j, kBlendMode, BlendMode);
     JsonUtil::ReadString(j, kInitCode,  InitCode);
     JsonUtil::ReadString(j, kFrameCode, FrameCode);
     JsonUtil::ReadString(j, kBeatCode,  BeatCode);
-    // imageData/imageData2 are bundle asset references — the raw bytes arrive via
-    // ApplyAsset, not decoded here. Just store the strings for round-trip.
+    // imageData is a single-mode bundle asset reference — raw bytes arrive via
+    // ApplyAsset, not decoded here. Just store the string for round-trip.
     JsonUtil::ReadString(j, kImageData,  ImageData);
-    JsonUtil::ReadString(j, kImageData2, ImageData2);
+    // Keyed-array list (entries' raw bytes also arrive via ApplyAsset afterwards).
+    Keyed.Deserialize(j);
 
-    if (j.contains(kActiveImage) && j[kActiveImage].is_number_integer())
-        SetActiveImage(j[kActiveImage].get<int>());
+    // Show the default until ApplyAsset delivers bytes; reloaded again per asset.
+    if (m_inited)
+        LoadSelected();
 
     RecompileInitCode();
-}
-
-void ImageGrid::SetActiveImage(int slot)
-{
-    const int v = slot ? 1 : 0;
-    if (v == ActiveImage)
-        return;
-    ActiveImage = v;
-    // On a slot toggle, rebuild the texture from the (already cached) raw bytes.
-    if (m_inited)
-        LoadActiveImage();
 }
 
 // ── Preset bundle assets ──────────────────────────────────────────────────────
@@ -83,23 +77,34 @@ void ImageGrid::SetActiveImage(int slot)
 std::vector<PresetAsset> ImageGrid::CollectAssets() const
 {
     std::vector<PresetAsset> out;
-    if (!m_slotRaw[0].empty())
-        out.push_back({ "imageData",  m_slotName[0], m_slotRaw[0] });
-    if (!m_slotRaw[1].empty())
-        out.push_back({ "imageData2", m_slotName[1], m_slotRaw[1] });
+    if (Mode == 0)
+    {
+        if (!m_singleRaw.empty())
+            out.push_back({ kImageData, m_singleName, m_singleRaw });
+    }
+    else
+    {
+        Keyed.CollectAssets(out);
+    }
     return out;
 }
 
 void ImageGrid::ApplyAsset(const std::string& key, const std::string& name,
                            std::vector<uint8_t> bytes)
 {
-    const int slot = (key == "imageData2") ? 1 : 0;
-    m_slotRaw[slot]  = std::move(bytes);
-    m_slotName[slot] = name;
-    (slot == 1 ? ImageData2 : ImageData) = name;  // non-empty marker for UI/round-trip
+    if (key == kImageData)
+    {
+        m_singleRaw  = std::move(bytes);
+        m_singleName = name;
+        ImageData    = name;  // non-empty marker for UI/round-trip
+        if (m_inited && Mode == 0)
+            LoadSelected();
+        return;
+    }
 
-    if (m_inited && slot == (ActiveImage == 1 ? 1 : 0))
-        LoadActiveImage();
+    // Keyed-array entry ("imageN"): route bytes into the matching list slot.
+    if (Keyed.ApplyAsset(key, name, std::move(bytes)) && m_inited && Mode == 1)
+        LoadSelected();
 }
 
 // ── Recompile entry points ────────────────────────────────────────────────────
@@ -237,13 +242,35 @@ void ImageGrid::AdvanceAnimation()
 
 // ── Image loading (raw bytes cached per slot, delivered via ApplyAsset) ───────
 
-// (Re)build the texture from the active slot's cached raw bytes. Only frame 0 of a
-// GIF is decoded here; the rest stream in during playback (AdvanceAnimation).
-void ImageGrid::LoadActiveImage()
+// Picks the active source (single-mode image, or the selected keyed image) and
+// (re)builds the texture from it. Safe to call before any bytes arrive — falls
+// back to the default checkerboard.
+void ImageGrid::LoadSelected()
+{
+    if (!m_inited)
+        return;
+
+    if (Mode == 1)
+    {
+        Keyed.ClampSelected();
+        if (!Keyed.Images.empty())
+            LoadImageFromRaw(Keyed.Images[Keyed.Selected].Raw);
+        else
+            LoadImageFromRaw({});  // empty list → default checkerboard
+    }
+    else
+    {
+        LoadImageFromRaw(m_singleRaw);
+    }
+}
+
+// (Re)build the texture from the given raw bytes. Only frame 0 of a GIF is decoded
+// here; the rest stream in during playback (AdvanceAnimation). Empty bytes →
+// default checkerboard.
+void ImageGrid::LoadImageFromRaw(const std::vector<uint8_t>& raw)
 {
     ResetAnimation();
 
-    const std::vector<uint8_t>& raw = m_slotRaw[ActiveImage == 1 ? 1 : 0];
     if (raw.empty()) { MakeDefaultImage(); return; }
 
     // Try the streaming GIF decoder first — returns null for any non-GIF format.
@@ -349,7 +376,7 @@ void ImageGrid::Init()
     CompileAll();
 
     m_inited = true;
-    LoadActiveImage();  // shows the default checkerboard until ApplyAsset delivers bytes
+    LoadSelected();  // shows the default checkerboard until ApplyAsset delivers bytes
     RunInit();
 }
 
@@ -358,10 +385,9 @@ void ImageGrid::Destroy()
     if (m_gif) { GifStreamClose(m_gif); m_gif = nullptr; }
     m_frames.clear();
     m_frameDelaysMs.clear();
-    m_slotRaw[0].clear();
-    m_slotRaw[1].clear();
-    m_slotName[0].clear();
-    m_slotName[1].clear();
+    m_singleRaw.clear();
+    m_singleName.clear();
+    Keyed.Images.clear();
     if (bgfx::isValid(m_imageTex))   bgfx::destroy(m_imageTex);
     if (bgfx::isValid(m_paramsUnif)) bgfx::destroy(m_paramsUnif);
     if (bgfx::isValid(m_xformUnif))  bgfx::destroy(m_xformUnif);
@@ -383,6 +409,10 @@ void ImageGrid::Destroy()
 
 void ImageGrid::Render(const RenderContext& Ctx)
 {
+    // Keyboard-driven image switching (key-down edge → switch selected image).
+    if (Mode == 1 && Keyed.UpdateSelection())
+        LoadSelected();
+
     AdvanceAnimation();
 
     const int w = Ctx.Width, h = Ctx.Height;

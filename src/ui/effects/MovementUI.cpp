@@ -22,11 +22,14 @@ static void DrawMovementUI(Effect* base)
         fx->SetCoordinateSystem(coordItems[coordIdx]); // handles default-code swap + recompile
 
     // --- GLSL editor (shared helper owns the TextEditor instance) ---
-    ImGui::TextUnformatted("GLSL Code");
-    if (ConfigUi::CodeEditor("movement.code", fx->Code, ConfigUi::Lang::Glsl))
-        fx->Compile();
-    if (std::string err = fx->GetScriptError(Movement::kCode); !err.empty())
-        ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
+    if (ImGui::TreeNodeEx("GLSL Code", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("movement.code", fx->Code, ConfigUi::Lang::Glsl))
+            fx->Compile();
+        if (std::string err = fx->GetScriptError(Movement::kCode); !err.empty())
+            ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
+        ImGui::TreePop();
+    }
 
     ImGui::SeparatorText("Sampling");
 

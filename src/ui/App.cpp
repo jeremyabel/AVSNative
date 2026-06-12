@@ -4,6 +4,7 @@
 #include "engine/Effect.h"
 #include "engine/EffectChain.h"
 #include "engine/Engine.h"
+#include "engine/KeyInput.h"
 #include "engine/Preset.h"
 #include "ui/ChainPanel.h"
 #include "ui/ConfigPanel.h"
@@ -334,6 +335,10 @@ void App::ProcessEvents()
     const SDL_WindowID editorID = SDL_GetWindowID(m_editorWin);
     const SDL_WindowID outputID = SDL_GetWindowID(m_outputWin);
 
+    // Reset the per-frame keyboard state before draining events; effects poll it in
+    // Engine::Tick and the config UI polls it in RenderUI, both later this iteration.
+    avs::KeyInput::BeginFrame();
+
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
@@ -374,6 +379,17 @@ void App::ProcessEvents()
                 event.key.scancode == SDL_SCANCODE_ESCAPE &&
                 !ImGui::GetIO().WantCaptureKeyboard)
                 m_running = false;
+
+            // Feed key-DOWN edges to effects' keyboard-driven image switching (and
+            // the press-to-capture UI). Switching is key-down only — key-up is never
+            // forwarded. !repeat collapses auto-repeat to a single edge. We gate on
+            // WantTextInput (true only while a text field/code editor is actively
+            // focused), NOT WantCaptureKeyboard — the latter is always true in the
+            // editor window because keyboard nav is enabled, which would block every
+            // key. WantTextInput keeps keys typed into code editors from triggering
+            // swaps while still letting hotkeys and press-to-capture through.
+            if (!event.key.repeat && !ImGui::GetIO().WantTextInput)
+                avs::KeyInput::PushKeyDown((uint32_t)event.key.key);
             break;
 
         default:

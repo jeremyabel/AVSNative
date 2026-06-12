@@ -2,12 +2,16 @@
 #include "ui/FileDialog.h"
 
 #include "engine/Effect.h"
+#include "engine/KeyInput.h"
+#include "engine/KeyedImageList.h"
 
 #include <imgui.h>
 #include <TextEditor.h>
 #include <SDL3/SDL_dialog.h>
+#include <SDL3/SDL_keyboard.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -136,5 +140,117 @@ bool PickImageInto(Effect* effect, const char* configKey)
 
     effect->ApplyAsset(configKey, name, std::move(raw));
     return true;
+}
+
+bool KeyedImageListEditor(Effect* effect, KeyedImageList& list)
+{
+    // Press-to-capture target. Only one capture is armed at a time (you press one
+    // key at a time), but it's bound to a specific list pointer + index so it can
+    // never write to another effect instance's entry.
+    static const void* s_capturingList  = nullptr;
+    static int         s_capturingIndex = -1;
+
+    bool reload = false;
+    ImGui::PushID(&list);
+
+    // Columns: selection radio | key bind | load | filename | remove. A table keeps
+    // them aligned across rows regardless of differing key-name / filename widths.
+    if (ImGui::BeginTable("##keyedimages", 5,
+            ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoBordersInBody))
+    {
+        ImGui::TableSetupColumn("##sel",  ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("##key",  ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("##load", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("##name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("##rm",   ImGuiTableColumnFlags_WidthFixed);
+
+        for (int i = 0; i < (int)list.Images.size(); ++i)
+        {
+            ImGui::PushID(i);
+            KeyedImage& img = list.Images[i];
+            ImGui::TableNextRow();
+
+            // Selection radio — picking an entry switches the displayed image.
+            ImGui::TableNextColumn();
+            if (ImGui::RadioButton("##sel", list.Selected == i) && list.Selected != i)
+            {
+                list.Selected = i;
+                reload = true;
+            }
+
+            // Press-to-capture key binding.
+            ImGui::TableNextColumn();
+            const bool capturing = (s_capturingList == &list && s_capturingIndex == i);
+            if (capturing)
+            {
+                if (const uint32_t k = avs::KeyInput::LastKeyPressed(); k != 0)
+                {
+                    img.Keycode      = k;
+                    s_capturingList  = nullptr;
+                    s_capturingIndex = -1;
+                }
+            }
+
+            std::string keyName;
+            const char* keyLabel = "(unset)";
+            if (capturing)
+                keyLabel = "press a key...";
+            else if (img.Keycode != 0)
+            {
+                keyName  = SDL_GetKeyName((SDL_Keycode)img.Keycode);
+                keyLabel = keyName.empty() ? "(unknown)" : keyName.c_str();
+            }
+
+            char btn[80];
+            std::snprintf(btn, sizeof(btn), "Key: %s###setkey", keyLabel);
+            if (ImGui::Button(btn))
+            {
+                s_capturingList  = &list;
+                s_capturingIndex = i;
+            }
+
+            // Load.
+            ImGui::TableNextColumn();
+            if (ImGui::Button("Load..."))
+            {
+                const std::string key = "image" + std::to_string(i);
+                if (PickImageInto(effect, key.c_str()) && list.Selected == i)
+                    reload = true;
+            }
+
+            // Filename.
+            ImGui::TableNextColumn();
+            if (img.Name.empty())
+                ImGui::TextDisabled("(no image)");
+            else
+                ImGui::TextUnformatted(img.Name.c_str());
+
+            // Remove.
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton("x"))
+            {
+                list.Images.erase(list.Images.begin() + i);
+                if (s_capturingList == &list) { s_capturingList = nullptr; s_capturingIndex = -1; }
+                list.ClampSelected();
+                reload = true;
+                ImGui::PopID();
+                break;
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::EndTable();
+    }
+
+    if (ImGui::Button("Add image"))
+    {
+        list.Images.push_back(KeyedImage{});
+        if (list.Images.size() == 1)  // first entry becomes the selection
+            reload = true;
+    }
+
+    ImGui::PopID();
+    return reload;
 }
 } // namespace ConfigUi

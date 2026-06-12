@@ -57,15 +57,23 @@ static void DrawEffectListUI(Effect* base)
 
     ImGui::Checkbox("Use evaluation override", &fx->UseEval);
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("effectlist.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-        fx->RecompileInitCode();
-    ScriptError(fx, EffectList::kInitCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("effectlist.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+            fx->RecompileInitCode();
+        ScriptError(fx, EffectList::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("effectlist.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-        fx->RecompileFrameCode();
-    ScriptError(fx, EffectList::kFrameCode);
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("effectlist.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->RecompileFrameCode();
+        ScriptError(fx, EffectList::kFrameCode);
+        ImGui::TreePop();
+    }
 }
 
 void RegisterEffectListUI(ConfigUiRegistry& reg)

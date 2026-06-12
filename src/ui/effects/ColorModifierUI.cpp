@@ -17,25 +17,43 @@ static void DrawColorModifierUI(Effect* base)
 {
     auto* fx = static_cast<ColorModifier*>(base);
 
-    ImGui::TextUnformatted("Pixel (GLSL)");
-    if (ConfigUi::CodeEditor("cmod.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
-        fx->RecompileMain();
-    ScriptError(fx, ColorModifier::kPixelCode);
+    if (ImGui::TreeNodeEx("Pixel (GLSL)", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("cmod.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
+            fx->RecompileMain();
+        ScriptError(fx, ColorModifier::kPixelCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("cmod.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-        fx->RecompileMain();
-    ScriptError(fx, ColorModifier::kInitCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("cmod.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-        fx->RecompileFrameCode();
-    ScriptError(fx, ColorModifier::kFrameCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("cmod.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+            fx->RecompileMain();
+        ScriptError(fx, ColorModifier::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("cmod.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-        fx->RecompileBeatCode();
-    ScriptError(fx, ColorModifier::kBeatCode);
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("cmod.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->RecompileFrameCode();
+        ScriptError(fx, ColorModifier::kFrameCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("cmod.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+            fx->RecompileBeatCode();
+        ScriptError(fx, ColorModifier::kBeatCode);
+        ImGui::TreePop();
+    }
 }
 
 void RegisterColorModifierUI(ConfigUiRegistry& reg)

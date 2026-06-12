@@ -17,25 +17,43 @@ static void DrawTriangleUI(Effect* base)
 {
     auto* fx = static_cast<Triangle*>(base);
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("triangle.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-        fx->RecompileAll();
-    ScriptError(fx, Triangle::kInitCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("triangle.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+            fx->RecompileAll();
+        ScriptError(fx, Triangle::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("triangle.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-        fx->RecompileAll();
-    ScriptError(fx, Triangle::kFrameCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("triangle.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-        fx->RecompileAll();
-    ScriptError(fx, Triangle::kBeatCode);
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("triangle.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->RecompileAll();
+        ScriptError(fx, Triangle::kFrameCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Triangle");
-    if (ConfigUi::CodeEditor("triangle.triangleCode", fx->TriangleCode, ConfigUi::Lang::Lua))
-        fx->RecompileAll();
-    ScriptError(fx, Triangle::kTriangleCode);
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("triangle.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+            fx->RecompileAll();
+        ScriptError(fx, Triangle::kBeatCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Triangle", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("triangle.triangleCode", fx->TriangleCode, ConfigUi::Lang::Lua))
+            fx->RecompileAll();
+        ScriptError(fx, Triangle::kTriangleCode);
+        ImGui::TreePop();
+    }
 
     ImGui::Checkbox("Antialiasing", &fx->AntialiasingEnabled);
 }

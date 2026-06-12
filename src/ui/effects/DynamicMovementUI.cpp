@@ -17,25 +17,43 @@ static void DrawDynamicMovementUI(Effect* base)
 {
     auto* fx = static_cast<DynamicMovement*>(base);
 
-    ImGui::TextUnformatted("Pixel");
-    if (ConfigUi::CodeEditor("dmove.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
-        fx->ApplyPixelCodeChange();
-    ScriptError(fx, DynamicMovement::kPixelCode);
+    if (ImGui::TreeNodeEx("Pixel", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dmove.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
+            fx->ApplyPixelCodeChange();
+        ScriptError(fx, DynamicMovement::kPixelCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("dmove.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-        fx->ApplyFrameCodeChange();
-    ScriptError(fx, DynamicMovement::kFrameCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("dmove.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-        fx->ApplyBeatCodeChange();
-    ScriptError(fx, DynamicMovement::kBeatCode);
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dmove.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->ApplyFrameCodeChange();
+        ScriptError(fx, DynamicMovement::kFrameCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("dmove.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-        fx->ApplyInitCodeChange();
-    ScriptError(fx, DynamicMovement::kInitCode);
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dmove.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+            fx->ApplyBeatCodeChange();
+        ScriptError(fx, DynamicMovement::kBeatCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dmove.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+            fx->ApplyInitCodeChange();
+        ScriptError(fx, DynamicMovement::kInitCode);
+        ImGui::TreePop();
+    }
 
     ImGui::Checkbox("Cartesian Coords", &fx->RectCoords);
     ImGui::Checkbox("Wrap", &fx->Wrap);

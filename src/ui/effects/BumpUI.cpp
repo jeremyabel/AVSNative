@@ -39,20 +39,33 @@ static void DrawBumpUI(Effect* base)
     ImGui::Checkbox("Show Light Pos", &fx->ShowLightPos);
     ImGui::Checkbox("Invert Depth", &fx->InvertDepth);
 
-    ImGui::TextUnformatted("Init");
-    if (ConfigUi::CodeEditor("bump.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-        fx->RecompileCode();
-    ScriptError(fx, Bump::kInitCode);
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("bump.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+            fx->RecompileCode();
+        ScriptError(fx, Bump::kInitCode);
+        ImGui::TreePop();
+    }
 
-    ImGui::TextUnformatted("Frame");
-    if (ConfigUi::CodeEditor("bump.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-        fx->RecompileCode();
-    ScriptError(fx, Bump::kFrameCode);
+    ImGui::Spacing();
 
-    ImGui::TextUnformatted("Beat");
-    if (ConfigUi::CodeEditor("bump.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-        fx->RecompileCode();
-    ScriptError(fx, Bump::kBeatCode);
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("bump.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->RecompileCode();
+        ScriptError(fx, Bump::kFrameCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("bump.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+            fx->RecompileCode();
+        ScriptError(fx, Bump::kBeatCode);
+        ImGui::TreePop();
+    }
 }
 
 void RegisterBumpUI(ConfigUiRegistry& reg)

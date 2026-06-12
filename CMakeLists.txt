@@ -157,6 +157,8 @@ add_library(avs_engine STATIC
     src/engine/ZipArchive.cpp
     src/engine/ShaderCompiler.cpp
     src/engine/AudioAnalyzer.cpp
+    src/engine/KeyInput.cpp
+    src/engine/KeyedImageList.cpp
     src/effects/AddBorders.cpp
     src/effects/BufferSave.cpp
     src/effects/ChannelShift.cpp
