@@ -128,6 +128,25 @@ add_custom_target(avs_shaders DEPENDS ${VS_SHADER_HEADERS} ${FS_SHADER_HEADERS})
 set(BGFX_EXAMPLES_COMMON ${CMAKE_CURRENT_SOURCE_DIR}/lib/bgfx.cmake/bgfx/examples/common)
 set(BGFX_3RDPARTY        ${CMAKE_CURRENT_SOURCE_DIR}/lib/bgfx.cmake/bgfx/3rdparty)
 
+# ── Patch bgfx's bundled fontstash for macOS ─────────────────────────────────
+# The bgfx nanovg fork hard-codes `#include <malloc.h>` in fontstash.h, which
+# does not exist on macOS (malloc/free live in <stdlib.h>, which is portable
+# everywhere). We can't edit the submodule in place durably, so apply the fix at
+# configure time, macOS only. Idempotent: only rewrites the file when the bad
+# include is still present. Update/remove this if the upstream submodule fixes it.
+if(APPLE)
+    set(_FONTSTASH_H ${BGFX_EXAMPLES_COMMON}/nanovg/fontstash.h)
+    if(EXISTS ${_FONTSTASH_H})
+        file(READ ${_FONTSTASH_H} _FONTSTASH_SRC)
+        string(FIND "${_FONTSTASH_SRC}" "#\tinclude <malloc.h>" _FONTSTASH_HIT)
+        if(NOT _FONTSTASH_HIT EQUAL -1)
+            string(REPLACE "#\tinclude <malloc.h>" "#\tinclude <stdlib.h>" _FONTSTASH_SRC "${_FONTSTASH_SRC}")
+            file(WRITE ${_FONTSTASH_H} "${_FONTSTASH_SRC}")
+            message(STATUS "Patched bgfx fontstash.h: <malloc.h> -> <stdlib.h> (macOS portability)")
+        endif()
+    endif()
+endif()
+
 # ── avs_engine (static lib — no UI headers) ───────────────────────────────────
 add_library(avs_engine STATIC
     src/engine/Engine.cpp
