@@ -1,7 +1,6 @@
 #include "Bump.h"
 
 #include "engine/JsonUtil.h"
-
 #include "engine/FBOManager.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
@@ -10,163 +9,177 @@
 #include <algorithm>
 #include <cmath>
 
-// Built-in variable names that ScanVarDecls must not treat as user-declared.
-static const std::vector<std::string> k_builtins = {
-    "x", "y", "bi", "isBeat", "is_long_beat",
-    "getspec", "getosc",
-};
+static constexpr const char* NAME_Depth = "depth";
+static constexpr const char* NAME_EnableOnBeatChange = "onBeat";
+static constexpr const char* NAME_OnBeatDuration = "onBeatDuration";
+static constexpr const char* NAME_OnBeatDepth = "onBeatDepth";
+static constexpr const char* NAME_BlendMode = "blendMode";
+static constexpr const char* NAME_ShowLightPos = "showLightPos";
+static constexpr const char* NAME_InvertDepth = "invertDepth";
+
+static const std::vector<std::string> LuaBuiltIns = { "x", "y", "bi", "isBeat", "isLBeat", "getspec", "getosc" };
 
 void Bump::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_bump_spv, sizeof(fs_bump_spv)));
-    Program    = bgfx::createProgram(VS, FS, true);
-    InputUnif  = bgfx::createUniform("s_input",      bgfx::UniformType::Sampler);
-    TexelUnif  = bgfx::createUniform("u_texelSize",  bgfx::UniformType::Vec4);
-    ParamsUnif = bgfx::createUniform("u_bumpParams", bgfx::UniformType::Vec4);
-    FlagsUnif  = bgfx::createUniform("u_bumpFlags",  bgfx::UniformType::Vec4);
+    bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_bump_spv, sizeof(fs_bump_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
 
-    m_curDepth = Depth;
+    TexUniform  = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    TexelSizeUniform = bgfx::createUniform("u_texelSize", bgfx::UniformType::Vec4);
+    Params1Uniform = bgfx::createUniform("u_bumpParams", bgfx::UniformType::Vec4);
+    Params2Uniform = bgfx::createUniform("u_bumpFlags", bgfx::UniformType::Vec4);
 
-    for (const auto& v : k_builtins) m_lua.SeedVar(v);
-    m_lua.SetEnvNumber("bi", 1.0);
+    CurrentDepth = Depth;
 
-    Recompile();
-    SeedUserVars();
-    m_lua.RunBlock(m_initRef, "initCode");
-    m_inited = true;
-}
+    for (const auto& Variable : LuaBuiltIns)
+    {
+        LuaContext.SeedVar(Variable);
+    }
 
-void Bump::SeedUserVars()
-{
-    const std::string all = InitCode + "\n" + FrameCode + "\n" + BeatCode;
-    for (const auto& v : LuaRuntime::ScanVarDecls(all, k_builtins))
-        m_lua.SeedVar(v);
-}
-
-void Bump::Recompile()
-{
-    m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
-    m_lua.CompileBlock(FrameCode, "frameCode", m_frameRef);
-    m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
-}
-
-void Bump::RecompileCode()
-{
-    if (!m_inited) return;
-
-    Recompile();
-    SeedUserVars();
-    m_lua.RunBlock(m_initRef, "initCode");
-}
-
-nlohmann::json Bump::Serialize() const
-{
-    return {
-        { kDepth,          Depth          },
-        { kOnBeat,         OnBeat         },
-        { kOnBeatDuration, OnBeatDuration },
-        { kOnBeatDepth,    OnBeatDepth    },
-        { kBlendMode,      BlendMode      },
-        { kShowLightPos,   ShowLightPos   },
-        { kInvertDepth,    InvertDepth    },
-        { kInitCode,       InitCode       },
-        { kFrameCode,      FrameCode      },
-        { kBeatCode,       BeatCode       },
-    };
-}
-
-void Bump::Deserialize(const nlohmann::json& j)
-{
-    JsonUtil::ReadInt   (j, kDepth,          Depth);
-    JsonUtil::ReadBool  (j, kOnBeat,         OnBeat);
-    JsonUtil::ReadInt   (j, kOnBeatDuration, OnBeatDuration);
-    JsonUtil::ReadInt   (j, kOnBeatDepth,    OnBeatDepth);
-    JsonUtil::ReadInt   (j, kBlendMode,      BlendMode);
-    JsonUtil::ReadBool  (j, kShowLightPos,   ShowLightPos);
-    JsonUtil::ReadBool  (j, kInvertDepth,    InvertDepth);
-    JsonUtil::ReadString(j, kInitCode,       InitCode);
-    JsonUtil::ReadString(j, kFrameCode,      FrameCode);
-    JsonUtil::ReadString(j, kBeatCode,       BeatCode);
+    LuaContext.SetEnvNumber("bi", 1.0);
+    LuaInitComplete = true;
 
     RecompileCode();
 }
 
+void Bump::Destroy()
+{
+    if (bgfx::isValid(Params2Uniform))  
+        bgfx::destroy(Params2Uniform);
+
+    if (bgfx::isValid(Params1Uniform)) 
+        bgfx::destroy(Params1Uniform);
+
+    if (bgfx::isValid(TexelSizeUniform))  
+        bgfx::destroy(TexelSizeUniform);
+
+    if (bgfx::isValid(TexUniform))  
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program))    
+        bgfx::destroy(Program);
+
+    Params2Uniform = BGFX_INVALID_HANDLE;
+    Params1Uniform = BGFX_INVALID_HANDLE;
+    TexelSizeUniform = BGFX_INVALID_HANDLE;
+    TexUniform  = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
+    LuaInitComplete = false;
+}
+
+
+void Bump::RecompileCode()
+{
+    if (!LuaInitComplete)
+        return;
+
+    LuaContext.CompileBlock(InitCode, NAME_InitCode, LuaRefInit);
+    LuaContext.CompileBlock(FrameCode, NAME_FrameCode, LuaRefFrame);
+    LuaContext.CompileBlock(BeatCode, NAME_BeatCode, LuaRefBeat);
+
+    const std::string AllCode = InitCode + "\n" + FrameCode + "\n" + BeatCode;
+    for (const auto& Variable : LuaRuntime::ScanVarDecls(AllCode, LuaBuiltIns))
+    {
+        LuaContext.SeedVar(Variable);
+    }
+
+    LuaContext.RunBlock(LuaRefInit, NAME_InitCode);
+}
+
 void Bump::Render(const RenderContext& Context)
 {
-    const int w = Context.Width;
-    const int h = Context.Height;
+    const int W = Context.Width;
+    const int H = Context.Height;
 
     // Update beat flags (EEL convention: -1 = true, 1 = false).
-    m_lua.SetEnvNumber("isBeat",       Context.IsBeat() ? -1.0 : 1.0);
-    m_lua.SetEnvNumber("is_long_beat", m_onBeatFadeout > 0 ? -1.0 : 1.0);
+    LuaContext.SetEnvNumber("isBeat", Context.IsBeat() ? -1.0 : 1.0);
+    LuaContext.SetEnvNumber("isLBeat", OnBeatFadeout > 0 ? -1.0 : 1.0);
 
-    m_lua.RunBlock(m_frameRef, "frameCode");
+    LuaContext.RunBlock(LuaRefFrame, NAME_FrameCode);
+
     if (Context.IsBeat())
-        m_lua.RunBlock(m_beatRef, "beatCode");
+    {
+        LuaContext.RunBlock(LuaRefBeat, NAME_BeatCode);
+    }
 
     // Clamp bi to [0,1].
-    const double bi = std::clamp(m_lua.GetEnvNumber("bi"), 0.0, 1.0);
-    m_lua.SetEnvNumber("bi", bi);
+    const double BeatIntensity = std::clamp(LuaContext.GetEnvNumber("bi"), 0.0, 1.0);
+    LuaContext.SetEnvNumber("bi", BeatIntensity);
 
     // On-beat depth snap (before bi multiplication, matching original).
-    if (Context.IsBeat() && OnBeat)
+    if (EnableOnBeatChange && Context.IsBeat())
     {
-        m_curDepth      = OnBeatDepth;
-        m_onBeatFadeout = OnBeatDuration;
+        CurrentDepth = OnBeatDepth;
+        OnBeatFadeout = OnBeatDuration;
     }
-    else if (!m_onBeatFadeout)
+    else if (!OnBeatFadeout)
     {
-        m_curDepth = Depth;
+        CurrentDepth = Depth;
     }
 
-    m_curDepth = (int)((double)m_curDepth * bi);
-    const int depthScaled = (m_curDepth * 256) / 100;
+    CurrentDepth = (int)((double)CurrentDepth * BeatIntensity);
+    const int DepthScaled = (CurrentDepth * 256) / 100;
 
-    // Light center: normalized [0,1] → pixel coords (truncate, clamp to [0, dim]).
-    const int centerX = std::clamp((int)(m_lua.GetEnvNumber("x") * w), 0, w);
-    const int centerY = std::clamp((int)(m_lua.GetEnvNumber("y") * h), 0, h);
+    // Light center: normalized [0,1] → pixel coords
+    const int CenterX = LuaContext.GetEnvNumber("x") * W;
+    const int CenterY = LuaContext.GetEnvNumber("y") * H;
 
-    const float texelSz[4] = { 1.0f / (float)w, 1.0f / (float)h, (float)w, (float)h };
-    const float params[4]  = { (float)centerX, (float)centerY, (float)depthScaled, (float)BlendMode };
-    const float flags[4]   = { InvertDepth  ? 1.0f : 0.0f,
-                                ShowLightPos ? 1.0f : 0.0f, 0.0f, 0.0f };
+    const float uTexelSize[4] = { 1.0f / (float)W, 1.0f / (float)H, (float)W, (float)H };
+    const float uParams1[4] = { (float)CenterX, (float)CenterY, (float)DepthScaled, (float)BlendMode };
+    const float uParams2[4] = { InvertDepth ? 1.0f : 0.0f, ShowLightPos ? 1.0f : 0.0f, 0.0f, 0.0f };
 
-    bgfx::setUniform(TexelUnif,  texelSz);
-    bgfx::setUniform(ParamsUnif, params);
-    bgfx::setUniform(FlagsUnif,  flags);
-    bgfx::setTexture(0, InputUnif, Context.InputTexture,
-                     BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
+    bgfx::setUniform(TexelSizeUniform, uTexelSize);
+    bgfx::setUniform(Params1Uniform, uParams1);
+    bgfx::setUniform(Params2Uniform, uParams2);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture, BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
     bgfx::submit(Context.ViewId, Program);
 
     Context.FboManager->Swap();
 
-    // Advance on-beat fadeout: step cur_depth toward base depth each frame.
-    if (m_onBeatFadeout > 0)
+    // Advance on-beat fadeout: step CurrentDepth toward base depth each frame.
+    if (OnBeatFadeout > 0)
     {
-        m_onBeatFadeout--;
-        if (m_onBeatFadeout > 0 && OnBeatDuration > 0)
+        OnBeatFadeout--;
+        if (OnBeatFadeout > 0 && OnBeatDuration > 0)
         {
-            const int step = std::abs(Depth - OnBeatDepth) / OnBeatDuration;
-            m_curDepth += step * (OnBeatDepth > Depth ? -1 : 1);
+            const int Step = std::abs(Depth - OnBeatDepth) / OnBeatDuration;
+            CurrentDepth += Step * (OnBeatDepth > Depth ? -1 : 1);
         }
     }
 }
 
-void Bump::Destroy()
+nlohmann::json Bump::Serialize() const
 {
-    if (bgfx::isValid(FlagsUnif))  bgfx::destroy(FlagsUnif);
-    if (bgfx::isValid(ParamsUnif)) bgfx::destroy(ParamsUnif);
-    if (bgfx::isValid(TexelUnif))  bgfx::destroy(TexelUnif);
-    if (bgfx::isValid(InputUnif))  bgfx::destroy(InputUnif);
-    if (bgfx::isValid(Program))    bgfx::destroy(Program);
+    return 
+    {
+        { NAME_Depth, Depth },
+        { NAME_EnableOnBeatChange, EnableOnBeatChange },
+        { NAME_OnBeatDuration, OnBeatDuration },
+        { NAME_OnBeatDepth, OnBeatDepth },
+        { NAME_BlendMode, BlendMode },
+        { NAME_ShowLightPos, ShowLightPos },
+        { NAME_InvertDepth, InvertDepth },
+        { NAME_InitCode, InitCode },
+        { NAME_FrameCode, FrameCode },
+        { NAME_BeatCode, BeatCode },
+    };
+}
 
-    FlagsUnif  = BGFX_INVALID_HANDLE;
-    ParamsUnif = BGFX_INVALID_HANDLE;
-    TexelUnif  = BGFX_INVALID_HANDLE;
-    InputUnif  = BGFX_INVALID_HANDLE;
-    Program    = BGFX_INVALID_HANDLE;
-    m_inited   = false;
+void Bump::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt(j, NAME_Depth, Depth);
+    JsonUtil::ReadBool(j, NAME_EnableOnBeatChange, EnableOnBeatChange);
+    JsonUtil::ReadInt(j, NAME_OnBeatDuration, OnBeatDuration);
+    JsonUtil::ReadInt(j, NAME_OnBeatDepth, OnBeatDepth);
+    JsonUtil::ReadInt(j, NAME_BlendMode, BlendMode);
+    JsonUtil::ReadBool(j, NAME_ShowLightPos, ShowLightPos);
+    JsonUtil::ReadBool(j, NAME_InvertDepth, InvertDepth);
+    JsonUtil::ReadString(j, NAME_InitCode, InitCode);
+    JsonUtil::ReadString(j, NAME_FrameCode, FrameCode);
+    JsonUtil::ReadString(j, NAME_BeatCode, BeatCode);
+
+    RecompileCode();
 }

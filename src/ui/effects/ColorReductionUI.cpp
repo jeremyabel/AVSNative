@@ -8,7 +8,7 @@ static void DrawColorReductionUI(Effect* base)
 {
     auto* fx = static_cast<ColorReduction*>(base);
 
-    ImGui::TextUnformatted("Levels (bits)");
+    ImGui::Text("Levels (bits)");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderInt("##levels", &fx->Levels, 1, 8);
 }

@@ -10,35 +10,6 @@
 
 #include <vector>
 
-// ── Serialize / Deserialize ───────────────────────────────────────────────────
-
-nlohmann::json Picture2::Serialize() const
-{
-    return {
-        { kBlendMode,         BlendMode         },
-        { kAdjustBlend,       AdjustBlend       },
-        { kBilinear,          Bilinear          },
-        { kOnBeatBlendMode,   OnBeatBlendMode   },
-        { kOnBeatAdjustBlend, OnBeatAdjustBlend },
-        { kOnBeatBilinear,    OnBeatBilinear    },
-        // Bundle asset reference — raw bytes arrive via ApplyAsset.
-        { kImageData,         ImageData         },
-    };
-}
-
-void Picture2::Deserialize(const nlohmann::json& j)
-{
-    JsonUtil::ReadInt   (j, kBlendMode,         BlendMode);
-    JsonUtil::ReadInt   (j, kAdjustBlend,       AdjustBlend);
-    JsonUtil::ReadBool  (j, kBilinear,          Bilinear);
-    JsonUtil::ReadInt   (j, kOnBeatBlendMode,   OnBeatBlendMode);
-    JsonUtil::ReadInt   (j, kOnBeatAdjustBlend, OnBeatAdjustBlend);
-    JsonUtil::ReadBool  (j, kOnBeatBilinear,    OnBeatBilinear);
-    JsonUtil::ReadString(j, kImageData,         ImageData);
-}
-
-// ── Preset bundle assets ──────────────────────────────────────────────────────
-
 std::vector<PresetAsset> Picture2::CollectAssets() const
 {
     if (m_raw.empty())
@@ -56,47 +27,25 @@ void Picture2::ApplyAsset(const std::string& /*key*/, const std::string& name,
         BuildFromRaw(m_raw);
 }
 
-// ── Init / Destroy ────────────────────────────────────────────────────────────
-
 void Picture2::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,  sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_picture2_spv, sizeof(fs_picture2_spv)));
-    m_prog = bgfx::createProgram(VS, FS, true);
+    bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv,  sizeof(vs_fullscreen_spv)));
+    bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_picture2_spv, sizeof(fs_picture2_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
 
-    m_inputUnif  = bgfx::createUniform("s_input",    bgfx::UniformType::Sampler);
-    m_imageUnif  = bgfx::createUniform("s_image",    bgfx::UniformType::Sampler);
-    m_paramsUnif = bgfx::createUniform("u_p2Params", bgfx::UniformType::Vec4);
+    TexUniform = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    ImageUniform = bgfx::createUniform("s_image", bgfx::UniformType::Sampler);
+    ParamsUniform = bgfx::createUniform("u_p2Params", bgfx::UniformType::Vec4);
 
     m_inited = true;
-    // No image until ApplyAsset delivers the bundled bytes (called after Deserialize).
 }
-
-void Picture2::Destroy()
-{
-    if (bgfx::isValid(m_imageTex))   bgfx::destroy(m_imageTex);
-    if (bgfx::isValid(m_paramsUnif)) bgfx::destroy(m_paramsUnif);
-    if (bgfx::isValid(m_imageUnif))  bgfx::destroy(m_imageUnif);
-    if (bgfx::isValid(m_inputUnif))  bgfx::destroy(m_inputUnif);
-    if (bgfx::isValid(m_prog))       bgfx::destroy(m_prog);
-
-    m_imageTex   = BGFX_INVALID_HANDLE;
-    m_paramsUnif = BGFX_INVALID_HANDLE;
-    m_imageUnif  = BGFX_INVALID_HANDLE;
-    m_inputUnif  = BGFX_INVALID_HANDLE;
-    m_prog       = BGFX_INVALID_HANDLE;
-    m_imgW = m_imgH = 0;
-    m_inited = false;
-}
-
-// ── BuildFromRaw ──────────────────────────────────────────────────────────────
 
 void Picture2::BuildFromRaw(const std::vector<uint8_t>& raw)
 {
-    if (bgfx::isValid(m_imageTex))
+    if (bgfx::isValid(ImageTexture))
     {
-        bgfx::destroy(m_imageTex);
-        m_imageTex = BGFX_INVALID_HANDLE;
+        bgfx::destroy(ImageTexture);
+        ImageTexture = BGFX_INVALID_HANDLE;
     }
     m_imgW = m_imgH = 0;
 
@@ -113,40 +62,90 @@ void Picture2::BuildFromRaw(const std::vector<uint8_t>& raw)
     stbi_image_free(pixels);
 
     // Sampler state is overridden per-draw by Render() for bilinear toggle.
-    m_imageTex = bgfx::createTexture2D(
+    ImageTexture = bgfx::createTexture2D(
         (uint16_t)w, (uint16_t)h,
         false, 1, bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP,
         mem);
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
-
-void Picture2::Render(const RenderContext& Ctx)
+void Picture2::Render(const RenderContext& Context)
 {
-    if (!bgfx::isValid(m_imageTex))
+    if (!bgfx::isValid(ImageTexture))
         return;  // No image loaded: pass through
 
-    const int  blend  = Ctx.IsBeat() ? OnBeatBlendMode   : BlendMode;
-    const bool linear = Ctx.IsBeat() ? OnBeatBilinear     : Bilinear;
-    const int  adjust = Ctx.IsBeat() ? OnBeatAdjustBlend  : AdjustBlend;
+    const int blend  = Context.IsBeat() ? OnBeatBlendMode : BlendMode;
+    const bool linear = Context.IsBeat() ? OnBeatBilinear : Bilinear;
+    const int adjust = Context.IsBeat() ? OnBeatAdjustBlend : AdjustBlend;
 
     if (blend == 10)
         return;  // Ignore: pass through without swapping
 
-    const uint32_t samplerFlags = linear
+    const uint32_t SamplerFlags = linear
         ? (uint32_t)(BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP)
         : (uint32_t)(BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT |
                      BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP);
 
-    float params[4] = { (float)blend, (float)adjust / 255.0f, 0.0f, 0.0f };
+    float uParams[4] = { (float)blend, (float)adjust / 255.0f, 0.0f, 0.0f };
 
-    bgfx::setTexture(0, m_inputUnif, Ctx.InputTexture);
-    bgfx::setTexture(1, m_imageUnif, m_imageTex, samplerFlags);
-    bgfx::setUniform(m_paramsUnif, params);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setTexture(1, ImageUniform, ImageTexture, SamplerFlags);
+    bgfx::setUniform(ParamsUniform, uParams);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Ctx.QuadVB);
-    bgfx::submit(Ctx.ViewId, m_prog);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
 
-    Ctx.FboManager->Swap();
+    Context.FboManager->Swap();
+}
+
+void Picture2::Destroy()
+{
+    if (bgfx::isValid(ImageTexture))   
+        bgfx::destroy(ImageTexture);
+
+    if (bgfx::isValid(ParamsUniform)) 
+        bgfx::destroy(ParamsUniform);
+
+    if (bgfx::isValid(ImageUniform))  
+        bgfx::destroy(ImageUniform);
+
+    if (bgfx::isValid(TexUniform))  
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program))       
+        bgfx::destroy(Program);
+
+    ImageTexture = BGFX_INVALID_HANDLE;
+    ParamsUniform = BGFX_INVALID_HANDLE;
+    ImageUniform = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
+
+    m_imgW = m_imgH = 0;
+    m_inited = false;
+}
+
+nlohmann::json Picture2::Serialize() const
+{
+    return 
+    {
+        { kBlendMode, BlendMode },
+        { kAdjustBlend, AdjustBlend },
+        { kBilinear, Bilinear },
+        { kOnBeatBlendMode, OnBeatBlendMode },
+        { kOnBeatAdjustBlend, OnBeatAdjustBlend },
+        { kOnBeatBilinear, OnBeatBilinear },
+        { kImageData, ImageData }, // Bundle asset reference — raw bytes arrive via ApplyAsset.
+    };
+}
+
+void Picture2::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadInt(j, kBlendMode, BlendMode);
+    JsonUtil::ReadInt(j, kAdjustBlend, AdjustBlend);
+    JsonUtil::ReadBool(j, kBilinear, Bilinear);
+    JsonUtil::ReadInt(j, kOnBeatBlendMode, OnBeatBlendMode);
+    JsonUtil::ReadInt(j, kOnBeatAdjustBlend, OnBeatAdjustBlend);
+    JsonUtil::ReadBool(j, kOnBeatBilinear, OnBeatBilinear);
+    JsonUtil::ReadString(j, kImageData, ImageData);
 }

@@ -5,33 +5,15 @@
 
 #include <imgui.h>
 
-#include <string>
-
-static void ScriptError(Effect* fx, const char* param)
-{
-    if (std::string err = fx->GetScriptError(param); !err.empty())
-        ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
-}
-
 static void DrawColorModifierUI(Effect* base)
 {
     auto* fx = static_cast<ColorModifier*>(base);
-
-    if (ImGui::TreeNodeEx("Pixel (GLSL)", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
-    {
-        if (ConfigUi::CodeEditor("cmod.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
-            fx->RecompileMain();
-        ScriptError(fx, ColorModifier::kPixelCode);
-        ImGui::TreePop();
-    }
-
-    ImGui::Spacing();
 
     if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
     {
         if (ConfigUi::CodeEditor("cmod.initCode", fx->InitCode, ConfigUi::Lang::Lua))
             fx->RecompileMain();
-        ScriptError(fx, ColorModifier::kInitCode);
+        ConfigUi::ScriptError(fx, ColorModifier::NAME_InitCode);
         ImGui::TreePop();
     }
 
@@ -41,7 +23,7 @@ static void DrawColorModifierUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("cmod.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
             fx->RecompileFrameCode();
-        ScriptError(fx, ColorModifier::kFrameCode);
+        ConfigUi::ScriptError(fx, ColorModifier::NAME_FrameCode);
         ImGui::TreePop();
     }
 
@@ -51,7 +33,17 @@ static void DrawColorModifierUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("cmod.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
             fx->RecompileBeatCode();
-        ScriptError(fx, ColorModifier::kBeatCode);
+        ConfigUi::ScriptError(fx, ColorModifier::NAME_BeatCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Pixel (GLSL)", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("cmod.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
+            fx->RecompileMain();
+        ConfigUi::ScriptError(fx, ColorModifier::NAME_PixelCode);
         ImGui::TreePop();
     }
 }

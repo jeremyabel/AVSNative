@@ -6,5 +6,5 @@ $output v_color0
 void main()
 {
     gl_Position = vec4(a_position.xy, 0.0, 1.0);
-    v_color0    = a_color0;
+    v_color0 = a_color0;
 }

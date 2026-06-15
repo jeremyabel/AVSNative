@@ -7,6 +7,7 @@ SAMPLER2D(s_texColor, 0);
 
 // x=zoom, y=angle (accumulated radians), z=centerX, w=centerY
 uniform vec4 u_blitParams;
+
 // x=compat(0/1)
 uniform vec4 u_blitFlags;
 

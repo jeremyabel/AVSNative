@@ -69,17 +69,8 @@ void main() {
 // Generates a single triangle covering the screen via gl_VertexIndex (0,1,2).
 // UV y is inverted so (0,0) = top-left, matching Vulkan texture convention.
 // Compiled via glslang so it shares an interface with our GLSL fragment shaders.
-static const char* k_pullVertGlsl = R"(
-#version 450
-layout(location = 0) out vec4 v_texcoord0;
-void main() {
-    vec2 uv = vec2(
-        (gl_VertexIndex == 1) ? 2.0 : 0.0,
-        (gl_VertexIndex == 2) ? 2.0 : 0.0);
-    gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
-    v_texcoord0 = vec4(uv.x, 1.0 - uv.y, 0.0, 0.0);
-}
-)";
+// Fullscreen triangle VS for the pull path — shared snippet.
+static const char* k_pullVertGlsl = avs::kFullscreenTriangleVertGlsl;
 
 // ---------------------------------------------------------------------------
 

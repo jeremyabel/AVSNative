@@ -10,6 +10,7 @@ uniform vec4 u_cfParams;
 void main()
 {
     vec3 c = texture2D(s_texColor, v_texcoord0.xy).rgb;
+    
     // Round to integer 0..255 before classifying. The win32 original works in
     // integer pixel space, so a gray pixel has R==G==B exactly. Bilinear sampling
     // here introduces sub-LSB per-channel float noise; without rounding, that noise

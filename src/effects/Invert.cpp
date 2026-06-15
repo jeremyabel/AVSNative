@@ -14,16 +14,6 @@ void Invert::Init()
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 }
 
-void Invert::Render(const RenderContext& Context)
-{
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, Program);
-
-    Context.FboManager->Swap();
-}
-
 void Invert::Destroy()
 {
     if (bgfx::isValid(TexUniform))
@@ -34,4 +24,14 @@ void Invert::Destroy()
 
     TexUniform = BGFX_INVALID_HANDLE;
     Program = BGFX_INVALID_HANDLE;
+}
+
+void Invert::Render(const RenderContext& Context)
+{
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+
+    Context.FboManager->Swap();
 }

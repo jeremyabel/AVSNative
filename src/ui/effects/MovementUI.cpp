@@ -13,7 +13,6 @@ static void DrawMovementUI(Effect* base)
 {
     auto* fx = static_cast<Movement*>(base);
 
-    // --- Coordinate system ---
     const char* coordItems[] = { "polar", "cartesian" };
     int coordIdx = (fx->Coordinates == "cartesian") ? 1 : 0;
     ImGui::TextUnformatted("Coordinates");
@@ -21,13 +20,11 @@ static void DrawMovementUI(Effect* base)
     if (ImGui::Combo("##coords", &coordIdx, coordItems, 2))
         fx->SetCoordinateSystem(coordItems[coordIdx]); // handles default-code swap + recompile
 
-    // --- GLSL editor (shared helper owns the TextEditor instance) ---
     if (ImGui::TreeNodeEx("GLSL Code", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
     {
         if (ConfigUi::CodeEditor("movement.code", fx->Code, ConfigUi::Lang::Glsl))
             fx->Compile();
-        if (std::string err = fx->GetScriptError(Movement::kCode); !err.empty())
-            ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
+        ConfigUi::ScriptError(fx, Movement::kCode);
         ImGui::TreePop();
     }
 

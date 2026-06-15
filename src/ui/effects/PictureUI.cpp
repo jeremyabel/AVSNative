@@ -19,7 +19,7 @@ static void DrawPictureUI(Effect* effect)
         ImGui::TextUnformatted("No image loaded");
 
     if (ImGui::Button("Load Image..."))
-        ConfigUi::PickImageInto(effect, Picture::kImageData);
+        ConfigUi::PickImageInto(effect, Picture::NAME_ImageData);
 
     ImGui::Spacing();
 

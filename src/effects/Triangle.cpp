@@ -18,7 +18,7 @@
 
 // Built-in variable names ScanVarDecls must not treat as user-declared. Mirrors the
 // JS reference's BUILTIN_VARS set.
-static const std::vector<std::string> k_builtins = {
+static const std::vector<std::string> LuaBuiltIns = {
     "w", "h", "n", "i", "b", "skip",
     "x1", "y1", "red1", "green1", "blue1",
     "x2", "y2", "red2", "green2", "blue2",
@@ -120,7 +120,7 @@ void Triangle::EnsureOverlay(int w, int h)
 
 void Triangle::SeedBuiltins()
 {
-    for (const auto& v : k_builtins) m_lua.SeedVar(v);
+    for (const auto& v : LuaBuiltIns) m_lua.SeedVar(v);
     // n defaults to 1 so a freshly added effect draws something.
     m_lua.SetEnvNumber("n", 1);
 }
@@ -129,7 +129,7 @@ void Triangle::SeedUserVars()
 {
     const std::string allCode =
         InitCode + "\n" + FrameCode + "\n" + BeatCode + "\n" + TriangleCode;
-    for (const auto& v : LuaRuntime::ScanVarDecls(allCode, k_builtins))
+    for (const auto& v : LuaRuntime::ScanVarDecls(allCode, LuaBuiltIns))
         m_lua.SeedVar(v);
 }
 

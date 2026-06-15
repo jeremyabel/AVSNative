@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/Effect.h"
+#include "engine/ColorList.h"
 #include "engine/LuaRuntime.h"
 
 #include <array>
@@ -16,7 +17,7 @@ public:
     std::string FrameCode;
     std::string BeatCode;
     std::string PointCode;
-    std::vector<std::array<uint8_t, 3>> Colors = { { 255, 255, 255 } };
+    ColorList Colors;
     int AudioSource  = 0;         // 0 = waveform, 1 = spectrum
     int AudioChannel = 0;         // 0 = center, 1 = left, 2 = right
     int DrawMode     = 1;         // 0 = dots, 1 = lines
@@ -56,8 +57,7 @@ private:
 
     bool m_inited = false;
 
-    // ── Color cycling (mirrors JS color_pos logic) ────────────────────────────
-    int m_colorPos = 0;
+    // ── Color cycling ─────────────────────────────────────────────────────────
     struct Rgb { float r, g, b; };
     Rgb AdvanceColor();
 

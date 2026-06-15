@@ -5,6 +5,8 @@
 // usable JSON type; otherwise the member keeps its current value, so the
 // in-class member initializers remain the single source of defaults.
 
+#include "engine/ColorList.h"
+
 #include <nlohmann/json.hpp>
 
 #include <array>
@@ -51,7 +53,7 @@ inline void ReadColor(const nlohmann::json& j, const char* key, Rgb& v)
 }
 
 // Ignores empty arrays so the "at least one color" invariant holds.
-inline void ReadColors(const nlohmann::json& j, const char* key, std::vector<Rgb>& v)
+inline void ReadColors(const nlohmann::json& j, const char* key, ColorList& v)
 {
     auto it = j.find(key);
     if (it == j.end() || !it->is_array() || it->empty())
@@ -67,7 +69,7 @@ inline void ReadColors(const nlohmann::json& j, const char* key, std::vector<Rgb
                         (uint8_t)c[2].get<int>() });
     }
     if (!out.empty())
-        v = std::move(out);
+        v.Entries = std::move(out);
 }
 
 inline nlohmann::json ColorToJson(const Rgb& c)
@@ -75,10 +77,10 @@ inline nlohmann::json ColorToJson(const Rgb& c)
     return { (int)c[0], (int)c[1], (int)c[2] };
 }
 
-inline nlohmann::json ColorsToJson(const std::vector<Rgb>& cs)
+inline nlohmann::json ColorsToJson(const ColorList& cs)
 {
     nlohmann::json arr = nlohmann::json::array();
-    for (const Rgb& c : cs)
+    for (const Rgb& c : cs.Entries)
         arr.push_back(ColorToJson(c));
     return arr;
 }

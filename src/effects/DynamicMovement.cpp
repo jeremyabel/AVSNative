@@ -12,7 +12,7 @@
 #include <unordered_set>
 
 // Built-in names that must never be treated as user-declared (bridged) variables.
-static const std::vector<std::string> k_builtins = {
+static const std::vector<std::string> LuaBuiltIns = {
     "b", "d", "r", "x", "y", "w", "h", "alpha", "getspec", "getosc"
 };
 
@@ -22,17 +22,8 @@ static const char* k_defaultPixel =
 
 // Procedural fullscreen-triangle VS (direct mode): outputs v_texcoord0 with (0,0) at
 // the top-left, matching the Vulkan/bgfx texture convention.
-static const char* k_directVertGlsl = R"(
-#version 450
-layout(location = 0) out vec4 v_texcoord0;
-void main() {
-    vec2 uv = vec2(
-        (gl_VertexIndex == 1) ? 2.0 : 0.0,
-        (gl_VertexIndex == 2) ? 2.0 : 0.0);
-    gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
-    v_texcoord0 = vec4(uv.x, 1.0 - uv.y, 0.0, 0.0);
-}
-)";
+// Fullscreen triangle VS for the direct (non-grid) path — shared snippet.
+static const char* k_directVertGlsl = avs::kFullscreenTriangleVertGlsl;
 
 // 8-bit integer bilinear — shared with the static .sc effects (and Movement).
 // See src/engine/ShaderSnippets.h / src/shaders/bilinear_compat.sh.
@@ -76,7 +67,7 @@ void DynamicMovement::Init()
     InputUnif    = bgfx::createUniform("uInput",     bgfx::UniformType::Sampler);
     AudioUnif    = bgfx::createUniform("s_audio",    bgfx::UniformType::Sampler);
 
-    for (const auto& v : k_builtins) m_lua.SeedVar(v);
+    for (const auto& v : LuaBuiltIns) m_lua.SeedVar(v);
     m_lua.SetEnvNumber("b", 0.0);
 
     RescanAndCompile();
@@ -392,13 +383,13 @@ void DynamicMovement::CompileShaders()
 
 void DynamicMovement::RescanAndCompile()
 {
-    m_bridged = LuaRuntime::ScanVarDecls(InitCode, k_builtins);
+    m_bridged = LuaRuntime::ScanVarDecls(InitCode, LuaBuiltIns);
     if ((int)m_bridged.size() > kMaxDyn)
         m_bridged.resize(kMaxDyn);
 
     m_locals.clear();
     for (const auto& name : ScanAssigned(PixelCode))
-        if (!Contains(k_builtins, name) && !Contains(m_bridged, name))
+        if (!Contains(LuaBuiltIns, name) && !Contains(m_bridged, name))
             m_locals.push_back(name);
 
     m_usesAudio = PixelCode.find("getspec") != std::string::npos ||
@@ -416,7 +407,7 @@ void DynamicMovement::RecompileLua()
     m_lua.CompileBlock(BeatCode,  "beatCode",  m_beatRef);
 
     const std::string all = InitCode + "\n" + FrameCode + "\n" + BeatCode;
-    for (const auto& v : LuaRuntime::ScanVarDecls(all, k_builtins))
+    for (const auto& v : LuaRuntime::ScanVarDecls(all, LuaBuiltIns))
         m_lua.SeedVar(v);
 
     m_lua.SetEnvNumber("b", 0.0);

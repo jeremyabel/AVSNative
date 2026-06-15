@@ -7,6 +7,25 @@
 
 namespace avs {
 
+// Fullscreen-triangle vertex shader for runtime-GLSL effects. Emits a single large
+// triangle from gl_VertexIndex (no vertex buffer — submit with setVertexCount(3)) and
+// derives v_texcoord0 with (0,0) = top-left to match the Vulkan/bgfx UV convention.
+// Used by every effect whose fragment shader embeds user GLSL (Movement, Dynamic
+// Movement, Dynamic Distance Modifier, Color Modifier): the VS must go through glslang
+// alongside the runtime FS, so it can't be the precompiled vs_fullscreen.sc blob.
+inline constexpr const char* kFullscreenTriangleVertGlsl = R"(
+#version 450
+layout(location = 0) out vec4 v_texcoord0;
+void main() 
+{
+    vec2 uv = vec2(
+        (gl_VertexIndex == 1) ? 2.0 : 0.0,
+        (gl_VertexIndex == 2) ? 2.0 : 0.0);
+    gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+    v_texcoord0 = vec4(uv.x, 1.0 - uv.y, 0.0, 0.0);
+}
+)";
+
 // 8-bit integer 2x2 bilinear blend — matches the original AVS C++
 // blend_bilinear_2x2 exactly (fixed-point lerp with 8-bit fractional weights and
 // >>8 truncation, on integer 0..255 channels). Bind the source POINT — this does
@@ -24,7 +43,8 @@ namespace avs {
 //   uv   : sample position in [0,1]
 //   sz   : texture size in texels, e.g. textureSize(name, 0)
 inline constexpr const char* kBilinearCompatGlsl = R"(
-vec3 bilinearCompat(texture2D tex, sampler smp, vec2 uv, ivec2 sz) {
+vec3 bilinearCompat(texture2D tex, sampler smp, vec2 uv, ivec2 sz) 
+{
     vec2  pos = uv * vec2(sz);
     ivec2 i0  = ivec2(floor(pos));
     ivec2 f8  = ivec2(fract(pos) * 256.0);

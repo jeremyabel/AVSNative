@@ -272,8 +272,8 @@ int LuaRuntime::l_getspec(lua_State* L)
     const VisData* v = self->m_audioData;
     if (v)
     {
-        int start = std::clamp((int)(band * kAudioBins), 0, kAudioBins - 1);
-        int end   = std::clamp((int)((band + bandw) * kAudioBins), start + 1, kAudioBins);
+        int start = std::clamp((int)(band * NumAudioBins), 0, NumAudioBins - 1);
+        int end   = std::clamp((int)((band + bandw) * NumAudioBins), start + 1, NumAudioBins);
         float sum = 0.0f;
         for (int i = start; i < end; ++i)
         {
@@ -298,8 +298,8 @@ int LuaRuntime::l_getosc(lua_State* L)
     const VisData* v = self->m_audioData;
     if (v)
     {
-        int start = std::clamp((int)(band * kAudioBins), 0, kAudioBins - 1);
-        int end   = std::clamp((int)((band + bandw) * kAudioBins), start + 1, kAudioBins);
+        int start = std::clamp((int)(band * NumAudioBins), 0, NumAudioBins - 1);
+        int end   = std::clamp((int)((band + bandw) * NumAudioBins), start + 1, NumAudioBins);
         float sum = 0.0f;
         for (int i = start; i < end; ++i)
         {

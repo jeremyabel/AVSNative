@@ -109,7 +109,7 @@ void MultiDelay::Init()
 {
     bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_blit_spv,       sizeof(fs_blit_spv)));
-    BlitProgram = bgfx::createProgram(VS, FS, true);
+    Program = bgfx::createProgram(VS, FS, true);
     TexUniform  = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
     if (!m_inited)
@@ -193,7 +193,7 @@ void MultiDelay::Render(const RenderContext& Context)
         bgfx::setTexture(0, TexUniform, slot.Ring[slot.OutIdx]);
         bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
         bgfx::setVertexBuffer(0, Context.QuadVB);
-        bgfx::submit(Context.ViewId, BlitProgram);
+        bgfx::submit(Context.ViewId, Program);
         Context.FboManager->Swap();
     }
 }
@@ -201,9 +201,9 @@ void MultiDelay::Render(const RenderContext& Context)
 void MultiDelay::Destroy()
 {
     if (bgfx::isValid(TexUniform))  bgfx::destroy(TexUniform);
-    if (bgfx::isValid(BlitProgram)) bgfx::destroy(BlitProgram);
+    if (bgfx::isValid(Program)) bgfx::destroy(Program);
     TexUniform  = BGFX_INVALID_HANDLE;
-    BlitProgram = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 
     if (m_inited)
     {

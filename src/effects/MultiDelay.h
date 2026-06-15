@@ -15,19 +15,19 @@
 // through the fullscreen blit shader. This keeps framebuffer usage at zero for the rings
 // (bgfx caps out at 128 framebuffers but 4096 textures), at the cost of up to
 // 6 * MAX_RING full-resolution textures of VRAM worst-case.
-
 class MultiDelay : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    int Mode         = 0;   // 0=Disabled, 1=Write to buffer, 2=Read from buffer
-    int ActiveBuffer = 0;   // 0..5
 
-    static constexpr const char* kMode           = "mode";
-    static constexpr const char* kActiveBuffer   = "activebuffer";
+    // ── Config (serialized; edited directly by the UI) ─────────────────────────
+    int Mode = 0; // 0=Disabled, 1=Write to buffer, 2=Read from buffer
+    int ActiveBuffer = 0; // 0..5
+
+    static constexpr const char* kMode = "mode";
+    static constexpr const char* kActiveBuffer = "activebuffer";
     // Shared per-buffer settings serialize as usebeats0..5 / delay0..5.
     static constexpr const char* kUseBeatsPrefix = "usebeats";
-    static constexpr const char* kDelayPrefix    = "delay";
+    static constexpr const char* kDelayPrefix = "delay";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -48,7 +48,8 @@ public:
     static void SetBufferDelay(int i, int delay);
 
 private:
-    bool                m_inited     = false;
-    bgfx::ProgramHandle BlitProgram  = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform   = BGFX_INVALID_HANDLE;
+
+    bool m_inited = false;
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
 };

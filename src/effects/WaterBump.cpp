@@ -12,12 +12,43 @@
 
 void WaterBump::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_waterbump_spv, sizeof(fs_waterbump_spv)));
-    Program    = bgfx::createProgram(VS, FS, true);
-    InputUnif  = bgfx::createUniform("s_input",     bgfx::UniformType::Sampler);
-    HeightUnif = bgfx::createUniform("s_height",    bgfx::UniformType::Sampler);
-    TexelUnif  = bgfx::createUniform("u_texelSize", bgfx::UniformType::Vec4);
+    bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_waterbump_spv, sizeof(fs_waterbump_spv)));
+
+    Program = bgfx::createProgram(VertShader, FragShader, true);
+    TexUniform = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    HeightUniform = bgfx::createUniform("s_height", bgfx::UniformType::Sampler);
+    TexelSizeUnifiorm = bgfx::createUniform("u_texelSize", bgfx::UniformType::Vec4);
+}
+
+void WaterBump::Destroy()
+{
+    if (bgfx::isValid(HeightTex))  
+        bgfx::destroy(HeightTex);
+
+    if (bgfx::isValid(TexelSizeUnifiorm))  
+        bgfx::destroy(TexelSizeUnifiorm);
+
+    if (bgfx::isValid(HeightUniform)) 
+        bgfx::destroy(HeightUniform);
+
+    if (bgfx::isValid(TexUniform))  
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program))    
+        bgfx::destroy(Program);
+
+    HeightTex = BGFX_INVALID_HANDLE;
+    TexelSizeUnifiorm = BGFX_INVALID_HANDLE;
+    HeightUniform = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
+
+    Bufs[0].clear();
+    Bufs[1].clear();
+    UploadBuf.clear();
+    Page = 0;
+    BufW = BufH = 0;
 }
 
 void WaterBump::EnsureBuffers(uint16_t W, uint16_t H)
@@ -137,10 +168,10 @@ void WaterBump::Render(const RenderContext& Context)
 
     // GPU displacement pass.
     const float texelSize[4] = { 1.0f / (float)w, 1.0f / (float)h, 0.0f, 0.0f };
-    bgfx::setUniform(TexelUnif, texelSize);
-    bgfx::setTexture(0, InputUnif,  Context.InputTexture,
+    bgfx::setUniform(TexelSizeUnifiorm, texelSize);
+    bgfx::setTexture(0, TexUniform,  Context.InputTexture,
                      BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
-    bgfx::setTexture(1, HeightUnif, HeightTex);
+    bgfx::setTexture(1, HeightUniform, HeightTex);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
     bgfx::submit(Context.ViewId, Program);
@@ -150,27 +181,6 @@ void WaterBump::Render(const RenderContext& Context)
     // Advance simulation: reads Page, writes Page^1.
     CalcWater();
     Page ^= 1;
-}
-
-void WaterBump::Destroy()
-{
-    if (bgfx::isValid(HeightTex))  bgfx::destroy(HeightTex);
-    if (bgfx::isValid(TexelUnif))  bgfx::destroy(TexelUnif);
-    if (bgfx::isValid(HeightUnif)) bgfx::destroy(HeightUnif);
-    if (bgfx::isValid(InputUnif))  bgfx::destroy(InputUnif);
-    if (bgfx::isValid(Program))    bgfx::destroy(Program);
-
-    HeightTex  = BGFX_INVALID_HANDLE;
-    TexelUnif  = BGFX_INVALID_HANDLE;
-    HeightUnif = BGFX_INVALID_HANDLE;
-    InputUnif  = BGFX_INVALID_HANDLE;
-    Program    = BGFX_INVALID_HANDLE;
-
-    Bufs[0].clear();
-    Bufs[1].clear();
-    UploadBuf.clear();
-    Page = 0;
-    BufW = BufH = 0;
 }
 
 nlohmann::json WaterBump::Serialize() const

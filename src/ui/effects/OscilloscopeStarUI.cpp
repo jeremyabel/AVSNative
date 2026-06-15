@@ -9,24 +9,24 @@ static void DrawOscilloscopeStarUI(Effect* base)
 {
     auto* fx = static_cast<OscilloscopeStar*>(base);
 
-    ImGui::TextUnformatted("Colors");
+    ImGui::Text("Colors");
     ConfigUi::ColorsEdit("##colors", fx->Colors);
 
-    static const char* kChannels[] = { "Left", "Right", "Center" };
-    ImGui::TextUnformatted("Audio Channel");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##audioChannel", &fx->AudioChannel, kChannels, IM_ARRAYSIZE(kChannels));
+    ImGui::Text("Audio Channel");
+    ImGui::RadioButton("Left##AudioChannel", &fx->AudioChannel, 0); ImGui::SameLine();
+    ImGui::RadioButton("Right##AudioChannel", &fx->AudioChannel, 1); ImGui::SameLine();
+    ImGui::RadioButton("Center##AudioChannel", &fx->AudioChannel, 2);
 
-    static const char* kPositions[] = { "Left", "Right", "Center" };
-    ImGui::TextUnformatted("Position");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##position", &fx->Position, kPositions, IM_ARRAYSIZE(kPositions));
+    ImGui::Text("Position");
+    ImGui::RadioButton("Left##Position", &fx->Position, 0); ImGui::SameLine();
+    ImGui::RadioButton("Right##Position", &fx->Position, 1); ImGui::SameLine();
+    ImGui::RadioButton("Center##Position", &fx->Position, 2);
 
-    ImGui::TextUnformatted("Size");
+    ImGui::Text("Size");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderInt("##size", &fx->Size, 0, 32);
 
-    ImGui::TextUnformatted("Rotation Speed");
+    ImGui::Text("Rotation Speed");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderInt("##rotation", &fx->Rotation, -16, 16);
 }

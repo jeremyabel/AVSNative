@@ -1,7 +1,5 @@
 #include "EffectList.h"
-
 #include "engine/JsonUtil.h"
-
 #include "engine/FBOManager.h"
 #include "engine/Registry.h"
 
@@ -12,7 +10,7 @@
 
 // Built-in names the eval blocks expose; ScanVarDecls must not treat them as
 // user-declared. enabled/beat/clear/alphain/alphaout are read/write; w/h read-only.
-static const std::vector<std::string> k_builtins = {
+static const std::vector<std::string> LuaBuiltIns = {
     "enabled", "beat", "clear", "alphain", "alphaout", "w", "h", "getspec", "getosc"
 };
 
@@ -32,7 +30,7 @@ void EffectList::Init()
     BlendParamsUniform = bgfx::createUniform("u_elBlendParams", bgfx::UniformType::Vec4);
 
     // ── Lua evaluation override ───────────────────────────────────────────────
-    for (const auto& v : k_builtins)
+    for (const auto& v : LuaBuiltIns)
         m_lua.SeedVar(v);
     RescanUserVars();
     m_lua.CompileBlock(InitCode,  "initCode",  m_initRef);
@@ -43,7 +41,7 @@ void EffectList::Init()
 
 void EffectList::RescanUserVars()
 {
-    for (const auto& v : LuaRuntime::ScanVarDecls(InitCode, k_builtins))
+    for (const auto& v : LuaRuntime::ScanVarDecls(InitCode, LuaBuiltIns))
         m_lua.SeedVar(v);
 }
 

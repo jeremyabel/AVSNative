@@ -12,20 +12,10 @@
 class DynamicShift : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    std::string InitCode  = "d = 0";
-    std::string FrameCode = "x = sin(d) * 1.4\ny = 1.4 * cos(d)\nd = d + 0.01";
-    std::string BeatCode  = "d = d + 2.0";
-    bool Blend    = false;  // false = black border; true = alpha-blend with original
-    bool Subpixel = true;   // linear filtering on the input texture
-    bool Compat   = false;  // 8-bit integer bilinear matching win32 (needs Subpixel)
 
-    static constexpr const char* kInitCode  = "initCode";
-    static constexpr const char* kFrameCode = "frameCode";
-    static constexpr const char* kBeatCode  = "beatCode";
-    static constexpr const char* kBlend     = "blend";
-    static constexpr const char* kSubpixel  = "subpixel";
-    static constexpr const char* kCompat    = "bilinearCompat";
+    static constexpr const char* NAME_InitCode = "initCode";
+    static constexpr const char* NAME_FrameCode = "frameCode";
+    static constexpr const char* NAME_BeatCode = "beatCode";
 
     void Init() override;
     void Destroy() override;
@@ -37,26 +27,35 @@ public:
 
     std::string GetScriptError(const std::string& paramName) const override
     {
-        return m_lua.GetError(paramName);
+        return LuaContext.GetError(paramName);
     }
 
-    // Recompile entry points. Called after Deserialize and by the UI when the
-    // matching code editor changes.
-    void RecompileInitCode();   // rescans user vars, recompiles + reruns init
+    // Recompile entry points. Called after Deserialize and by the UI when the matching code editor changes.
+    void RecompileInitCode();
     void RecompileFrameCode();
     void RecompileBeatCode();
 
+public:
+
+    std::string InitCode = "d = 0";
+    std::string FrameCode = "x = sin(d) * 1.4\ny = 1.4 * cos(d)\nd = d + 0.01";
+    std::string BeatCode = "d = d + 2.0";
+    bool EnableBlend = false;  // false = black border; true = alpha-blend with original
+    bool Bilinear = true;   // bilinear filtering on the input texture
+    bool Compat = false;  // 8-bit integer bilinear matching win32 (needs Bilinear)
+
 private:
+
     void RescanUserVars();
 
-    bgfx::ProgramHandle Program     = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle Params0Unif = BGFX_INVALID_HANDLE;  // (shiftX, shiftY, w, h)
-    bgfx::UniformHandle Params1Unif = BGFX_INVALID_HANDLE;  // (blend, alpha, 0, 0)
-    bgfx::UniformHandle InputUnif   = BGFX_INVALID_HANDLE;  // s_input
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle Params1Uniform = BGFX_INVALID_HANDLE;  // (shiftX, shiftY, w, h)
+    bgfx::UniformHandle Params2Uniform = BGFX_INVALID_HANDLE;  // (blend, alpha, 0, 0)
 
-    LuaRuntime m_lua;
-    int  m_initRef  = -1;
-    int  m_frameRef = -1;
+    LuaRuntime LuaContext;
+    int  LuaRefInit  = -1;
+    int  LuaRefFrame = -1;
     int  m_beatRef  = -1;
     bool m_inited   = false;
 };

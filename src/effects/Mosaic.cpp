@@ -9,50 +9,66 @@
 #include <algorithm>
 #include <cstdlib>
 
+static constexpr const char* NAME_Size = "size";
+static constexpr const char* NAME_EnableOnBeatSizeChange = "onBeatSizeChange";
+static constexpr const char* NAME_OnBeatSize = "onBeatSize";
+static constexpr const char* NAME_OnBeatDuration = "onBeatDuration";
+static constexpr const char* NAME_Blend = "blend";
+
 void Mosaic::Init()
 {
-    const bgfx::ShaderHandle vs = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle fs = bgfx::createShader(bgfx::copy(fs_mosaic_spv,     sizeof(fs_mosaic_spv)));
-    Program       = bgfx::createProgram(vs, fs, true);
-    TexUniform    = bgfx::createUniform("s_texColor",    bgfx::UniformType::Sampler);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_mosaic_spv, sizeof(fs_mosaic_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
+
+    TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_mosaicParams", bgfx::UniformType::Vec4);
 
-    m_curSize = Size;
+    CurrentSize = Size;
+}
+
+void Mosaic::Destroy()
+{
+    if (bgfx::isValid(ParamsUniform)) 
+        bgfx::destroy(ParamsUniform);
+
+    if (bgfx::isValid(TexUniform))    
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program))       
+        bgfx::destroy(Program);
+
+    ParamsUniform = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }
 
 void Mosaic::Render(const RenderContext& Context)
 {
-    // ── On-beat size selection + cooldown decay (ported from e_mosaic.cpp). ──────
-    if (OnBeatSizeChange && Context.IsBeat())
+    if (EnableOnBeatSizeChange && Context.IsBeat())
     {
-        m_curSize  = OnBeatSize;
-        m_cooldown = OnBeatDuration;
+        CurrentSize = OnBeatSize;
+        RemainingCooldownTime = OnBeatDuration;
     }
-    else if (m_cooldown == 0)
+    else if (RemainingCooldownTime == 0)
     {
-        m_curSize = Size;
+        CurrentSize = Size;
     }
 
-    if (m_cooldown > 0)
+    if (RemainingCooldownTime > 0)
     {
-        m_cooldown--;
-        if (m_cooldown > 0)
+        RemainingCooldownTime--;
+        if (RemainingCooldownTime > 0)
         {
             const int dur = std::max(1, OnBeatDuration);
-            const int a   = std::abs(Size - OnBeatSize) / dur;
-            m_curSize += a * (OnBeatSize > Size ? -1 : 1);
+            const int a = std::abs(Size - OnBeatSize) / dur;
+            CurrentSize += a * (OnBeatSize > Size ? -1 : 1);
         }
     }
 
-    const int cs = std::clamp(m_curSize, 1, 100);
+    const float uParams[4] = { (float)CurrentSize, (float)Context.Width, (float)Context.Height, (float)Blend };
 
-    const float params[4] = {
-        (float)cs,
-        (float)Context.Width,
-        (float)Context.Height,
-        (float)Blend,
-    };
-    bgfx::setUniform(ParamsUniform, params);
+    bgfx::setUniform(ParamsUniform, uParams);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -61,33 +77,23 @@ void Mosaic::Render(const RenderContext& Context)
     Context.FboManager->Swap();
 }
 
-void Mosaic::Destroy()
-{
-    if (bgfx::isValid(ParamsUniform)) bgfx::destroy(ParamsUniform);
-    if (bgfx::isValid(TexUniform))    bgfx::destroy(TexUniform);
-    if (bgfx::isValid(Program))       bgfx::destroy(Program);
-
-    ParamsUniform = BGFX_INVALID_HANDLE;
-    TexUniform    = BGFX_INVALID_HANDLE;
-    Program       = BGFX_INVALID_HANDLE;
-}
-
 nlohmann::json Mosaic::Serialize() const
 {
-    return {
-        { kSize,             Size             },
-        { kOnBeatSizeChange, OnBeatSizeChange },
-        { kOnBeatSize,       OnBeatSize       },
-        { kOnBeatDuration,   OnBeatDuration   },
-        { kBlend,            Blend            },
+    return 
+    {
+        { NAME_Size, Size },
+        { NAME_EnableOnBeatSizeChange, EnableOnBeatSizeChange },
+        { NAME_OnBeatSize, OnBeatSize },
+        { NAME_OnBeatDuration, OnBeatDuration },
+        { NAME_Blend, Blend },
     };
 }
 
 void Mosaic::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt (j, kSize,             Size);
-    JsonUtil::ReadBool(j, kOnBeatSizeChange, OnBeatSizeChange);
-    JsonUtil::ReadInt (j, kOnBeatSize,       OnBeatSize);
-    JsonUtil::ReadInt (j, kOnBeatDuration,   OnBeatDuration);
-    JsonUtil::ReadInt (j, kBlend,            Blend);
+    JsonUtil::ReadInt(j, NAME_Size, Size);
+    JsonUtil::ReadBool(j, NAME_EnableOnBeatSizeChange, EnableOnBeatSizeChange);
+    JsonUtil::ReadInt(j, NAME_OnBeatSize, OnBeatSize);
+    JsonUtil::ReadInt(j, NAME_OnBeatDuration, OnBeatDuration);
+    JsonUtil::ReadInt(j, NAME_Blend, Blend);
 }

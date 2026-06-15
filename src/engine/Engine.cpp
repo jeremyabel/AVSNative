@@ -201,7 +201,7 @@ void Engine::Tick()
     UploadAudioTex();
 
     uint8_t viewCounter = 0;
-    uint32_t lineBlendMode = (1u << 16); // default: lineWidth=1, alpha=0, Replace
+    LineRenderMode lineMode; // defaults: Width=1, Alpha=0, Blend=0 (Replace)
     // Per-frame beat, shared by pointer so Custom BPM can rewrite it for downstream effects.
     bool beat = Audio.IsBeat();
 
@@ -209,7 +209,7 @@ void Engine::Tick()
     Context.FboManager = &FboManager;
     Context.QuadVB = BlitQuadVB;
     Context.NextViewId = &viewCounter;
-    Context.LineBlendMode = &lineBlendMode;
+    Context.LineMode = &lineMode;
     Context.IsBeatPtr = &beat;
     Context.AudioTex = AudioTex;
     Context.AudioData = &Audio.GetVisData();
@@ -332,12 +332,12 @@ void Engine::InitAudioTex()
     // but conventional sampling from dynamic effects should use nearest.
     const uint64_t flags = BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT | BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP;
     AudioTex = bgfx::createTexture2D(
-        kAudioBins, 1, /*hasMips=*/true, /*numLayers=*/1,
+        NumAudioBins, 1, /*hasMips=*/true, /*numLayers=*/1,
         bgfx::TextureFormat::RGBA8, flags);
 
     // Upload zero-filled mip 0 immediately so the texture is valid before any audio arrives.
-    static const uint8_t zeros[kAudioBins * 4] = {};
-    bgfx::updateTexture2D(AudioTex, 0, 0, 0, 0, kAudioBins, 1, bgfx::copy(zeros, sizeof(zeros)));
+    static const uint8_t zeros[NumAudioBins * 4] = {};
+    bgfx::updateTexture2D(AudioTex, 0, 0, 0, 0, NumAudioBins, 1, bgfx::copy(zeros, sizeof(zeros)));
 }
 
 void Engine::DestroyAudioTex()
@@ -359,22 +359,22 @@ void Engine::UploadAudioTex()
     const VisData& vd = Audio.GetVisData();
 
     // Build mip 0 (576 RGBA8 pixels): R=specL, G=specR, B=oscL, A=oscR.
-    uint8_t mip0[kAudioBins * 4];
-    for (int i = 0; i < kAudioBins; i++)
+    uint8_t mip0[NumAudioBins * 4];
+    for (int i = 0; i < NumAudioBins; i++)
     {
         mip0[i * 4 + 0] = (uint8_t)std::clamp((int)vd.spec[0][i], 0, 255);
         mip0[i * 4 + 1] = (uint8_t)std::clamp((int)vd.spec[1][i], 0, 255);
-        mip0[i * 4 + 2] = (uint8_t)std::clamp((int)vd.osc [0][i], 0, 255);
-        mip0[i * 4 + 3] = (uint8_t)std::clamp((int)vd.osc [1][i], 0, 255);
+        mip0[i * 4 + 2] = (uint8_t)std::clamp((int)vd.osc[0][i], 0, 255);
+        mip0[i * 4 + 3] = (uint8_t)std::clamp((int)vd.osc[1][i], 0, 255);
     }
 
     // Upload all mip levels. Each level is a box-filtered (averaged pairs) downsample
     // of the previous, computed in-place on a single scratch buffer.
     // In-place downsampling is safe: output at index i reads from 2i and 2i+1
     // which are always ahead of (or equal to, for i=0) any previous write.
-    uint8_t buf[kAudioBins * 4];
+    uint8_t buf[NumAudioBins * 4];
     const uint8_t* src = mip0;
-    int w = kAudioBins;
+    int w = NumAudioBins;
 
     for (int mip = 0; ; mip++)
     {

@@ -6,6 +6,10 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_uniquetone.sc.bin.h"
 
+static constexpr const char* NAME_Color = "color";
+static constexpr const char* NAME_Invert = "invert";
+static constexpr const char* NAME_OutBlend = "outBlend";
+
 void UniqueTone::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -19,11 +23,11 @@ void UniqueTone::Init()
 
 void UniqueTone::Render(const RenderContext& Context)
 {
-    const float ToneColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
-    const float Params[4] = { Invert ? 1.f : 0.f, (float)OutBlend, 0.f, 0.f };
+    const float uToneColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
+    const float uParams[4] = { EnableInvert ? 1.f : 0.f, (float)OutBlend, 0.f, 0.f };
 
-    bgfx::setUniform(ColorUniform, ToneColor);
-    bgfx::setUniform(ParamsUniform, Params);
+    bgfx::setUniform(ColorUniform, uToneColor);
+    bgfx::setUniform(ParamsUniform, uParams);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -54,16 +58,17 @@ void UniqueTone::Destroy()
 
 nlohmann::json UniqueTone::Serialize() const
 {
-    return {
-        { kColor,    JsonUtil::ColorToJson(Color) },
-        { kInvert,   Invert   },
-        { kOutBlend, OutBlend },
+    return 
+    {
+        { NAME_Color, JsonUtil::ColorToJson(Color) },
+        { NAME_Invert, EnableInvert },
+        { NAME_OutBlend, OutBlend },
     };
 }
 
 void UniqueTone::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadColor(j, kColor,    Color);
-    JsonUtil::ReadBool (j, kInvert,   Invert);
-    JsonUtil::ReadInt  (j, kOutBlend, OutBlend);
+    JsonUtil::ReadColor(j, NAME_Color, Color);
+    JsonUtil::ReadBool(j, NAME_Invert, EnableInvert);
+    JsonUtil::ReadInt(j, NAME_OutBlend, OutBlend);
 }

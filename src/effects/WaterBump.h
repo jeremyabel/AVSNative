@@ -36,15 +36,15 @@ private:
     void SineBlob(int X, int Y, int Radius, int Height);
     void CalcWater();
 
-    bgfx::ProgramHandle Program    = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle InputUnif  = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle HeightUnif = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexelUnif  = BGFX_INVALID_HANDLE;  // u_texelSize: (1/w, 1/h, 0, 0)
-    bgfx::TextureHandle HeightTex  = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle HeightUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexelSizeUnifiorm = BGFX_INVALID_HANDLE;  // u_texelSize: (1/w, 1/h, 0, 0)
+    bgfx::TextureHandle HeightTex = BGFX_INVALID_HANDLE;
 
     std::vector<int32_t> Bufs[2];  // ping-pong CPU height buffers (int32, row-major, row 0 = top)
-    std::vector<float>   UploadBuf;
-    int      Page = 0;
+    std::vector<float> UploadBuf;
+    int Page = 0;
     uint16_t BufW = 0;
     uint16_t BufH = 0;
 };

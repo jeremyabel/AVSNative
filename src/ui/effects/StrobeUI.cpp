@@ -15,7 +15,7 @@ static void DrawStrobeUI(Effect* effect)
     // right speeds up; the right end is kMinInterval (a strobe every other frame).
     int speed = Strobe::kMaxInterval - std::clamp(s->Interval, Strobe::kMinInterval,
                                                   Strobe::kMaxInterval);
-    ImGui::TextUnformatted("Speed");
+    ImGui::Text("Speed");
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::SliderInt("##speed", &speed, 0, Strobe::kMaxInterval - Strobe::kMinInterval,
                          "%d"))
@@ -24,7 +24,7 @@ static void DrawStrobeUI(Effect* effect)
     ImGui::TextDisabled("(every %d frames)", std::max(Strobe::kMinInterval, s->Interval));
 
     // Duration: frames the color stays on per strobe.
-    ImGui::TextUnformatted("Duration (frames)");
+    ImGui::Text("Duration (frames)");
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::InputInt("##duration", &s->Duration))
         s->Duration = std::max(1, s->Duration);
@@ -46,7 +46,7 @@ static void DrawStrobeUI(Effect* effect)
 
     if (s->TriggerMode == 1)
     {
-        ImGui::TextUnformatted("Hold key");
+        ImGui::Text("Hold key");
         ImGui::SameLine();
         ConfigUi::KeyCaptureButton("##trigkey", s, 0, s->TriggerKey);
     }

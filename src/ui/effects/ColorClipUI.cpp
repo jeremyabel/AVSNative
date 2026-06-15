@@ -9,7 +9,7 @@ static void DrawColorClipUI(Effect* base)
 {
     auto* fx = static_cast<ColorClip*>(base);
 
-    ImGui::TextUnformatted("Clip Color");
+    ImGui::Text("Clip Color");
     ImGui::SetNextItemWidth(-1.0f);
     ConfigUi::ColorEdit("##color", fx->Color);
 }

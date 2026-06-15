@@ -2,12 +2,16 @@ $input v_texcoord0
 
 #include <bgfx_shader.sh>
 
-SAMPLER2D(s_input,  0);   // current framebuffer (persists frame-to-frame)
-SAMPLER2D(s_column, 1);   // 1×h scope column for this frame (RGB = color * magnitude)
+SAMPLER2D(s_input, 0);   // current framebuffer (persists frame-to-frame)
+SAMPLER2D(s_audio, 1);   // 576x1 audio texture: R=spec_L, G=spec_R (raw 0..255 / 255)
 
 // x = position (column to draw this frame), y = width (px),
-// z = blend mode (0/3 replace, 1 additive, 2 50/50)
+// z = blend mode (0/3 replace, 1 additive, 2 50/50), w = height (px)
 uniform vec4 u_tsParams;
+// rgb = color (0..255), w = bands (spectrum bins spread across column height)
+uniform vec4 u_tsColor;
+// x = channel (0=Left, 1=Right, 2=Center)
+uniform vec4 u_tsParams2;
 
 void main()
 {
@@ -25,7 +29,26 @@ void main()
         return;
     }
 
-    vec3 scope = texture2D(s_column, vec2(0.5, uv.y)).rgb;
+    int h     = int(u_tsParams.w + 0.5);
+    int bands = int(u_tsColor.w + 0.5);
+    int chan  = int(u_tsParams2.x + 0.5);
+
+    // Row along the column height → spectrum bin, with the original's integer indexing.
+    int row = int(floor(uv.y * float(h)));
+    int bin = clamp((row * bands) / h, 0, 575);
+
+    // Recover the raw 0..255 spectrum magnitudes (bit-exact to the CPU path).
+    vec2  spec = texelFetch(s_audio, ivec2(bin, 0), 0).rg;
+    float vL   = floor(spec.r * 255.0 + 0.5);
+    float vR   = floor(spec.g * 255.0 + 0.5);
+
+    float val;
+    if      (chan == 2) val = floor(vL / 2.0) + floor(vR / 2.0);  // center
+    else if (chan == 0) val = vL;
+    else                val = vR;
+
+    // color × magnitude / 256 (original fixed-point scaling), in integer space.
+    vec3 scope = floor(u_tsColor.rgb * val / 256.0) / 255.0;
 
     int mode = int(u_tsParams.z + 0.5);
     vec3 outc;

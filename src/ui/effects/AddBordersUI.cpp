@@ -9,11 +9,11 @@ static void DrawAddBordersUI(Effect* base)
 {
     auto* fx = static_cast<AddBorders*>(base);
 
-    ImGui::TextUnformatted("Color");
+    ImGui::Text("Color");
     ImGui::SetNextItemWidth(-1.0f);
     ConfigUi::ColorEdit("##color", fx->Color);
 
-    ImGui::TextUnformatted("Size");
+    ImGui::Text("Size");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderInt("##size", &fx->Size, 1, 50);
 }

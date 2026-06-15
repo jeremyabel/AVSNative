@@ -5,60 +5,56 @@
 
 #include <imgui.h>
 
-#include <string>
-
-static void ScriptError(Effect* fx, const char* param)
-{
-    if (std::string err = fx->GetScriptError(param); !err.empty())
-        ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
-}
-
 static void DrawDynamicDistanceModifierUI(Effect* base)
 {
     auto* fx = static_cast<DynamicDistanceModifier*>(base);
 
     ImGui::Checkbox("Blend", &fx->Blend);
+
     ImGui::Checkbox("Bilinear Filtering", &fx->Bilinear);
-
-    ImGui::BeginDisabled(!fx->Bilinear);
-    ImGui::Checkbox("Bilinear (precise)", &fx->Compat);
-    ImGui::EndDisabled();
-
-    if (ImGui::TreeNodeEx("Pixel (GLSL)", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    if (fx->Bilinear)
     {
-        if (ConfigUi::CodeEditor("ddm.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
-            fx->RecompileMain();
-        ScriptError(fx, DynamicDistanceModifier::kPixelCode);
-        ImGui::TreePop();
+        ImGui::SameLine();
+        ImGui::Checkbox("Precise", &fx->Compat);
     }
 
-    ImGui::Spacing();
+    ImGui::Separator();
 
     if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
     {
         if (ConfigUi::CodeEditor("ddm.initCode", fx->InitCode, ConfigUi::Lang::Lua))
             fx->RecompileMain();
-        ScriptError(fx, DynamicDistanceModifier::kInitCode);
+        ConfigUi::ScriptError(fx, DynamicDistanceModifier::NAME_InitCode);
         ImGui::TreePop();
     }
-
+    
+    ImGui::Spacing();
+    
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("ddm.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+        fx->RecompileBeatCode();
+        ConfigUi::ScriptError(fx, DynamicDistanceModifier::NAME_BeatCode);
+        ImGui::TreePop();
+    }
+    
     ImGui::Spacing();
 
     if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
     {
         if (ConfigUi::CodeEditor("ddm.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
             fx->RecompileFrameCode();
-        ScriptError(fx, DynamicDistanceModifier::kFrameCode);
+        ConfigUi::ScriptError(fx, DynamicDistanceModifier::NAME_FrameCode);
         ImGui::TreePop();
     }
 
     ImGui::Spacing();
 
-    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    if (ImGui::TreeNodeEx("Pixel (GLSL)", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
     {
-        if (ConfigUi::CodeEditor("ddm.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-            fx->RecompileBeatCode();
-        ScriptError(fx, DynamicDistanceModifier::kBeatCode);
+        if (ConfigUi::CodeEditor("ddm.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
+            fx->RecompileMain();
+        ConfigUi::ScriptError(fx, DynamicDistanceModifier::NAME_PixelCode);
         ImGui::TreePop();
     }
 }

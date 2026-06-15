@@ -1,11 +1,10 @@
 #pragma once
 
 #include "engine/Effect.h"
+#include "engine/ColorList.h"
 
-#include <array>
 #include <bgfx/bgfx.h>
 #include <cstdint>
-#include <vector>
 
 // Flashes a flat color over the whole screen. Each strobe advances through a color
 // list. Speed sets the frames between strobes (min 2 = a strobe every other frame).
@@ -18,7 +17,7 @@ class Strobe : public Effect
 {
 public:
     // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    std::vector<std::array<uint8_t,3>> Colors = { { 255, 255, 255 } };
+    ColorList Colors;
     int      Interval    = 8;   // frames between strobe starts (>= 2)
     int      Duration    = 1;   // frames the color is on per strobe (>= 1)
     int      TriggerMode = 0;   // 0 = Always On, 1 = Keyboard (hold to strobe)

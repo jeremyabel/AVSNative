@@ -9,7 +9,7 @@ static void DrawClearUI(Effect* base)
 {
     auto* fx = static_cast<Clear*>(base);
 
-    ImGui::TextUnformatted("Color");
+    ImGui::Text("Color");
     ImGui::SetNextItemWidth(-1.0f);
     ConfigUi::ColorEdit("##color", fx->Color);
 }

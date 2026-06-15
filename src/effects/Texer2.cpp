@@ -514,8 +514,8 @@ void Texer2::Render(const RenderContext& Context)
 
     const int n = (int)std::clamp(m_lua.GetEnvNumber("n"), 0.0, (double)k_maxN);
 
-    const int   blendMode  = (int)((*Context.LineBlendMode) & 0xFF);
-    const float blendAlpha = (float)(((*Context.LineBlendMode) >> 8) & 0xFF) / 255.0f;
+    const int   blendMode  = Context.LineMode ? Context.LineMode->Blend : 0;
+    const float blendAlpha = (Context.LineMode ? Context.LineMode->Alpha : 0) / 255.0f;
 
     // One sequential view: seed the output with the input, then blend each particle
     // quad on top, in submission order, using the per-mode GPU blend.

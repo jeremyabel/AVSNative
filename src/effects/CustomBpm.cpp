@@ -4,81 +4,94 @@
 
 #include <algorithm>
 
-nlohmann::json CustomBpm::Serialize() const
-{
-    return {
-        { kArbitrary, Arbitrary },
-        { kSkip,      Skip      },
-        { kInvert,    Invert    },
-        { kArbVal,    ArbVal    },
-        { kSkipVal,   SkipVal   },
-        { kSkipFirst, SkipFirst },
-    };
-}
-
-void CustomBpm::Deserialize(const nlohmann::json& j)
-{
-    JsonUtil::ReadBool(j, kArbitrary, Arbitrary);
-    JsonUtil::ReadBool(j, kSkip,      Skip);
-    JsonUtil::ReadBool(j, kInvert,    Invert);
-    JsonUtil::ReadInt (j, kArbVal,    ArbVal);
-    JsonUtil::ReadInt (j, kSkipVal,   SkipVal);
-    JsonUtil::ReadInt (j, kSkipFirst, SkipFirst);
-}
+static constexpr const char* NAME_EnableArbitraryMode = "arbitrary";
+static constexpr const char* NAME_EnableSkip = "skip";
+static constexpr const char* NAME_EnableInvert = "invert";
+static constexpr const char* NAME_ArbitraryValue = "arbVal";
+static constexpr const char* NAME_SkipValue = "skipVal";
+static constexpr const char* NAME_SkipFirst = "skipfirst";
 
 void CustomBpm::Init()
 {
 }
 
-void CustomBpm::Render(const RenderContext& Ctx)
+void CustomBpm::Destroy()
 {
-    // ── Beat modification (mirrors the reference render) ──
-    // Reads the beat as it arrives at this point in the chain, then rewrites it
-    // so downstream effects see the modified beat.
-    const bool inBeat = Ctx.IsBeat();
+}
 
-    if (inBeat)
+void CustomBpm::Render(const RenderContext& Context)
+{
+    const bool InBeat = Context.IsBeat();
+
+    if (InBeat)
     {
-        m_beatCount++;
-        m_inSeg += m_inDir;
-        if      (m_inSeg >= 7) { m_inSeg = 7; m_inDir = -1; }
-        else if (m_inSeg <= 0) { m_inSeg = 0; m_inDir =  1; }
+        BeatCount++;
     }
 
-    bool outBeat = inBeat;
-    if (SkipFirst != 0 && m_beatCount <= SkipFirst)
+    bool OutBeat = InBeat;
+    if (SkipFirst != 0 && BeatCount <= SkipFirst)
     {
-        outBeat = false;
+        OutBeat = false;
     }
     else if (Arbitrary)
     {
-        const auto now = Clock::now();
-        const auto period = std::chrono::milliseconds(60000 / std::max(1, ArbVal));
-        if (now - m_arbLast > period) { m_arbLast = now; outBeat = true; }
-        else                          outBeat = false;
+        const auto Now = Clock::now();
+        const auto Period = std::chrono::milliseconds(60000 / std::max(1, ArbVal));
+        
+        if (Now - LastArbitraryBeat > Period) 
+        { 
+            LastArbitraryBeat = Now; 
+            OutBeat = true; 
+        }
+        else
+        {
+            OutBeat = false;
+        }
     }
     else if (Skip)
     {
-        if (inBeat && ++m_skipCount >= SkipVal + 1) { m_skipCount = 0; outBeat = true; }
-        else                                            outBeat = false;
+        if (InBeat && ++SkipCount >= SkipVal + 1) 
+        { 
+            SkipCount = 0; 
+            OutBeat = true; 
+        }
+        else
+        {
+            OutBeat = false;
+        }
     }
     else if (Invert)
     {
-        outBeat = !inBeat;
+        OutBeat = !InBeat;
     }
 
-    Ctx.SetBeat(outBeat);
+    Context.SetBeat(OutBeat);
 
-    if (outBeat)
+    if (OutBeat)
     {
-        m_outSeg += m_outDir;
-        if      (m_outSeg >= 7) { m_outSeg = 7; m_outDir = -1; }
-        else if (m_outSeg <= 0) { m_outSeg = 0; m_outDir =  1; }
+        OutCount++;
     }
-
-    // No image output and no swap: EffectChain runs control-only effects in place.
 }
 
-void CustomBpm::Destroy()
+nlohmann::json CustomBpm::Serialize() const
 {
+    return 
+    {
+        { NAME_EnableArbitraryMode, Arbitrary },
+        { NAME_EnableSkip, Skip },
+        { NAME_EnableInvert, Invert },
+        { NAME_ArbitraryValue, ArbVal },
+        { NAME_SkipValue, SkipVal },
+        { NAME_SkipFirst, SkipFirst },
+    };
+}
+
+void CustomBpm::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadBool(j, NAME_EnableArbitraryMode, Arbitrary);
+    JsonUtil::ReadBool(j, NAME_EnableSkip, Skip);
+    JsonUtil::ReadBool(j, NAME_EnableInvert, Invert);
+    JsonUtil::ReadInt(j, NAME_ArbitraryValue, ArbVal);
+    JsonUtil::ReadInt(j, NAME_SkipValue, SkipVal);
+    JsonUtil::ReadInt(j, NAME_SkipFirst, SkipFirst);
 }

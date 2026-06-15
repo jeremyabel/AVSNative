@@ -9,11 +9,11 @@ static void DrawFadeOutUI(Effect* base)
 {
     auto* fx = static_cast<FadeOut*>(base);
 
-    ImGui::TextUnformatted("Speed");
+    ImGui::Text("Speed");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderFloat("##speed", &fx->Speed, 0.0f, 1.0f);
 
-    ImGui::TextUnformatted("Color");
+    ImGui::Text("Color");
     ImGui::SetNextItemWidth(-1.0f);
     ConfigUi::ColorEdit("##color", fx->Color);
 }

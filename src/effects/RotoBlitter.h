@@ -5,26 +5,6 @@
 class RotoBlitter : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    int  ZoomScale   = 31;    // 0-256; 31 = no zoom
-    int  ZoomScale2  = 31;    // beat zoom target
-    int  RotDir      = 31;    // 0-64; 32 = no rotation, <32 one way, >32 other
-    int  BeatchSpeed = 0;     // 0-8; rotation reversal smoothing
-    bool Subpixel    = true;  // hardware bilinear (vs nearest)
-    bool Compat      = false; // 8-bit integer bilinear matching the win32 original
-    bool Blend       = false;
-    bool Beatch      = false; // reverse rotation on beat
-    bool BeatchScale = false; // snap zoom on beat
-
-    static constexpr const char* kZoomScale   = "zoom_scale";
-    static constexpr const char* kZoomScale2  = "zoom_scale2";
-    static constexpr const char* kRotDir      = "rot_dir";
-    static constexpr const char* kBeatchSpeed = "beatch_speed";
-    static constexpr const char* kSubpixel    = "subpixel";
-    static constexpr const char* kCompat      = "bilinearCompat";
-    static constexpr const char* kBlend       = "blend";
-    static constexpr const char* kBeatch      = "beatch";
-    static constexpr const char* kBeatchScale = "beatch_scale";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -38,14 +18,26 @@ public:
     // and by the UI when the zoom slider changes.
     void ResetZoomAnim() { m_scaleFpos = (float)ZoomScale; }
 
+public:
+
+    int ZoomScale = 31; // 0-256; 31 = no zoom
+    int ZoomScale2 = 31; // beat zoom target
+    int RotDir = 31; // 0-64; 32 = no rotation, <32 one way, >32 other
+    int BeatchSpeed = 0; // 0-8; rotation reversal smoothing
+    bool Subpixel = true; // hardware bilinear (vs nearest)
+    bool Compat = false; // 8-bit integer bilinear matching the win32 original
+    bool Blend = false;
+    bool Beatch = false; // reverse rotation on beat
+    bool BeatchScale = false; // snap zoom on beat
+
 private:
-    // Runtime state (not serialized)
-    float m_rotRev    =  1.0f; // target: 1 or -1
-    float m_rotRevPos =  1.0f; // smoothed rotRev
+
+    float m_rotRev = 1.0f; // target: 1 or -1
+    float m_rotRevPos = 1.0f; // smoothed rotRev
     float m_scaleFpos = 31.0f; // animates toward ZoomScale
 
-    bgfx::ProgramHandle Program          = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform       = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle TransformUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle ResolutionUniform = BGFX_INVALID_HANDLE;
 };

@@ -5,6 +5,7 @@
 class Scatter : public Effect
 {
 public:
+
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
@@ -14,9 +15,10 @@ public:
     void Deserialize(const nlohmann::json& /*j*/) override {}
 
 private:
+
     uint32_t SeedFrame = 0;
 
-    bgfx::ProgramHandle Program       = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform    = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle ParamsUniform = BGFX_INVALID_HANDLE;
 };

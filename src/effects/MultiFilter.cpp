@@ -6,6 +6,9 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_multifilter.sc.bin.h"
 
+static constexpr const char* NAME_EffectMode = "effect";
+static constexpr const char* NAME_ToggleOnBeat = "toggleOnBeat";
+
 void MultiFilter::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -14,29 +17,6 @@ void MultiFilter::Init()
 
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_mfParams", bgfx::UniformType::Vec4);
-}
-
-void MultiFilter::Render(const RenderContext& Context)
-{
-    if (ToggleOnBeat && Context.IsBeat())
-    {
-        ToggleState = !ToggleState;
-    }
-
-    if (!ToggleState)
-    {
-        return;
-    }
-
-    const float Params[4] = { float(EffectMode), 1.0f / float(Context.Width), 1.0f / float(Context.Height), 0.0f };
-
-    bgfx::setUniform(ParamsUniform, Params);
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, Program);
-
-    Context.FboManager->Swap();
 }
 
 void MultiFilter::Destroy()
@@ -55,16 +35,40 @@ void MultiFilter::Destroy()
     Program = BGFX_INVALID_HANDLE;
 }
 
+void MultiFilter::Render(const RenderContext& Context)
+{
+    if (ToggleOnBeat && Context.IsBeat())
+    {
+        ToggleState = !ToggleState;
+    }
+
+    if (!ToggleState)
+    {
+        return;
+    }
+
+    const float uParams[4] = { float(EffectMode), 1.0f / float(Context.Width), 1.0f / float(Context.Height), 0.0f };
+
+    bgfx::setUniform(ParamsUniform, uParams);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+
+    Context.FboManager->Swap();
+}
+
 nlohmann::json MultiFilter::Serialize() const
 {
-    return {
-        { kEffectMode,   EffectMode   },
-        { kToggleOnBeat, ToggleOnBeat },
+    return 
+    {
+        { NAME_EffectMode, EffectMode },
+        { NAME_ToggleOnBeat, ToggleOnBeat },
     };
 }
 
 void MultiFilter::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt (j, kEffectMode,   EffectMode);
-    JsonUtil::ReadBool(j, kToggleOnBeat, ToggleOnBeat);
+    JsonUtil::ReadInt (j, NAME_EffectMode, EffectMode);
+    JsonUtil::ReadBool(j, NAME_ToggleOnBeat, ToggleOnBeat);
 }

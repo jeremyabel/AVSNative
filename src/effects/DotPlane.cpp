@@ -2,7 +2,7 @@
 
 #include "engine/JsonUtil.h"
 #include "engine/MathConstants.h"
-
+#include "engine/Matrix3D.h"
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
 
@@ -11,70 +11,36 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
-
-
-// ── Matrix helpers (ported from matrix.cpp). ──────────────────────────────────
-
-static void MatRot(float* m, int axis, float deg)
-{
-    const float r = deg * avs::Pi / 180.0f;
-    std::fill(m, m + 16, 0.0f);
-    m[(axis - 1) * 4 + (axis - 1)] = 1.0f;
-    m[15] = 1.0f;
-    const int m1 = axis % 3;
-    const int m2 = (m1 + 1) % 3;
-    const float c = std::cos(r), s = std::sin(r);
-    m[m1 * 4 + m1] = c;
-    m[m1 * 4 + m2] = s;
-    m[m2 * 4 + m2] = c;
-    m[m2 * 4 + m1] = -s;
-}
-
-static void MatTrans(float* m, float x, float y, float z)
-{
-    std::fill(m, m + 16, 0.0f);
-    m[0] = m[5] = m[10] = m[15] = 1.0f;
-    m[3] = x; m[7] = y; m[11] = z;
-}
-
-// dest = src × dest_old
-static void MatMul(float* dest, const float* src)
-{
-    float t[16];
-    std::memcpy(t, dest, sizeof(t));
-    for (int i = 0; i < 16; i += 4)
-    {
-        dest[i]     = src[i]*t[0] + src[i+1]*t[4] + src[i+2]*t[8]  + src[i+3]*t[12];
-        dest[i + 1] = src[i]*t[1] + src[i+1]*t[5] + src[i+2]*t[9]  + src[i+3]*t[13];
-        dest[i + 2] = src[i]*t[2] + src[i+1]*t[6] + src[i+2]*t[10] + src[i+3]*t[14];
-        dest[i + 3] = src[i]*t[3] + src[i+1]*t[7] + src[i+2]*t[11] + src[i+3]*t[15];
-    }
-}
-
-// ── Init / Destroy ────────────────────────────────────────────────────────────
 
 void DotPlane::Init()
 {
-    const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_dotplane_spv,  sizeof(fs_dotplane_spv)));
-    m_program = bgfx::createProgram(VS, FS, true);
-    m_uInput  = bgfx::createUniform("s_input",   bgfx::UniformType::Sampler);
-    m_uDots   = bgfx::createUniform("s_overlay", bgfx::UniformType::Sampler);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_dotplane_spv, sizeof(fs_dotplane_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
+
+    TexUniform = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    OverlayUniform = bgfx::createUniform("s_overlay", bgfx::UniformType::Sampler);
 
     BuildColorMap();
 }
 
 void DotPlane::Destroy()
 {
-    if (bgfx::isValid(m_dotsTex)) bgfx::destroy(m_dotsTex);
-    if (bgfx::isValid(m_uDots))   bgfx::destroy(m_uDots);
-    if (bgfx::isValid(m_uInput))  bgfx::destroy(m_uInput);
-    if (bgfx::isValid(m_program)) bgfx::destroy(m_program);
+    if (bgfx::isValid(OverlayTexture)) 
+        bgfx::destroy(OverlayTexture);
 
-    m_dotsTex = BGFX_INVALID_HANDLE;
-    m_uDots = m_uInput = BGFX_INVALID_HANDLE;
-    m_program = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(OverlayUniform))   
+        bgfx::destroy(OverlayUniform);
+
+    if (bgfx::isValid(TexUniform))  
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program)) 
+        bgfx::destroy(Program);
+
+    OverlayTexture = BGFX_INVALID_HANDLE;
+    OverlayUniform = TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }
 
 void DotPlane::BuildColorMap()
@@ -87,7 +53,7 @@ void DotPlane::BuildColorMap()
         for (int x = 0; x < 16; x++)
         {
             const int i = (t * 16 + x) * 3;
-            m_colorMap[i]     = (uint8_t)(int)(c1[0] + x * ((int)c2[0] - c1[0]) / 16.0f);
+            m_colorMap[i + 0] = (uint8_t)(int)(c1[0] + x * ((int)c2[0] - c1[0]) / 16.0f);
             m_colorMap[i + 1] = (uint8_t)(int)(c1[1] + x * ((int)c2[1] - c1[1]) / 16.0f);
             m_colorMap[i + 2] = (uint8_t)(int)(c1[2] + x * ((int)c2[2] - c1[2]) / 16.0f);
         }
@@ -97,11 +63,11 @@ void DotPlane::BuildColorMap()
 void DotPlane::EnsureDots(int w, int h)
 {
     if (m_dotsW == w && m_dotsH == h) return;
-    if (bgfx::isValid(m_dotsTex)) bgfx::destroy(m_dotsTex);
+    if (bgfx::isValid(OverlayTexture)) bgfx::destroy(OverlayTexture);
     m_dotsW = w;
     m_dotsH = h;
     m_buf.assign((size_t)w * h * 4, 0);
-    m_dotsTex = bgfx::createTexture2D(
+    OverlayTexture = bgfx::createTexture2D(
         (uint16_t)w, (uint16_t)h, false, 1, bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_POINT | BGFX_SAMPLER_UVW_CLAMP);
 }
@@ -127,7 +93,7 @@ void DotPlane::UpdateGrid(const VisData* vd)
 
     // Push the new audio line into row 0 (spectrum, channel 0).
     const float* spec = vd ? vd->spec[0] : nullptr;
-    const auto sp = [&](int i) -> int { return spec ? (int)spec[std::min(i, kAudioBins - 1)] : 0; };
+    const auto sp = [&](int i) -> int { return spec ? (int)spec[std::min(i, NumAudioBins - 1)] : 0; };
     for (int x = 0; x < GRID; x++)
     {
         const int i0 = x * 3;
@@ -139,8 +105,6 @@ void DotPlane::UpdateGrid(const VisData* vd)
     }
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
-
 void DotPlane::Render(const RenderContext& Context)
 {
     const int sw = Context.Width, sh = Context.Height;
@@ -148,11 +112,11 @@ void DotPlane::Render(const RenderContext& Context)
 
     // Build 3D transform: T(0,-20,400) × Rx(angle) × Ry(rotation).
     float m[16], m2[16];
-    MatRot(m,  2, m_rotation);
-    MatRot(m2, 1, (float)Angle);
-    MatMul(m, m2);
-    MatTrans(m2, 0.0f, -20.0f, 400.0f);
-    MatMul(m, m2);
+    avs::MatRot(m,  2, CurrentRotation);
+    avs::MatRot(m2, 1, (float)Angle);
+    avs::MatMul(m, m2);
+    avs::MatTrans(m2, 0.0f, -20.0f, 400.0f);
+    avs::MatMul(m, m2);
 
     UpdateGrid(Context.AudioData);
 
@@ -160,7 +124,7 @@ void DotPlane::Render(const RenderContext& Context)
 
     std::fill(m_buf.begin(), m_buf.end(), (uint8_t)0);
 
-    const float rot = m_rotation;
+    const float rot = CurrentRotation;
     for (int yp = 0; yp < GRID; yp++)
     {
         // Painter's order: pick the grid row to draw by rotation quadrant.
@@ -212,45 +176,45 @@ void DotPlane::Render(const RenderContext& Context)
     }
 
     // Advance rotation.
-    m_rotation += RotationSpeed / 5.0f;
-    if (m_rotation >= 360.0f) m_rotation -= 360.0f;
-    if (m_rotation <    0.0f) m_rotation += 360.0f;
+    CurrentRotation += RotationSpeed / 5.0f;
+    if (CurrentRotation >= 360.0f) CurrentRotation -= 360.0f;
+    if (CurrentRotation <    0.0f) CurrentRotation += 360.0f;
 
     // Upload dots & composite (screen blend) over the input.
-    bgfx::updateTexture2D(m_dotsTex, 0, 0, 0, 0, (uint16_t)sw, (uint16_t)sh,
-                          bgfx::copy(m_buf.data(), (uint32_t)m_buf.size()));
+    bgfx::updateTexture2D(OverlayTexture, 0, 0, 0, 0, (uint16_t)sw, (uint16_t)sh, bgfx::copy(m_buf.data(), (uint32_t)m_buf.size()));
 
-    bgfx::setTexture(0, m_uInput, Context.InputTexture);
-    bgfx::setTexture(1, m_uDots,  m_dotsTex);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setTexture(1, OverlayUniform,  OverlayTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, m_program);
+    bgfx::submit(Context.ViewId, Program);
 
     Context.FboManager->Swap();
 }
 
 nlohmann::json DotPlane::Serialize() const
 {
-    return {
+    return 
+    {
         { kRotationSpeed, RotationSpeed },
-        { kAngle,         Angle         },
-        { kColor0,        JsonUtil::ColorToJson(Color0) },
-        { kColor1,        JsonUtil::ColorToJson(Color1) },
-        { kColor2,        JsonUtil::ColorToJson(Color2) },
-        { kColor3,        JsonUtil::ColorToJson(Color3) },
-        { kColor4,        JsonUtil::ColorToJson(Color4) },
+        { kAngle, Angle },
+        { kColor0, JsonUtil::ColorToJson(Color0) },
+        { kColor1, JsonUtil::ColorToJson(Color1) },
+        { kColor2, JsonUtil::ColorToJson(Color2) },
+        { kColor3, JsonUtil::ColorToJson(Color3) },
+        { kColor4, JsonUtil::ColorToJson(Color4) },
     };
 }
 
 void DotPlane::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt  (j, kRotationSpeed, RotationSpeed);
-    JsonUtil::ReadInt  (j, kAngle,         Angle);
-    JsonUtil::ReadColor(j, kColor0,        Color0);
-    JsonUtil::ReadColor(j, kColor1,        Color1);
-    JsonUtil::ReadColor(j, kColor2,        Color2);
-    JsonUtil::ReadColor(j, kColor3,        Color3);
-    JsonUtil::ReadColor(j, kColor4,        Color4);
+    JsonUtil::ReadInt(j, kRotationSpeed, RotationSpeed);
+    JsonUtil::ReadInt(j, kAngle, Angle);
+    JsonUtil::ReadColor(j, kColor0, Color0);
+    JsonUtil::ReadColor(j, kColor1, Color1);
+    JsonUtil::ReadColor(j, kColor2, Color2);
+    JsonUtil::ReadColor(j, kColor3, Color3);
+    JsonUtil::ReadColor(j, kColor4, Color4);
 
     BuildColorMap();
 }

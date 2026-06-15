@@ -8,20 +8,20 @@ static void DrawRotoBlitterUI(Effect* base)
 {
     auto* fx = static_cast<RotoBlitter*>(base);
 
-    ImGui::TextUnformatted("Zoom");
+    ImGui::Text("Zoom");
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::SliderInt("##zoom_scale", &fx->ZoomScale, 0, 256))
         fx->ResetZoomAnim();
 
-    ImGui::TextUnformatted("Zoom (On Beat)");
+    ImGui::Text("Zoom (On Beat)");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderInt("##zoom_scale2", &fx->ZoomScale2, 0, 256);
 
-    ImGui::TextUnformatted("Rotation");
+    ImGui::Text("Rotation");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderInt("##rot_dir", &fx->RotDir, 0, 64);
 
-    ImGui::TextUnformatted("Reversal Smoothing");
+    ImGui::Text("Reversal Smoothing");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderInt("##beatch_speed", &fx->BeatchSpeed, 0, 8);
 

@@ -10,13 +10,12 @@ uniform vec4 u_csParams;
 void main()
 {
     vec3 c = texture2D(s_texColor, v_texcoord0.xy).rgb;
-    vec3 r;
+    vec3 result = c.rgb;
     int mode = int(u_csParams.x);
-    if      (mode == 1) r = c.rbg;
-    else if (mode == 2) r = c.grb;
-    else if (mode == 3) r = c.gbr;
-    else if (mode == 4) r = c.brg;
-    else if (mode == 5) r = c.bgr;
-    else                r = c.rgb;
-    gl_FragColor = vec4(r, 1.0);
+    if      (mode == 1) result = c.rbg;
+    else if (mode == 2) result = c.grb;
+    else if (mode == 3) result = c.gbr;
+    else if (mode == 4) result = c.brg;
+    else if (mode == 5) result = c.bgr;
+    gl_FragColor = vec4(result, 1.0);
 }

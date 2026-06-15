@@ -7,14 +7,6 @@
 class OnBeatClear : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    std::array<uint8_t, 3> Color = { 255, 255, 255 };
-    bool                   Blend = false;
-    int                    Nf    = 1;   // clear every N beats (0–100); 0 = disabled
-
-    static constexpr const char* kColor = "color";
-    static constexpr const char* kBlend = "blend";
-    static constexpr const char* kNf    = "nf";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -24,12 +16,18 @@ public:
     nlohmann::json Serialize() const override;
     void Deserialize(const nlohmann::json& j) override;
 
-private:
-    // Runtime counters
-    int32_t Cf = 0;   // beats since last clear
-    int32_t Df = 0;   // non-beat frames since last clear
+public:
 
-    bgfx::ProgramHandle Program      = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform   = BGFX_INVALID_HANDLE;
+    std::array<uint8_t, 3> Color = { 255, 255, 255 };
+    bool Blend = false;
+    int ClearEveryN = 1;
+
+private:
+
+    int32_t BeatsSinceLastClear = 0;
+    int32_t NonBeatFramesSinceLastClear = 0;
+
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle ColorUniform = BGFX_INVALID_HANDLE;
 };

@@ -7,7 +7,7 @@
 
 // Number of frequency/waveform bins exposed to effects and shaders.
 // Matches AVS_Remake's BINS constant.
-static constexpr int kAudioBins    = 576;
+static constexpr int NumAudioBins    = 576;
 // FFT window size. 2048-point real FFT → 1024 frequency bins, resampled to kAudioBins.
 static constexpr int kAudioFFTSize = 2048;
 
@@ -17,8 +17,8 @@ static constexpr int kAudioFFTSize = 2048;
 //   channel 0 = left, 1 = right
 struct VisData
 {
-    float spec[2][kAudioBins] = {};
-    float osc [2][kAudioBins] = {};
+    float spec[2][NumAudioBins] = {};
+    float osc [2][NumAudioBins] = {};
 };
 
 struct AudioDeviceInfo

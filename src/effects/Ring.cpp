@@ -72,18 +72,10 @@ void Ring::Render(const RenderContext& Context)
     if (!m_overlayFbo) return;
 
     // Color cycling
-    const int n = (int)Colors.size();
-    m_colorPos = (m_colorPos + 1) % (n * 64);
-    const int frac = m_colorPos & 63;
-    const int seg  = m_colorPos / 64;
-    const auto& c1 = Colors[seg % n];
-    const auto& c2 = Colors[(seg + 1) % n];
-    const float cr = (float)((c1[0] * (63 - frac) + c2[0] * frac) / 64) / 255.0f;
-    const float cg = (float)((c1[1] * (63 - frac) + c2[1] * frac) / 64) / 255.0f;
-    const float cb = (float)((c1[2] * (63 - frac) + c2[2] * frac) / 64) / 255.0f;
+    const auto [cr, cg, cb] = Colors.StepF();
 
     // Audio data preparation — waveform or spectrum, left/right/center
-    float faData[kAudioBins] = {};
+    float faData[NumAudioBins] = {};
     if (Context.AudioData)
     {
         const VisData& vis = *Context.AudioData;
@@ -92,7 +84,7 @@ void Ring::Render(const RenderContext& Context)
             if (AudioSource == 0)
             {
                 // center waveform: signed int8 average → uint8 encoding
-                for (int i = 0; i < kAudioBins; i++)
+                for (int i = 0; i < NumAudioBins; i++)
                 {
                     const int v0 = std::clamp((int)vis.osc[0][i], 0, 255);
                     const int v1 = std::clamp((int)vis.osc[1][i], 0, 255);
@@ -102,7 +94,7 @@ void Ring::Render(const RenderContext& Context)
             else
             {
                 // center spectrum: uint8 average
-                for (int i = 0; i < kAudioBins; i++)
+                for (int i = 0; i < NumAudioBins; i++)
                     faData[i] = (float)((int)vis.spec[0][i] / 2 + (int)vis.spec[1][i] / 2);
             }
         }
@@ -111,13 +103,13 @@ void Ring::Render(const RenderContext& Context)
             const float* src = (AudioSource == 0)
                              ? vis.osc[AudioChannel]
                              : vis.spec[AudioChannel];
-            for (int i = 0; i < kAudioBins; i++)
+            for (int i = 0; i < NumAudioBins; i++)
                 faData[i] = src[i];
         }
     }
     else
     {
-        for (int i = 0; i < kAudioBins; i++) faData[i] = 128.0f;
+        for (int i = 0; i < NumAudioBins; i++) faData[i] = 128.0f;
     }
 
     // Radius scale from audio: sca ∈ [0.1, 1.0]

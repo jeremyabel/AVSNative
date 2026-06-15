@@ -11,6 +11,7 @@
 
 class Effect;
 class KeyedImageList;
+struct ColorList;
 
 namespace ConfigUi
 {
@@ -32,6 +33,11 @@ void SetEditorScope(const void* effect);
 // frames (e.g. Movement swapping its default code), the editor re-syncs to it.
 bool CodeEditor(const char* id, std::string& text, Lang lang, float height = 150.0f);
 
+// Shows the effect's compile/runtime error for the named code block (via
+// Effect::GetScriptError) as red text, or nothing if there's no error. Call right
+// after a CodeEditor() for the matching block.
+void ScriptError(Effect* effect, const char* paramName);
+
 // Drops editor instances that weren't drawn this frame. Call once after all config
 // panels are rendered; bounds the editor map as effects are added/removed/unlocked.
 void EndFramePrune();
@@ -45,7 +51,7 @@ bool ColorEdit(const char* label, std::array<uint8_t, 3>& c);
 // Editable color list: one compact ColorEdit per entry plus remove ("x", guarded
 // so at least one color always remains) and add ("+") buttons. Returns true if
 // any color or the list itself changed.
-bool ColorsEdit(const char* id, std::vector<std::array<uint8_t, 3>>& colors);
+bool ColorsEdit(const char* id, ColorList& list);
 
 // Opens an image file picker; on selection reads the raw bytes and hands them to
 // the effect via Effect::ApplyAsset(configKey, basename, bytes) — no base64. The

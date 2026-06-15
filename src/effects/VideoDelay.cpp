@@ -10,6 +10,9 @@
 #include <algorithm>
 #include <cstring>
 
+static constexpr const char* NAME_UseBeats = "usebeats";
+static constexpr const char* NAME_Delay = "delay";
+
 // Cap ring size to bound VRAM (the original's 400-frame max is impractical on GPU).
 static constexpr int MAX_RING_SLOTS = 64;
 
@@ -27,10 +30,11 @@ static bgfx::TextureHandle MakeSlot(uint16_t w, uint16_t h)
 
 void VideoDelay::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_blit_spv,       sizeof(fs_blit_spv)));
-    m_program = bgfx::createProgram(VS, FS, true);
-    m_texUnif = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
+    bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_blit_spv, sizeof(fs_blit_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
+
+    TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
     m_frameDelay = Delay;
 }
@@ -54,24 +58,6 @@ void VideoDelay::ApplyDelayChange()
     if (!UseBeats) m_frameDelay = Delay;
 }
 
-nlohmann::json VideoDelay::Serialize() const
-{
-    return {
-        { kEnabled,  Enabled  },
-        { kUseBeats, UseBeats },
-        { kDelay,    Delay    },
-    };
-}
-
-void VideoDelay::Deserialize(const nlohmann::json& j)
-{
-    JsonUtil::ReadBool(j, kEnabled,  Enabled);
-    JsonUtil::ReadBool(j, kUseBeats, UseBeats);
-    JsonUtil::ReadInt (j, kDelay,    Delay);
-
-    ApplyDelayChange();
-}
-
 void VideoDelay::Render(const RenderContext& Context)
 {
     const uint16_t w = (uint16_t)Context.Width;
@@ -92,8 +78,8 @@ void VideoDelay::Render(const RenderContext& Context)
         m_frameDelay = Delay;
     }
 
-    if (!Enabled || m_frameDelay == 0)
-        return;   // pass-through (no swap)
+    if (m_frameDelay == 0)
+        return;
 
     const int slots = std::min(m_frameDelay, MAX_RING_SLOTS);
 
@@ -107,7 +93,9 @@ void VideoDelay::Render(const RenderContext& Context)
 
     // Grow the ring lazily to cover the needed slots.
     while ((int)m_ring.size() < slots)
+    {
         m_ring.push_back(MakeSlot(w, h));
+    }
 
     // Keep the write index in bounds if the slot count shrank.
     m_writeIdx %= slots;
@@ -116,10 +104,10 @@ void VideoDelay::Render(const RenderContext& Context)
 
     // Read pass (viewId): output the oldest stored frame → output FBO. EffectChain
     // already bound this view to the next ping-pong slot.
-    bgfx::setTexture(0, m_texUnif, slot);
+    bgfx::setTexture(0, TexUniform, slot);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, m_program);
+    bgfx::submit(Context.ViewId, Program);
 
     // Write pass (viewId+1): overwrite that slot with the current input. A higher view
     // ID guarantees this transfer runs *after* the read above, so we never read the
@@ -136,8 +124,29 @@ void VideoDelay::Destroy()
 {
     FreeRing();
 
-    if (bgfx::isValid(m_texUnif)) bgfx::destroy(m_texUnif);
-    if (bgfx::isValid(m_program)) bgfx::destroy(m_program);
-    m_texUnif = BGFX_INVALID_HANDLE;
-    m_program = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(TexUniform)) 
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program)) 
+        bgfx::destroy(Program);
+
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
+}
+
+nlohmann::json VideoDelay::Serialize() const
+{
+    return 
+    {
+        { NAME_UseBeats, UseBeats },
+        { NAME_Delay, Delay },
+    };
+}
+
+void VideoDelay::Deserialize(const nlohmann::json& j)
+{
+    JsonUtil::ReadBool(j, NAME_UseBeats, UseBeats);
+    JsonUtil::ReadInt (j, NAME_Delay, Delay);
+
+    ApplyDelayChange();
 }

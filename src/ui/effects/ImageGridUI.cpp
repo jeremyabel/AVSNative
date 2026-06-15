@@ -5,14 +5,6 @@
 
 #include <imgui.h>
 
-#include <string>
-
-static void ScriptError(Effect* fx, const char* param)
-{
-    if (std::string err = fx->GetScriptError(param); !err.empty())
-        ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
-}
-
 // ── Bespoke UI ────────────────────────────────────────────────────────────────
 
 static void DrawImageGridUI(Effect* effect)
@@ -64,7 +56,7 @@ static void DrawImageGridUI(Effect* effect)
     {
         if (ConfigUi::CodeEditor("imagegrid.initCode", grid->InitCode, ConfigUi::Lang::Lua))
             grid->RecompileInitCode();
-        ScriptError(grid, ImageGrid::kInitCode);
+        ConfigUi::ScriptError(grid, ImageGrid::kInitCode);
         ImGui::TreePop();
     }
 
@@ -74,7 +66,7 @@ static void DrawImageGridUI(Effect* effect)
     {
         if (ConfigUi::CodeEditor("imagegrid.frameCode", grid->FrameCode, ConfigUi::Lang::Lua))
             grid->RecompileFrameCode();
-        ScriptError(grid, ImageGrid::kFrameCode);
+        ConfigUi::ScriptError(grid, ImageGrid::kFrameCode);
         ImGui::TreePop();
     }
 
@@ -84,7 +76,7 @@ static void DrawImageGridUI(Effect* effect)
     {
         if (ConfigUi::CodeEditor("imagegrid.beatCode", grid->BeatCode, ConfigUi::Lang::Lua))
             grid->RecompileBeatCode();
-        ScriptError(grid, ImageGrid::kBeatCode);
+        ConfigUi::ScriptError(grid, ImageGrid::kBeatCode);
         ImGui::TreePop();
     }
 }

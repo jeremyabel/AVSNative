@@ -16,15 +16,13 @@
 
 static void WriteI32(std::ofstream& f, int32_t v)
 {
-    uint8_t b[4] = { (uint8_t)(v & 0xff), (uint8_t)((v >> 8) & 0xff),
-                     (uint8_t)((v >> 16) & 0xff), (uint8_t)((v >> 24) & 0xff) };
+    uint8_t b[4] = { (uint8_t)(v & 0xff), (uint8_t)((v >> 8) & 0xff), (uint8_t)((v >> 16) & 0xff), (uint8_t)((v >> 24) & 0xff) };
     f.write((const char*)b, 4);
 }
 
 static int32_t ReadI32(const uint8_t* p)
 {
-    return (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) |
-                     ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24));
+    return (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24));
 }
 
 static const SDL_DialogFileFilter kCffFilters[] = {
@@ -41,9 +39,9 @@ static void SaveKernel(const Convolution& fx)
     if (!f) return;
 
     WriteI32(f, 1);                       // enabled
-    WriteI32(f, fx.Wrap     ? 1 : 0);
-    WriteI32(f, fx.Absolute ? 1 : 0);
-    WriteI32(f, fx.TwoPass  ? 1 : 0);
+    WriteI32(f, fx.EnableWrap     ? 1 : 0);
+    WriteI32(f, fx.EnableAbsolute ? 1 : 0);
+    WriteI32(f, fx.EnableTwoPass  ? 1 : 0);
     for (int k : fx.Kernel) WriteI32(f, k);
     WriteI32(f, fx.Bias);
     WriteI32(f, fx.Scale);
@@ -62,9 +60,9 @@ static bool LoadKernel(Convolution& fx)
     if (f.gcount() < (std::streamsize)sizeof(buf)) return false;
 
     int pos = 4;                          // skip enabled
-    fx.Wrap     = ReadI32(buf + pos) != 0; pos += 4;
-    fx.Absolute = ReadI32(buf + pos) != 0; pos += 4;
-    fx.TwoPass  = ReadI32(buf + pos) != 0; pos += 4;
+    fx.EnableWrap     = ReadI32(buf + pos) != 0; pos += 4;
+    fx.EnableAbsolute = ReadI32(buf + pos) != 0; pos += 4;
+    fx.EnableTwoPass  = ReadI32(buf + pos) != 0; pos += 4;
     for (int i = 0; i < 49; ++i) { fx.Kernel[i] = ReadI32(buf + pos); pos += 4; }
     fx.Bias  = ReadI32(buf + pos); pos += 4;
     fx.Scale = ReadI32(buf + pos);
@@ -77,13 +75,13 @@ static void DrawConvolutionUI(Effect* effect)
     auto* conv = static_cast<Convolution*>(effect);
 
     // Mode flags (wrap/absolute mutually exclusive, matching the reference)
-    if (ImGui::Checkbox("Wrap", &conv->Wrap) && conv->Wrap)
-        conv->Absolute = false;
+    if (ImGui::Checkbox("Wrap", &conv->EnableWrap) && conv->EnableWrap)
+        conv->EnableAbsolute = false;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Absolute", &conv->Absolute) && conv->Absolute)
-        conv->Wrap = false;
+    if (ImGui::Checkbox("Absolute", &conv->EnableAbsolute) && conv->EnableAbsolute)
+        conv->EnableWrap = false;
     ImGui::SameLine();
-    ImGui::Checkbox("Two Pass", &conv->TwoPass);
+    ImGui::Checkbox("Two Pass", &conv->EnableTwoPass);
 
     ImGui::SetNextItemWidth(120.0f);
     ImGui::InputInt("Bias", &conv->Bias);
@@ -113,7 +111,7 @@ static void DrawConvolutionUI(Effect* effect)
     if (ImGui::Button("Auto Scale"))
     {
         int sum = std::accumulate(conv->Kernel.begin(), conv->Kernel.end(), 0) + conv->Bias;
-        if (conv->TwoPass) sum *= 2;
+        if (conv->EnableTwoPass) sum *= 2;
         conv->Scale = (sum == 0) ? 1 : sum;
     }
     ImGui::SameLine();
@@ -121,7 +119,7 @@ static void DrawConvolutionUI(Effect* effect)
     {
         conv->Kernel.fill(0);
         conv->Kernel[24] = 1;
-        conv->Wrap = conv->Absolute = conv->TwoPass = false;
+        conv->EnableWrap = conv->EnableAbsolute = conv->EnableTwoPass = false;
         conv->Bias = 0;
         conv->Scale = 1;
     }

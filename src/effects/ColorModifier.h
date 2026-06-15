@@ -10,23 +10,11 @@
 class ColorModifier : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    std::string PixelCode =
-        "// red, green, blue all start at the same channel intensity (0..1).\n"
-        "// Modify them to remap that intensity to new R, G, B output values.\n"
-        "// The stub runs once per channel: red output -> new R, green -> new G, blue -> new B.\n"
-        "// beat = 1 on a beat. User vars declared in Init are also available.\n"
-        "red   = red;\n"
-        "green = green;\n"
-        "blue  = blue;";
-    std::string InitCode  = "";
-    std::string FrameCode = "";
-    std::string BeatCode  = "";
 
-    static constexpr const char* kPixelCode = "pixelCode";
-    static constexpr const char* kInitCode  = "initCode";
-    static constexpr const char* kFrameCode = "frameCode";
-    static constexpr const char* kBeatCode  = "beatCode";
+    static constexpr const char* NAME_PixelCode = "pixelCode";
+    static constexpr const char* NAME_InitCode = "initCode";
+    static constexpr const char* NAME_FrameCode = "frameCode";
+    static constexpr const char* NAME_BeatCode = "beatCode";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -38,33 +26,42 @@ public:
 
     std::string GetScriptError(const std::string& paramName) const override
     {
-        if (paramName == kPixelCode) return m_shaderError;
-        return m_lua.GetError(paramName);
+        if (paramName == NAME_PixelCode) 
+            return ShaderError;
+
+        return LuaContext.GetError(paramName);
     }
 
     // Recompiles after PixelCode or InitCode changes: recompiles the init block,
     // rescans user-var uniforms, rebuilds the GLSL, and reruns init. Called after
     // Deserialize and by the UI.
     void RecompileMain();
-    // Recompiles just the frame / beat Lua blocks.
     void RecompileFrameCode();
     void RecompileBeatCode();
 
+public:
+
+    std::string PixelCode = "red = red;\ngreen = green;\nblue = blue;";
+    std::string InitCode = "";
+    std::string FrameCode = "";
+    std::string BeatCode = "";
+
 private:
-    void Recompile();      // builds GLSL → SPIRV → bgfx program
+
+    void Recompile();
 
     std::string BuildFragGlsl() const;
 
-    bgfx::ProgramHandle Program   = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle InputUnif = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle BeatUnif  = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle BeatUniform = BGFX_INVALID_HANDLE;
 
-    std::string m_shaderError;
+    std::string ShaderError;
 
-    LuaRuntime       m_lua;
-    LuaUniformBridge m_bridge;   // packs user Lua vars into u_cmod_v[N]
-    int  m_initRef  = -1;
-    int  m_frameRef = -1;
-    int  m_beatRef  = -1;
-    bool m_inited   = false;
+    LuaRuntime LuaContext;
+    LuaUniformBridge LuaBridge;
+    int LuaRefInit = -1;
+    int LuaRefFrame = -1;
+    int LuaRefBeat = -1;
+    bool LuaInitComplete = false;
 };

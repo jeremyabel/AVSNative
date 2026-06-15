@@ -6,7 +6,6 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_scatter.sc.bin.h"
 
-
 void Scatter::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -21,10 +20,9 @@ void Scatter::Render(const RenderContext& Context)
 {
     SeedFrame = (SeedFrame + 1) & 0xFFFF;
     const float Seed = (float)SeedFrame * avs::Phi;
+    const float uParams[4] = { (float)Context.Width, (float)Context.Height, Seed, 0.f, };
 
-    const float Params[4] = { (float)Context.Width, (float)Context.Height, Seed, 0.f, };
-
-    bgfx::setUniform(ParamsUniform, Params);
+    bgfx::setUniform(ParamsUniform, uParams);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);

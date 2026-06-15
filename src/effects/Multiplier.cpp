@@ -6,6 +6,8 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_multiplier.sc.bin.h"
 
+static constexpr const char* NAME_Mode = "mode";
+
 void Multiplier::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -14,19 +16,6 @@ void Multiplier::Init()
 
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_mulParams", bgfx::UniformType::Vec4);
-}
-
-void Multiplier::Render(const RenderContext& Context)
-{
-    const float Params[4] = { float(Mode), 0.f, 0.f, 0.f };
-
-    bgfx::setUniform(ParamsUniform, Params);
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, Program);
-
-    Context.FboManager->Swap();
 }
 
 void Multiplier::Destroy()
@@ -45,14 +34,28 @@ void Multiplier::Destroy()
     Program = BGFX_INVALID_HANDLE;
 }
 
+void Multiplier::Render(const RenderContext& Context)
+{
+    const float uParams[4] = { float(Mode), 0.f, 0.f, 0.f };
+
+    bgfx::setUniform(ParamsUniform, uParams);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+
+    Context.FboManager->Swap();
+}
+
 nlohmann::json Multiplier::Serialize() const
 {
-    return {
-        { kMode, Mode },
+    return 
+    {
+        { NAME_Mode, Mode },
     };
 }
 
 void Multiplier::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt(j, kMode, Mode);
+    JsonUtil::ReadInt(j, NAME_Mode, Mode);
 }

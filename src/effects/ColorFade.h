@@ -5,20 +5,6 @@
 class ColorFade : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    int  Faders[3]     = { 8, -8, -8 }; // -32..32, 0 = no change
-    int  BeatFaders[3] = { 8, -8, -8 };
-    bool Gradual       = false;
-    bool RandomBeat    = false;
-
-    static constexpr const char* kFader0     = "fader0";
-    static constexpr const char* kFader1     = "fader1";
-    static constexpr const char* kFader2     = "fader2";
-    static constexpr const char* kBeatFader0 = "beat_fader0";
-    static constexpr const char* kBeatFader1 = "beat_fader1";
-    static constexpr const char* kBeatFader2 = "beat_fader2";
-    static constexpr const char* kGradual    = "gradual";
-    static constexpr const char* kRandomBeat = "random_beat";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -32,18 +18,25 @@ public:
     // Deserialize and by the UI when a fader slider changes.
     void ResetFaderPos()
     {
-        m_fp[0] = (float)Faders[0];
-        m_fp[1] = (float)Faders[1];
-        m_fp[2] = (float)Faders[2];
+        InterpFaders[0] = (float)Faders[0];
+        InterpFaders[1] = (float)Faders[1];
+        InterpFaders[2] = (float)Faders[2];
     }
 
+public:
+
+    int Faders[3] = { 0, 0, 0 };
+    int BeatFaders[3] = { 0, 0, 0 };
+    bool EnableOnBeatChange = false;
+    bool EnableRandomBeat = false;
+
 private:
-    void UpdateFaderPos(bool isBeat);
 
-    // Runtime state (not serialized)
-    float m_fp[3] = { 8.0f, -8.0f, -8.0f }; // interpolated fader positions
+    void UpdateFaderPos(bool IsBeat);
 
-    bgfx::ProgramHandle Program       = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform    = BGFX_INVALID_HANDLE;
+    float InterpFaders[3] = { 0.0f, 0.0f, 0.0f }; // interpolated fader positions
+
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle ParamsUniform = BGFX_INVALID_HANDLE;
 };

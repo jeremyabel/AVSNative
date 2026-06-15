@@ -11,18 +11,9 @@
 // Like MultiDelay, ring slots are plain BGFX_TEXTURE_BLIT_DST textures (no framebuffers):
 // the write path copies the input with bgfx::blit, the read path samples through the
 // fullscreen blit shader. Ring size is capped at MAX_RING_SLOTS to bound VRAM.
-
 class VideoDelay : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    bool Enabled  = true;
-    bool UseBeats = false;
-    int  Delay    = 10;   // frames (UseBeats off, 0–200) or beat multiplier (UseBeats on, 0–16)
-
-    static constexpr const char* kEnabled  = "enabled";
-    static constexpr const char* kUseBeats = "usebeats";
-    static constexpr const char* kDelay    = "delay";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -37,19 +28,25 @@ public:
     // Deserialize and by the UI.
     void ApplyDelayChange();
 
+public:
+
+    bool UseBeats = false;
+    int Delay = 10; 
+
 private:
+
     void FreeRing();
 
     // Runtime state
-    int m_frameDelay      = 10;
+    int m_frameDelay = 10;
     int m_framesSinceBeat = 0;
-    int m_writeIdx        = 0;
-    int m_lastW           = 0;
-    int m_lastH           = 0;
+    int m_writeIdx = 0;
+    int m_lastW = 0;
+    int m_lastH = 0;
 
     std::vector<bgfx::TextureHandle> m_ring;  // BLIT_DST textures, no framebuffers
 
     // bgfx resources for the read (shader blit) pass.
-    bgfx::ProgramHandle m_program  = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_texUnif  = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
 };

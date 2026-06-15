@@ -5,10 +5,6 @@
 class Multiplier : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    int Mode = 3;  // default: ×2
-
-    static constexpr const char* kMode = "mode";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -18,8 +14,13 @@ public:
     nlohmann::json Serialize() const override;
     void Deserialize(const nlohmann::json& j) override;
 
+public:
+
+    int Mode = 3;
+
 private:
-    bgfx::ProgramHandle Program       = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform    = BGFX_INVALID_HANDLE;
+
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle ParamsUniform = BGFX_INVALID_HANDLE;
 };

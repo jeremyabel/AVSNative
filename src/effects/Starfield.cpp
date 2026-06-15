@@ -21,32 +21,24 @@ static const float k_quadVerts[] = {
 // ─── colour formula ───────────────────────────────────────────────────────────
 // Matches blend_adjustable_rough() from e_starfield.cpp.
 // Inputs and output are in [0, 240] — guaranteed not to overflow uint8_t.
-void Starfield::Colorize(uint8_t Bright, uint8_t Cr, uint8_t Cg, uint8_t Cb,
-                          uint8_t& OutR, uint8_t& OutG, uint8_t& OutB)
+void Starfield::Colorize(uint8_t Bright, uint8_t Cr, uint8_t Cg, uint8_t Cb, uint8_t& OutR, uint8_t& OutG, uint8_t& OutB)
 {
-    int v  = (Bright >> 4) & 0xF;
+    int v = (Bright >> 4) & 0xF;
     int gn = v;
     OutR = (uint8_t)((gn * (16 - v)) + ((Cr >> 4) * v));
     OutG = (uint8_t)((gn * (16 - v)) + ((Cg >> 4) * v));
     OutB = (uint8_t)((gn * (16 - v)) + ((Cb >> 4) * v));
 }
 
-// ─── Init / Destroy ───────────────────────────────────────────────────────────
-
 void Starfield::Init()
 {
-    // Blit program — copies input texture to output
-    {
-        bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-        bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_blit_spv,       sizeof(fs_blit_spv)));
-        BlitProgram = bgfx::createProgram(VS, FS, true);
-    }
-    // Star program — positions + tinted color0 attribute
-    {
-        bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_starfield_spv, sizeof(vs_starfield_spv)));
-        bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_starfield_spv, sizeof(fs_starfield_spv)));
-        StarProgram = bgfx::createProgram(VS, FS, true);
-    }
+    bgfx::ShaderHandle FullscreenVertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    bgfx::ShaderHandle BlitFragShader = bgfx::createShader(bgfx::copy(fs_blit_spv, sizeof(fs_blit_spv)));
+    BlitProgram = bgfx::createProgram(FullscreenVertShader, BlitFragShader, true);
+
+    bgfx::ShaderHandle StarVertShader = bgfx::createShader(bgfx::copy(vs_starfield_spv, sizeof(vs_starfield_spv)));
+    bgfx::ShaderHandle StarFragShader = bgfx::createShader(bgfx::copy(fs_starfield_spv, sizeof(fs_starfield_spv)));
+    StarProgram = bgfx::createProgram(StarVertShader, StarFragShader, true);
 
     BlitTexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
@@ -57,41 +49,45 @@ void Starfield::Init()
         .end();
     BlitQuadVB = bgfx::createVertexBuffer(bgfx::copy(k_quadVerts, sizeof(k_quadVerts)), BlitLayout);
 
-    // Star point layout — position + normalised uint8 colour
+    // Star point layout: position + normalised uint8 colour
     StarLayout.begin()
         .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
-        .add(bgfx::Attrib::Color0,   4, bgfx::AttribType::Uint8, true)
+        .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
         .end();
 }
 
 void Starfield::Destroy()
 {
-    if (bgfx::isValid(BlitQuadVB))     bgfx::destroy(BlitQuadVB);
-    if (bgfx::isValid(BlitTexUniform)) bgfx::destroy(BlitTexUniform);
-    if (bgfx::isValid(StarProgram))    bgfx::destroy(StarProgram);
-    if (bgfx::isValid(BlitProgram))    bgfx::destroy(BlitProgram);
+    if (bgfx::isValid(BlitQuadVB))     
+        bgfx::destroy(BlitQuadVB);
 
-    BlitQuadVB     = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(BlitTexUniform)) 
+        bgfx::destroy(BlitTexUniform);
+
+    if (bgfx::isValid(StarProgram))    
+        bgfx::destroy(StarProgram);
+    
+    if (bgfx::isValid(BlitProgram))    
+        bgfx::destroy(BlitProgram);
+
+    BlitQuadVB = BGFX_INVALID_HANDLE;
     BlitTexUniform = BGFX_INVALID_HANDLE;
-    StarProgram    = BGFX_INVALID_HANDLE;
-    BlitProgram    = BGFX_INVALID_HANDLE;
+    StarProgram = BGFX_INVALID_HANDLE;
+    BlitProgram = BGFX_INVALID_HANDLE;
 }
-
-// ─── Star pool ────────────────────────────────────────────────────────────────
 
 void Starfield::InitStars(int W, int H)
 {
-    // Scale star count to canvas area, capped at kMaxStars-1. Matches JS exactly.
-    AbsStars = std::min(kMaxStars - 1,
-        (int)std::round((double)StarCount * W * H / (512.0 * 384.0)));
+    // Scale star count to screen area, capped at kMaxStars-1
+    AbsStars = std::min(kMaxStars - 1, (int)std::round((double)StarCount * W * H / (512.0 * 384.0)));
 
     int XOff = W >> 1;
     int YOff = H >> 1;
     for (int i = 0; i < AbsStars; i++)
     {
-        Stars[i].X         = (float)(rand() % W) - XOff;
-        Stars[i].Y         = (float)(rand() % H) - YOff;
-        Stars[i].Z         = (float)(rand() % 256);
+        Stars[i].X = (float)(rand() % W) - XOff;
+        Stars[i].Y = (float)(rand() % H) - YOff;
+        Stars[i].Z = (float)(rand() % 256);
         Stars[i].SpeedMult = (float)((rand() % 9) + 1) / 10.0f;
     }
 }
@@ -101,15 +97,12 @@ void Starfield::ResetStar(int Idx, int W, int H, int XOff, int YOff)
     Stars[Idx].X = (float)(rand() % W) - XOff;
     Stars[Idx].Y = (float)(rand() % H) - YOff;
     Stars[Idx].Z = 255.0f;
-    // SpeedMult preserved — matches JS create_star()
 }
-
-// ─── Render ───────────────────────────────────────────────────────────────────
 
 void Starfield::Render(const RenderContext& Context)
 {
-    const int W    = Context.Width;
-    const int H    = Context.Height;
+    const int W = Context.Width;
+    const int H = Context.Height;
     const int XOff = W >> 1;
     const int YOff = H >> 1;
 
@@ -117,8 +110,8 @@ void Starfield::Render(const RenderContext& Context)
     if (Context.IsBeat() && OnBeat)
     {
         CurrentSpeed = OnBeatSpeed;
-        OnBeatDiff   = (Speed - OnBeatSpeed) / (float)OnBeatDuration;
-        Cooldown     = OnBeatDuration;
+        OnBeatDiff = (Speed - OnBeatSpeed) / (float)OnBeatDuration;
+        Cooldown = OnBeatDuration;
     }
 
     // Reinitialise pool whenever canvas size changes.
@@ -129,15 +122,14 @@ void Starfield::Render(const RenderContext& Context)
         InitStars(W, H);
     }
 
-    // ── Pass 1 (ViewId): blit input to output ─────────────────────────────────
+    // Pass 1 (ViewId): blit input to output
     bgfx::setTexture(0, BlitTexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, BlitQuadVB);
     bgfx::submit(Context.ViewId, BlitProgram);
 
-    // ── Simulate stars → build transient vertex buffer ────────────────────────
-    if (AbsStars > 0 &&
-        bgfx::getAvailTransientVertexBuffer((uint32_t)AbsStars, StarLayout) >= (uint32_t)AbsStars)
+    // Simulate stars, build transient vertex buffer
+    if (AbsStars > 0 && bgfx::getAvailTransientVertexBuffer((uint32_t)AbsStars, StarLayout) >= (uint32_t)AbsStars)
     {
         bgfx::TransientVertexBuffer tvb;
         bgfx::allocTransientVertexBuffer(&tvb, (uint32_t)AbsStars, StarLayout);
@@ -182,14 +174,16 @@ void Starfield::Render(const RenderContext& Context)
 
         // Speed ramp-back (runs after star loop, matching original).
         if (Cooldown <= 0)
+        {
             CurrentSpeed = Speed;
+        }
         else
         {
             CurrentSpeed = std::max(0.0f, CurrentSpeed + OnBeatDiff);
             --Cooldown;
         }
 
-        // ── Pass 2 (ViewId+1): draw stars on top of blitted input ─────────────
+        // Pass 2 (ViewId+1): draw stars on top of blitted input
         if (count > 0)
         {
             uint8_t starView = Context.ViewId + 1;
@@ -200,10 +194,9 @@ void Starfield::Render(const RenderContext& Context)
             uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_PT_POINTS;
             switch (BlendMode)
             {
-            case 1: state |= BGFX_STATE_BLEND_ADD; break;
-            case 2: state |= BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA,
-                                                    BGFX_STATE_BLEND_INV_SRC_ALPHA); break;
-            default: break; // Replace — no blending, overwrite pixel
+                case 1: state |= BGFX_STATE_BLEND_ADD; break;
+                case 2: state |= BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA); break;
+                default: break; // Replace — no blending, overwrite pixel
             }
 
             bgfx::setState(state);
@@ -213,9 +206,16 @@ void Starfield::Render(const RenderContext& Context)
     }
     else
     {
-        // No transient space or no stars — speed ramp still ticks.
-        if (Cooldown <= 0) CurrentSpeed = Speed;
-        else { CurrentSpeed = std::max(0.0f, CurrentSpeed + OnBeatDiff); --Cooldown; }
+        // No transient space or no stars: speed ramp still ticks.
+        if (Cooldown <= 0) 
+        {
+            CurrentSpeed = Speed;
+        }
+        else 
+        { 
+            CurrentSpeed = std::max(0.0f, CurrentSpeed + OnBeatDiff); 
+            --Cooldown; 
+        }
     }
 
     Context.FboManager->Swap();
@@ -223,26 +223,27 @@ void Starfield::Render(const RenderContext& Context)
 
 nlohmann::json Starfield::Serialize() const
 {
-    return {
-        { kColor,          JsonUtil::ColorToJson(Color) },
-        { kBlendMode,      BlendMode      },
-        { kSpeed,          Speed          },
-        { kStarCount,      StarCount      },
-        { kOnBeat,         OnBeat         },
-        { kOnBeatSpeed,    OnBeatSpeed    },
-        { kOnBeatDuration, OnBeatDuration },
+    return 
+    {
+        { NAME_Color, JsonUtil::ColorToJson(Color) },
+        { NAME_BlendMode, BlendMode },
+        { NAME_Speed, Speed },
+        { NAME_StarCount, StarCount },
+        { NAME_EnableOnBeatChange, OnBeat },
+        { NAME_OnBeatSpeed, OnBeatSpeed },
+        { NAME_OnBeatDuration, OnBeatDuration },
     };
 }
 
 void Starfield::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadColor(j, kColor,          Color);
-    JsonUtil::ReadInt  (j, kBlendMode,      BlendMode);
-    JsonUtil::ReadFloat(j, kSpeed,          Speed);
-    JsonUtil::ReadInt  (j, kStarCount,      StarCount);
-    JsonUtil::ReadBool (j, kOnBeat,         OnBeat);
-    JsonUtil::ReadFloat(j, kOnBeatSpeed,    OnBeatSpeed);
-    JsonUtil::ReadInt  (j, kOnBeatDuration, OnBeatDuration);
+    JsonUtil::ReadColor(j, NAME_Color, Color);
+    JsonUtil::ReadInt(j, NAME_BlendMode, BlendMode);
+    JsonUtil::ReadFloat(j, NAME_Speed, Speed);
+    JsonUtil::ReadInt(j, NAME_StarCount, StarCount);
+    JsonUtil::ReadBool(j, NAME_EnableOnBeatChange, OnBeat);
+    JsonUtil::ReadFloat(j, NAME_OnBeatSpeed, OnBeatSpeed);
+    JsonUtil::ReadInt(j, NAME_OnBeatDuration, OnBeatDuration);
 
     ResetSpeed();
     ReinitStars();

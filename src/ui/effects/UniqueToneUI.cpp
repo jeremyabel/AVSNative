@@ -9,14 +9,14 @@ static void DrawUniqueToneUI(Effect* base)
 {
     auto* fx = static_cast<UniqueTone*>(base);
 
-    ImGui::TextUnformatted("Color");
+    ImGui::Text("Color");
     ImGui::SetNextItemWidth(-1.0f);
     ConfigUi::ColorEdit("##color", fx->Color);
 
-    ImGui::Checkbox("Invert", &fx->Invert);
+    ImGui::Checkbox("Invert", &fx->EnableInvert);
 
     static const char* kBlends[] = { "Replace", "Additive", "Average" };
-    ImGui::TextUnformatted("Blend");
+    ImGui::Text("Blend");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::Combo("##outBlend", &fx->OutBlend, kBlends, IM_ARRAYSIZE(kBlends));
 }

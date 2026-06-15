@@ -5,14 +5,6 @@
 
 #include <imgui.h>
 
-#include <string>
-
-static void ScriptError(Effect* fx, const char* param)
-{
-    if (std::string err = fx->GetScriptError(param); !err.empty())
-        ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
-}
-
 static void DrawTriangleUI(Effect* base)
 {
     auto* fx = static_cast<Triangle*>(base);
@@ -21,7 +13,7 @@ static void DrawTriangleUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("triangle.initCode", fx->InitCode, ConfigUi::Lang::Lua))
             fx->RecompileAll();
-        ScriptError(fx, Triangle::kInitCode);
+        ConfigUi::ScriptError(fx, Triangle::kInitCode);
         ImGui::TreePop();
     }
 
@@ -31,7 +23,7 @@ static void DrawTriangleUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("triangle.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
             fx->RecompileAll();
-        ScriptError(fx, Triangle::kFrameCode);
+        ConfigUi::ScriptError(fx, Triangle::kFrameCode);
         ImGui::TreePop();
     }
 
@@ -41,7 +33,7 @@ static void DrawTriangleUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("triangle.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
             fx->RecompileAll();
-        ScriptError(fx, Triangle::kBeatCode);
+        ConfigUi::ScriptError(fx, Triangle::kBeatCode);
         ImGui::TreePop();
     }
 
@@ -51,7 +43,7 @@ static void DrawTriangleUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("triangle.triangleCode", fx->TriangleCode, ConfigUi::Lang::Lua))
             fx->RecompileAll();
-        ScriptError(fx, Triangle::kTriangleCode);
+        ConfigUi::ScriptError(fx, Triangle::kTriangleCode);
         ImGui::TreePop();
     }
 

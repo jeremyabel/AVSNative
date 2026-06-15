@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <cmath>
 
+static constexpr const char* NAME_Color = "color";
+static constexpr const char* NAME_Size  = "size";
+
 void AddBorders::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -17,7 +20,7 @@ void AddBorders::Init()
 
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     BorderParamsUniform = bgfx::createUniform("u_borderParams", bgfx::UniformType::Vec4);
-    BorderColorUniform  = bgfx::createUniform("u_borderColor", bgfx::UniformType::Vec4);
+    BorderColorUniform = bgfx::createUniform("u_borderColor", bgfx::UniformType::Vec4);
 }
 
 void AddBorders::Render(const RenderContext& Context)
@@ -28,11 +31,11 @@ void AddBorders::Render(const RenderContext& Context)
     const float BorderW = std::max(1.0f, std::floor(W * Size / 100.f));
     const float BorderH = std::max(1.0f, std::floor(H * Size / 100.f));
 
-    const float Params[4] = { BorderW, BorderH, W, H };
-    const float BorderColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
+    const float uParams[4] = { BorderW, BorderH, W, H };
+    const float uBorderColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
 
-    bgfx::setUniform(BorderParamsUniform, Params);
-    bgfx::setUniform(BorderColorUniform, BorderColor);
+    bgfx::setUniform(BorderParamsUniform, uParams);
+    bgfx::setUniform(BorderColorUniform, uBorderColor);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -63,14 +66,15 @@ void AddBorders::Destroy()
 
 nlohmann::json AddBorders::Serialize() const
 {
-    return {
-        { kColor, JsonUtil::ColorToJson(Color) },
-        { kSize,  Size },
+    return
+    {
+        { NAME_Color, JsonUtil::ColorToJson(Color) },
+        { NAME_Size, Size },
     };
 }
 
 void AddBorders::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadColor(j, kColor, Color);
-    JsonUtil::ReadInt  (j, kSize,  Size);
+    JsonUtil::ReadColor(j, NAME_Color, Color);
+    JsonUtil::ReadInt(j, NAME_Size, Size);
 }

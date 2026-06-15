@@ -12,7 +12,7 @@ static void DrawColorFadeUI(Effect* base)
     for (int i = 0; i < 3; ++i)
     {
         ImGui::PushID(i);
-        ImGui::TextUnformatted(kFaderLabels[i]);
+        ImGui::Text(kFaderLabels[i]);
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::SliderInt("##fader", &fx->Faders[i], -32, 32))
             fx->ResetFaderPos();
@@ -23,14 +23,14 @@ static void DrawColorFadeUI(Effect* base)
     for (int i = 0; i < 3; ++i)
     {
         ImGui::PushID(100 + i);
-        ImGui::TextUnformatted(kBeatFaderLabels[i]);
+        ImGui::Text(kBeatFaderLabels[i]);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderInt("##beatFader", &fx->BeatFaders[i], -32, 32);
         ImGui::PopID();
     }
 
-    ImGui::Checkbox("Gradual", &fx->Gradual);
-    ImGui::Checkbox("Random on Beat", &fx->RandomBeat);
+    ImGui::Checkbox("On Beat", &fx->EnableOnBeatChange);
+    ImGui::Checkbox("Random on Beat", &fx->EnableRandomBeat);
 }
 
 void RegisterColorFadeUI(ConfigUiRegistry& reg)

@@ -5,14 +5,6 @@
 
 #include <imgui.h>
 
-#include <string>
-
-static void ScriptError(Effect* fx, const char* param)
-{
-    if (std::string err = fx->GetScriptError(param); !err.empty())
-        ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
-}
-
 static void DrawDynamicShiftUI(Effect* base)
 {
     auto* fx = static_cast<DynamicShift*>(base);
@@ -21,17 +13,7 @@ static void DrawDynamicShiftUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("dshift.initCode", fx->InitCode, ConfigUi::Lang::Lua))
             fx->RecompileInitCode();
-        ScriptError(fx, DynamicShift::kInitCode);
-        ImGui::TreePop();
-    }
-
-    ImGui::Spacing();
-
-    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
-    {
-        if (ConfigUi::CodeEditor("dshift.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
-            fx->RecompileFrameCode();
-        ScriptError(fx, DynamicShift::kFrameCode);
+        ConfigUi::ScriptError(fx, DynamicShift::NAME_InitCode);
         ImGui::TreePop();
     }
 
@@ -41,14 +23,24 @@ static void DrawDynamicShiftUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("dshift.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
             fx->RecompileBeatCode();
-        ScriptError(fx, DynamicShift::kBeatCode);
+        ConfigUi::ScriptError(fx, DynamicShift::NAME_BeatCode);
         ImGui::TreePop();
     }
 
-    ImGui::Checkbox("Blend", &fx->Blend);
-    ImGui::Checkbox("Subpixel", &fx->Subpixel);
+    ImGui::Spacing();
 
-    ImGui::BeginDisabled(!fx->Subpixel);
+    if (ImGui::TreeNodeEx("Frame", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dshift.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
+            fx->RecompileFrameCode();
+        ConfigUi::ScriptError(fx, DynamicShift::NAME_FrameCode);
+        ImGui::TreePop();
+    }
+
+    ImGui::Checkbox("Blend", &fx->EnableBlend);
+    ImGui::Checkbox("Subpixel", &fx->Bilinear);
+
+    ImGui::BeginDisabled(!fx->Bilinear);
     ImGui::Checkbox("Bilinear (precise)", &fx->Compat);
     ImGui::EndDisabled();
 }

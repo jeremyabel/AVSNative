@@ -1,6 +1,5 @@
 #include "RotoBlitter.h"
 #include "engine/MathConstants.h"
-
 #include "engine/FBOManager.h"
 #include "engine/JsonUtil.h"
 
@@ -10,6 +9,15 @@
 #include <algorithm>
 #include <cmath>
 
+static constexpr const char* kZoomScale = "zoom_scale";
+static constexpr const char* kZoomScale2 = "zoom_scale2";
+static constexpr const char* NAME_RotDir = "rot_dir";
+static constexpr const char* kBeatchSpeed = "beatch_speed";
+static constexpr const char* NAME_Bilinear = "subpixel";
+static constexpr const char* NAME_BilinearCompat = "bilinearCompat";
+static constexpr const char* NAME_EnableBlend = "blend";
+static constexpr const char* kBeatch = "beatch";
+static constexpr const char* kBeatchScale = "beatch_scale";
 
 void RotoBlitter::Init()
 {
@@ -69,8 +77,7 @@ void RotoBlitter::Render(const RenderContext& Context)
 
     // Compat does its own integer texelFetch blend, so bind POINT (the shader
     // ignores the hardware filter). Otherwise: bilinear when Subpixel, else nearest.
-    const uint32_t PointFlags = BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT |
-                                BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP;
+    const uint32_t PointFlags = BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT | BGFX_SAMPLER_U_CLAMP   | BGFX_SAMPLER_V_CLAMP;
     const uint32_t SamplerFlags = (Subpixel && !Compat) ? UINT32_MAX : PointFlags;
     bgfx::setTexture(0, TexUniform, Context.InputTexture, SamplerFlags);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
@@ -102,29 +109,30 @@ void RotoBlitter::Destroy()
 
 nlohmann::json RotoBlitter::Serialize() const
 {
-    return {
-        { kZoomScale,   ZoomScale   },
-        { kZoomScale2,  ZoomScale2  },
-        { kRotDir,      RotDir      },
+    return 
+    {
+        { kZoomScale, ZoomScale },
+        { kZoomScale2, ZoomScale2 },
+        { NAME_RotDir, RotDir },
         { kBeatchSpeed, BeatchSpeed },
-        { kSubpixel,    Subpixel    },
-        { kCompat,      Compat      },
-        { kBlend,       Blend       },
-        { kBeatch,      Beatch      },
+        { NAME_Bilinear, Subpixel },
+        { NAME_BilinearCompat, Compat },
+        { NAME_EnableBlend, Blend },
+        { kBeatch, Beatch },
         { kBeatchScale, BeatchScale },
     };
 }
 
 void RotoBlitter::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt (j, kZoomScale,   ZoomScale);
-    JsonUtil::ReadInt (j, kZoomScale2,  ZoomScale2);
-    JsonUtil::ReadInt (j, kRotDir,      RotDir);
-    JsonUtil::ReadInt (j, kBeatchSpeed, BeatchSpeed);
-    JsonUtil::ReadBool(j, kSubpixel,    Subpixel);
-    JsonUtil::ReadBool(j, kCompat,      Compat);
-    JsonUtil::ReadBool(j, kBlend,       Blend);
-    JsonUtil::ReadBool(j, kBeatch,      Beatch);
+    JsonUtil::ReadInt(j, kZoomScale, ZoomScale);
+    JsonUtil::ReadInt(j, kZoomScale2, ZoomScale2);
+    JsonUtil::ReadInt(j, NAME_RotDir, RotDir);
+    JsonUtil::ReadInt(j, kBeatchSpeed, BeatchSpeed);
+    JsonUtil::ReadBool(j, NAME_Bilinear, Subpixel);
+    JsonUtil::ReadBool(j, NAME_BilinearCompat, Compat);
+    JsonUtil::ReadBool(j, NAME_EnableBlend, Blend);
+    JsonUtil::ReadBool(j, kBeatch, Beatch);
     JsonUtil::ReadBool(j, kBeatchScale, BeatchScale);
 
     ResetZoomAnim();

@@ -5,10 +5,6 @@
 class FastBrightness : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    int Dir = 0; // 0=×2 brighter, 1=×½ darker, 2=no change
-
-    static constexpr const char* kDir = "dir";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -18,8 +14,13 @@ public:
     nlohmann::json Serialize() const override;
     void Deserialize(const nlohmann::json& j) override;
 
+public:
+
+    int Dir = 0; // 0=×2 brighter, 1=×½ darker, 2=no change
+
 private:
-    bgfx::ProgramHandle Program       = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle TexUniform    = BGFX_INVALID_HANDLE;
+
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle ParamsUniform = BGFX_INVALID_HANDLE;
 };

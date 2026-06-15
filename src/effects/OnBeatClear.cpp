@@ -6,6 +6,10 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_onbeatclear.sc.bin.h"
 
+static constexpr const char* NAME_Color = "color";
+static constexpr const char* NAME_Blend = "blend";
+static constexpr const char* NAME_ClearEveryN = "nf";
+
 void OnBeatClear::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -14,35 +18,6 @@ void OnBeatClear::Init()
 
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ColorUniform = bgfx::createUniform("u_obcColor", bgfx::UniformType::Vec4);
-}
-
-void OnBeatClear::Render(const RenderContext& Context)
-{
-    if (Context.IsBeat())
-    {
-        // nf=0 disables the effect entirely (matches `if (nf && ++cf >= nf)`)
-        if (Nf && ++Cf >= Nf)
-        {
-            Cf = Df = 0;
-
-            const float ClearColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, Blend ? 1.f : 0.f };
-
-            bgfx::setUniform(ColorUniform, ClearColor);
-            bgfx::setTexture(0, TexUniform, Context.InputTexture);
-            bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-            bgfx::setVertexBuffer(0, Context.QuadVB);
-            bgfx::submit(Context.ViewId, Program);
-
-            Context.FboManager->Swap();
-        }
-    }
-    else
-    {
-        if (++Df >= Nf)
-        {
-            Df = 0;
-        }
-    }
 }
 
 void OnBeatClear::Destroy()
@@ -61,18 +36,47 @@ void OnBeatClear::Destroy()
     Program = BGFX_INVALID_HANDLE;
 }
 
+void OnBeatClear::Render(const RenderContext& Context)
+{
+    if (Context.IsBeat())
+    {
+        if (ClearEveryN && ++BeatsSinceLastClear >= ClearEveryN)
+        {
+            BeatsSinceLastClear = NonBeatFramesSinceLastClear = 0;
+
+            const float uClearColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, Blend ? 1.f : 0.f };
+
+            bgfx::setUniform(ColorUniform, uClearColor);
+            bgfx::setTexture(0, TexUniform, Context.InputTexture);
+            bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+            bgfx::setVertexBuffer(0, Context.QuadVB);
+            bgfx::submit(Context.ViewId, Program);
+
+            Context.FboManager->Swap();
+        }
+    }
+    else
+    {
+        if (++NonBeatFramesSinceLastClear >= ClearEveryN)
+        {
+            NonBeatFramesSinceLastClear = 0;
+        }
+    }
+}
+
 nlohmann::json OnBeatClear::Serialize() const
 {
-    return {
-        { kColor, JsonUtil::ColorToJson(Color) },
-        { kBlend, Blend },
-        { kNf,    Nf    },
+    return 
+    {
+        { NAME_Color, JsonUtil::ColorToJson(Color) },
+        { NAME_Blend, Blend },
+        { NAME_ClearEveryN, ClearEveryN },
     };
 }
 
 void OnBeatClear::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadColor(j, kColor, Color);
-    JsonUtil::ReadBool (j, kBlend, Blend);
-    JsonUtil::ReadInt  (j, kNf,    Nf);
+    JsonUtil::ReadColor(j, NAME_Color, Color);
+    JsonUtil::ReadBool(j, NAME_Blend, Blend);
+    JsonUtil::ReadInt(j, NAME_ClearEveryN, ClearEveryN);
 }

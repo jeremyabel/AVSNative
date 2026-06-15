@@ -1,112 +1,100 @@
 #include "Timescope.h"
 
-#include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
 #include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_timescope.sc.bin.h"
 
-#include <algorithm>
+static constexpr const char* NAME_Channel = "channel";
+static constexpr const char* NAME_Color = "color";
+static constexpr const char* NAME_Blend = "blend";
+static constexpr const char* NAME_Bands = "bands";
 
 void Timescope::Init()
 {
-    const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_timescope_spv,  sizeof(fs_timescope_spv)));
-    m_program = bgfx::createProgram(VS, FS, true);
-    m_uInput  = bgfx::createUniform("s_input",   bgfx::UniformType::Sampler);
-    m_uColumn = bgfx::createUniform("s_column",  bgfx::UniformType::Sampler);
-    m_uParams = bgfx::createUniform("u_tsParams", bgfx::UniformType::Vec4);
-}
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_timescope_spv, sizeof(fs_timescope_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
 
-void Timescope::Destroy()
-{
-    if (bgfx::isValid(m_columnTex)) bgfx::destroy(m_columnTex);
-    if (bgfx::isValid(m_uParams))   bgfx::destroy(m_uParams);
-    if (bgfx::isValid(m_uColumn))   bgfx::destroy(m_uColumn);
-    if (bgfx::isValid(m_uInput))    bgfx::destroy(m_uInput);
-    if (bgfx::isValid(m_program))   bgfx::destroy(m_program);
-
-    m_columnTex = BGFX_INVALID_HANDLE;
-    m_uParams = m_uColumn = m_uInput = BGFX_INVALID_HANDLE;
-    m_program = BGFX_INVALID_HANDLE;
-}
-
-void Timescope::EnsureScope(int w, int h)
-{
-    if (m_scopeW == w && m_scopeH == h) return;
-    if (bgfx::isValid(m_columnTex)) bgfx::destroy(m_columnTex);
-
-    m_scopeW = w;
-    m_scopeH = h;
-    m_position = 0;
-    m_column.assign((size_t)h * 4, 0);
-
-    // 1-wide, h-tall column. POINT so each row maps to exactly one frequency bin.
-    m_columnTex = bgfx::createTexture2D(
-        1, (uint16_t)h, false, 1, bgfx::TextureFormat::RGBA8,
-        BGFX_SAMPLER_POINT | BGFX_SAMPLER_UVW_CLAMP);
+    TexUniform = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    AudioUniform = bgfx::createUniform("s_audio", bgfx::UniformType::Sampler);
+    Params1Uniform = bgfx::createUniform("u_tsParams", bgfx::UniformType::Vec4);
+    ColorUniform = bgfx::createUniform("u_tsColor", bgfx::UniformType::Vec4);
+    Params2Uniform = bgfx::createUniform("u_tsParams2", bgfx::UniformType::Vec4);
 }
 
 void Timescope::Render(const RenderContext& Context)
 {
-    const int w = Context.Width, h = Context.Height;
-    EnsureScope(w, h);
-
-    const VisData* vd = Context.AudioData;
-
-    // Advance the column position first (matches the original).
-    m_position = (m_position + 1) % w;
-
-    // Build this frame's scope column from the spectrum.
-    for (int i = 0; i < h; i++)
+    // Reset the scroll position when the output is resized.
+    if (LastWidth != Context.Width)
     {
-        int bin = (i * Bands) / h;          // integer indexing, exactly as the original
-        bin = std::clamp(bin, 0, kAudioBins - 1);
-
-        int val;
-        if (Channel == 2)                    // Center = (L/2 + R/2)
-            val = (vd ? (int)vd->spec[0][bin] / 2 + (int)vd->spec[1][bin] / 2 : 0);
-        else
-            val = (vd ? (int)vd->spec[std::clamp(Channel, 0, 1)][bin] : 0);
-        val &= 0xFF;
-
-        // color × magnitude / 256 (original fixed-point scaling).
-        const size_t o = (size_t)i * 4;
-        m_column[o]     = (uint8_t)((Color[0] * val) / 256);
-        m_column[o + 1] = (uint8_t)((Color[1] * val) / 256);
-        m_column[o + 2] = (uint8_t)((Color[2] * val) / 256);
-        m_column[o + 3] = 255;
+        LastWidth = Context.Width;
+        LastPosition = 0;
     }
 
-    bgfx::updateTexture2D(m_columnTex, 0, 0, 0, 0, 1, (uint16_t)h,
-                          bgfx::copy(m_column.data(), (uint32_t)m_column.size()));
+    // Advance the column position first
+    LastPosition = (LastPosition + 1) % Context.Width;
 
-    const float params[4] = { (float)m_position, (float)w, (float)Blend, 0.0f };
-    bgfx::setUniform(m_uParams, params);
-    bgfx::setTexture(0, m_uInput,  Context.InputTexture);
-    bgfx::setTexture(1, m_uColumn, m_columnTex);
+    const float uColor[4] = { (float)Color[0], (float)Color[1], (float)Color[2], (float)Bands };
+    const float uParams1[4] = { (float)LastPosition, (float)Context.Width, (float)Blend, (float)Context.Height };
+    const float uParams2[4] = { (float)Channel, 0.0f, 0.0f, 0.0f };
+
+    bgfx::setUniform(ColorUniform, uColor);
+    bgfx::setUniform(Params1Uniform, uParams1);
+    bgfx::setUniform(Params2Uniform, uParams2);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setTexture(1, AudioUniform, Context.AudioTex);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, m_program);
+    bgfx::submit(Context.ViewId, Program);
 
     Context.FboManager->Swap();
 }
 
+void Timescope::Destroy()
+{
+    if (bgfx::isValid(Params2Uniform)) 
+        bgfx::destroy(Params2Uniform);
+
+    if (bgfx::isValid(ColorUniform))   
+        bgfx::destroy(ColorUniform);
+
+    if (bgfx::isValid(Params1Uniform))  
+        bgfx::destroy(Params1Uniform);
+
+    if (bgfx::isValid(AudioUniform))   
+        bgfx::destroy(AudioUniform);
+
+    if (bgfx::isValid(TexUniform))   
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program))  
+        bgfx::destroy(Program);
+
+    Params2Uniform = BGFX_INVALID_HANDLE;
+    ColorUniform = BGFX_INVALID_HANDLE;
+    Params1Uniform = BGFX_INVALID_HANDLE;
+    AudioUniform = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program  = BGFX_INVALID_HANDLE;
+}
+
 nlohmann::json Timescope::Serialize() const
 {
-    return {
-        { kChannel, Channel },
-        { kColor,   JsonUtil::ColorToJson(Color) },
-        { kBlend,   Blend   },
-        { kBands,   Bands   },
+    return 
+    {
+        { NAME_Channel, Channel },
+        { NAME_Color, JsonUtil::ColorToJson(Color) },
+        { NAME_Blend, Blend },
+        { NAME_Bands, Bands },
     };
 }
 
 void Timescope::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt  (j, kChannel, Channel);
-    JsonUtil::ReadColor(j, kColor,   Color);
-    JsonUtil::ReadInt  (j, kBlend,   Blend);
-    JsonUtil::ReadInt  (j, kBands,   Bands);
+    JsonUtil::ReadInt(j, NAME_Channel, Channel);
+    JsonUtil::ReadColor(j, NAME_Color, Color);
+    JsonUtil::ReadInt(j, NAME_Blend, Blend);
+    JsonUtil::ReadInt(j, NAME_Bands, Bands);
 }

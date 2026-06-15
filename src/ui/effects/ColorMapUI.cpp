@@ -166,7 +166,7 @@ static void DrawColorMapUI(Effect* effect)
     // Follow the displayed map onto the edit radio when a bound key switched it.
     if (st.LastKeySelectVersion != cm->KeySelectVersion())
     {
-        st.Selected             = std::clamp(cm->CurrentMap, 0, ColorMap::kNumMaps - 1);
+        st.Selected = std::clamp(cm->CurrentMap, 0, ColorMap::kNumMaps - 1);
         st.LastKeySelectVersion = cm->KeySelectVersion();
     }
 
@@ -197,7 +197,7 @@ static void DrawColorMapUI(Effect* effect)
     // ── Gradient editor for the selected map ──
     ImGui::SeparatorText("Gradient");
     ImGG::Settings settings;
-    settings.gradient_width  = std::max(120.0f, ImGui::GetContentRegionAvail().x - 20.0f);
+    settings.gradient_width = std::max(120.0f, ImGui::GetContentRegionAvail().x - 20.0f);
     settings.gradient_height = 32.0f;
     if (st.Widgets[sel].widget("##gradient", settings))
     {
@@ -244,7 +244,10 @@ static void DrawColorMapUI(Effect* effect)
     if (ImGui::BeginCombo("##key", keyOpts[std::clamp(cm->ColorKey, 0, 5)]))
     {
         for (int i = 0; i < 6; ++i)
-            if (ImGui::Selectable(keyOpts[i], cm->ColorKey == i)) cm->ColorKey = i;
+        {
+            if (ImGui::Selectable(keyOpts[i], cm->ColorKey == i)) 
+                cm->ColorKey = i;
+        }
         ImGui::EndCombo();
     }
 
@@ -255,11 +258,14 @@ static void DrawColorMapUI(Effect* effect)
     if (ImGui::BeginCombo("##blend", blendOpts[std::clamp(cm->BlendMode, 0, 9)]))
     {
         for (int i = 0; i < 10; ++i)
-            if (ImGui::Selectable(blendOpts[i], cm->BlendMode == i)) cm->BlendMode = i;
+        {
+            if (ImGui::Selectable(blendOpts[i], cm->BlendMode == i)) 
+                cm->BlendMode = i;
+        }
         ImGui::EndCombo();
     }
 
-    if (cm->BlendMode == 9)   // Adjustable
+    if (cm->BlendMode == 9) // Adjustable
     {
         ImGui::TextUnformatted("Alpha");
         ImGui::SetNextItemWidth(-1.0f);
@@ -272,7 +278,10 @@ static void DrawColorMapUI(Effect* effect)
     if (ImGui::BeginCombo("##cycle", cycleOpts[std::clamp(cm->MapCycleMode, 0, 2)]))
     {
         for (int i = 0; i < 3; ++i)
-            if (ImGui::Selectable(cycleOpts[i], cm->MapCycleMode == i)) cm->MapCycleMode = i;
+        {
+            if (ImGui::Selectable(cycleOpts[i], cm->MapCycleMode == i)) 
+                cm->MapCycleMode = i;
+        }
         ImGui::EndCombo();
     }
 

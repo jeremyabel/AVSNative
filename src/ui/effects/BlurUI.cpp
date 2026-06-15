@@ -8,10 +8,10 @@ static void DrawBlurUI(Effect* base)
 {
     auto* fx = static_cast<Blur*>(base);
 
-    static const char* kLevels[] = { "Light", "Medium", "Heavy" };
-    ImGui::TextUnformatted("Intensity");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##intensity", &fx->Intensity, kLevels, IM_ARRAYSIZE(kLevels));
+    ImGui::Text("Intensity");
+    ImGui::RadioButton("Light", &fx->Intensity, 0);
+    ImGui::RadioButton("Medium", &fx->Intensity, 1);
+    ImGui::RadioButton("Heavy", &fx->Intensity, 2);
 }
 
 void RegisterBlurUI(ConfigUiRegistry& reg)

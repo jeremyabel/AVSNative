@@ -1,10 +1,11 @@
 #include "FastBrightness.h"
-
 #include "engine/FBOManager.h"
 #include "engine/JsonUtil.h"
 
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_fastbrightness.sc.bin.h"
+
+static constexpr const char* NAME_Dir = "dir";
 
 void FastBrightness::Init()
 {
@@ -14,18 +15,6 @@ void FastBrightness::Init()
     
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_fbParams", bgfx::UniformType::Vec4);
-}
-
-void FastBrightness::Render(const RenderContext& Context)
-{
-    const float Params[4] = { (float)Dir, 0.f, 0.f, 0.f };
-    bgfx::setUniform(ParamsUniform, Params);
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, Program);
-
-    Context.FboManager->Swap();
 }
 
 void FastBrightness::Destroy()
@@ -44,14 +33,28 @@ void FastBrightness::Destroy()
     Program = BGFX_INVALID_HANDLE;
 }
 
+void FastBrightness::Render(const RenderContext& Context)
+{
+    const float uParams[4] = { (float)Dir, 0.f, 0.f, 0.f };
+
+    bgfx::setUniform(ParamsUniform, uParams);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+
+    Context.FboManager->Swap();
+}
+
 nlohmann::json FastBrightness::Serialize() const
 {
-    return {
-        { kDir, Dir },
+    return 
+    {
+        { NAME_Dir, Dir },
     };
 }
 
 void FastBrightness::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt(j, kDir, Dir);
+    JsonUtil::ReadInt(j, NAME_Dir, Dir);
 }

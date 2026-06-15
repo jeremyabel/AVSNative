@@ -5,7 +5,7 @@ $input v_texcoord0
 SAMPLER2D(s_input,   0);
 SAMPLER2D(s_overlay, 1);
 
-// x = blend mode (0-9 from SetRenderMode / g_line_blend_mode bits 0-7)
+// x = blend mode (0-9, from SetRenderMode)
 // y = alpha (0-255, used by Adjustable mode 7)
 uniform vec4 u_simpleParams;
 

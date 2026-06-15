@@ -35,17 +35,14 @@ void EffectChain::Render(RenderContext Context)
             // Container effects (EffectList) self-allocate their view IDs from
             // NextViewId, running the inner chain first so inner views are lower
             // (execute earlier in bgfx's ascending view order) than the output blend.
+            // Disabled containers consume no views (downstream IDs shift, which is
+            // invisible at runtime).
             if (Entry.Enabled)
             {
                 Context.InputTexture = Context.FboManager->GetCurrent().Texture;
                 Context.OutputFBO    = Context.FboManager->GetNext().Fbo;
                 Entry.Effect->Render(Context);
                 // EffectList::Render calls FboManager->Swap() internally.
-            }
-            else
-            {
-                // Advance by the effect's full view footprint so IDs after it stay stable.
-                *Context.NextViewId += Entry.Effect->ExpectedViewCount();
             }
         }
         else if (Entry.Effect->ExpectedViewCount() == 0)
@@ -60,34 +57,27 @@ void EffectChain::Render(RenderContext Context)
                 Entry.Effect->Render(Context);
             }
         }
-        else
+        else if (Entry.Enabled)
         {
-            // Leaf effects: pre-allocate a view block. Always advance — even when
-            // disabled — so subsequent effects keep stable view IDs across toggles.
+            // Leaf effects allocate a view block only when enabled. Disabled effects
+            // consume no views, so the view ID a later effect gets shifts when an
+            // upstream effect is toggled — invisible at runtime (bgfx only processes
+            // views that are touched/submitted this frame), and every view a live
+            // effect uses is fully reconfigured below before it draws.
             const uint8_t viewId = *Context.NextViewId;
             *Context.NextViewId += Entry.Effect->ExpectedViewCount();
 
             FBOSlot& NextSlot = Context.FboManager->GetNext();
             bgfx::setViewFrameBuffer(viewId, NextSlot.Fbo);
             bgfx::setViewRect(viewId, 0, 0, (uint16_t)Context.Width, (uint16_t)Context.Height);
+            bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0x000000ff);
+            bgfx::touch(viewId);
 
-            if (Entry.Enabled)
-            {
-                bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0x000000ff);
-                bgfx::touch(viewId);
+            Context.InputTexture = Context.FboManager->GetCurrent().Texture;
+            Context.OutputFBO    = NextSlot.Fbo;
+            Context.ViewId       = viewId;
 
-                Context.InputTexture = Context.FboManager->GetCurrent().Texture;
-                Context.OutputFBO    = NextSlot.Fbo;
-                Context.ViewId       = viewId;
-
-                Entry.Effect->Render(Context);
-            }
-            else
-            {
-                // Reset the clear flag so there are no phantom clears if this view
-                // was previously bound to a different framebuffer.
-                bgfx::setViewClear(viewId, BGFX_CLEAR_NONE);
-            }
+            Entry.Effect->Render(Context);
         }
     }
 }

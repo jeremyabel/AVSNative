@@ -5,23 +5,25 @@
 
 #include <imgui.h>
 
-#include <string>
-
-static void ScriptError(Effect* fx, const char* param)
-{
-    if (std::string err = fx->GetScriptError(param); !err.empty())
-        ImGui::TextColored(ImVec4(1, .3f, .3f, 1), "%s", err.c_str());
-}
-
 static void DrawDynamicMovementUI(Effect* base)
 {
     auto* fx = static_cast<DynamicMovement*>(base);
-
-    if (ImGui::TreeNodeEx("Pixel", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    
+    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
     {
-        if (ConfigUi::CodeEditor("dmove.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
-            fx->ApplyPixelCodeChange();
-        ScriptError(fx, DynamicMovement::kPixelCode);
+        if (ConfigUi::CodeEditor("dmove.initCode", fx->InitCode, ConfigUi::Lang::Lua))
+        fx->ApplyInitCodeChange();
+        ConfigUi::ScriptError(fx, DynamicMovement::kInitCode);
+        ImGui::TreePop();
+    }
+    
+    ImGui::Spacing();
+
+    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    {
+        if (ConfigUi::CodeEditor("dmove.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
+            fx->ApplyBeatCodeChange();
+        ConfigUi::ScriptError(fx, DynamicMovement::kBeatCode);
         ImGui::TreePop();
     }
 
@@ -31,27 +33,17 @@ static void DrawDynamicMovementUI(Effect* base)
     {
         if (ConfigUi::CodeEditor("dmove.frameCode", fx->FrameCode, ConfigUi::Lang::Lua))
             fx->ApplyFrameCodeChange();
-        ScriptError(fx, DynamicMovement::kFrameCode);
+        ConfigUi::ScriptError(fx, DynamicMovement::kFrameCode);
         ImGui::TreePop();
     }
 
     ImGui::Spacing();
 
-    if (ImGui::TreeNodeEx("Beat", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
+    if (ImGui::TreeNodeEx("Pixel", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
     {
-        if (ConfigUi::CodeEditor("dmove.beatCode", fx->BeatCode, ConfigUi::Lang::Lua))
-            fx->ApplyBeatCodeChange();
-        ScriptError(fx, DynamicMovement::kBeatCode);
-        ImGui::TreePop();
-    }
-
-    ImGui::Spacing();
-
-    if (ImGui::TreeNodeEx("Init", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth))
-    {
-        if (ConfigUi::CodeEditor("dmove.initCode", fx->InitCode, ConfigUi::Lang::Lua))
-            fx->ApplyInitCodeChange();
-        ScriptError(fx, DynamicMovement::kInitCode);
+        if (ConfigUi::CodeEditor("dmove.pixelCode", fx->PixelCode, ConfigUi::Lang::Glsl))
+            fx->ApplyPixelCodeChange();
+        ConfigUi::ScriptError(fx, DynamicMovement::kPixelCode);
         ImGui::TreePop();
     }
 
@@ -65,7 +57,6 @@ static void DrawDynamicMovementUI(Effect* base)
     ImGui::EndDisabled();
 
     ImGui::Checkbox("No Movement", &fx->NoMove);
-    ImGui::Checkbox("Show UV (debug)", &fx->ShowUV);
     ImGui::Checkbox("Use Grid", &fx->UseGrid);
 
     ImGui::BeginDisabled(!fx->UseGrid);

@@ -14,65 +14,59 @@
 class DynamicDistanceModifier : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    std::string PixelCode =
-        "// d = normalized distance from center (0..1, 1 = corner)\n"
-        "// r = angle (radians), t = time (a user var from Init/Frame), b = beat (0/1)\n"
-        "// Modify d to remap each radial ring. e.g. zoom: d = d * 0.9;\n"
-        "d = d * (1.0 + 0.08 * sin(t));";
-    std::string InitCode  = "t = 0.0;\nu = 1.0;";
-    std::string FrameCode = "t = t + 0.05;";
-    std::string BeatCode  = "";
-    bool Blend    = false;   // 50/50 with the original
-    bool Bilinear = false;   // linear vs nearest input sampling
-    bool Compat   = false;   // 8-bit integer bilinear matching win32 (needs Bilinear)
-
-    static constexpr const char* kBlend     = "blend";
-    static constexpr const char* kBilinear  = "bilinear";
-    static constexpr const char* kCompat    = "bilinearCompat";
-    static constexpr const char* kPixelCode = "pixelCode";
-    static constexpr const char* kInitCode  = "initCode";
-    static constexpr const char* kFrameCode = "frameCode";
-    static constexpr const char* kBeatCode  = "beatCode";
+    
+    static constexpr const char* NAME_InitCode = "initCode";
+    static constexpr const char* NAME_BeatCode = "beatCode";
+    static constexpr const char* NAME_FrameCode = "frameCode";
+    static constexpr const char* NAME_PixelCode = "pixelCode";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
     void Destroy() override;
-
+    
     std::string Name() const override { return "Dynamic Distance Modifier"; }
     nlohmann::json Serialize() const override;
     void Deserialize(const nlohmann::json& j) override;
-
+    
     std::string GetScriptError(const std::string& paramName) const override
     {
-        if (paramName == kPixelCode) return m_shaderError;
-        return m_lua.GetError(paramName);
+        if (paramName == NAME_PixelCode) 
+        return ShaderError;
+        
+        return LuaContext.GetError(paramName);
     }
-
-    // Recompiles after PixelCode or InitCode changes: recompiles the init block,
-    // rescans user-var uniforms, rebuilds the GLSL, and reruns init. Called after
-    // Deserialize and by the UI.
+    
     void RecompileMain();
-    // Recompiles just the frame / beat Lua blocks.
     void RecompileFrameCode();
     void RecompileBeatCode();
 
+public:
+
+    std::string PixelCode = "d = d * (1.0 + 0.08 * sin(t));";
+    std::string InitCode = "t = 0.0;";
+    std::string FrameCode = "t = t + 0.05;";
+    std::string BeatCode = "";
+    bool Blend = false;
+    bool Bilinear = false;
+    bool Compat = false;
+    
 private:
+    
     void Recompile();
     std::string BuildFragGlsl() const;
+    
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle Params1Uniform = BGFX_INVALID_HANDLE; // (w, h, maxD, beat)
+    bgfx::UniformHandle Params2Uniform = BGFX_INVALID_HANDLE; // (blend, 0, 0, 0)
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle AudioUniform = BGFX_INVALID_HANDLE;
+    
+    std::string ShaderError;
 
-    bgfx::ProgramHandle Program    = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle Params0Unif = BGFX_INVALID_HANDLE;  // (w, h, maxD, beat)
-    bgfx::UniformHandle Params1Unif = BGFX_INVALID_HANDLE;  // (blend, 0, 0, 0)
-    bgfx::UniformHandle InputUnif   = BGFX_INVALID_HANDLE;  // s_input
-    bgfx::UniformHandle AudioUnif   = BGFX_INVALID_HANDLE;  // s_audio
-
-    std::string m_shaderError;
-
-    LuaRuntime       m_lua;
-    LuaUniformBridge m_bridge;   // packs user Lua vars into u_ddm_v[N]
-    int  m_initRef  = -1;
-    int  m_frameRef = -1;
-    int  m_beatRef  = -1;
-    bool m_inited   = false;
+    LuaRuntime LuaContext;
+    LuaUniformBridge LuaBridge;
+    int LuaRefInit = -1;
+    int LuaRefFrame = -1;
+    int LuaRefBeat = -1;
+    bool LuaInitComplete = false;
 };

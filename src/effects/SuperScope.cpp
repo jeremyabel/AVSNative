@@ -14,7 +14,7 @@
 #include <cstring>
 
 // Built-in variable names that ScanVarDecls must not treat as user-declared.
-static const std::vector<std::string> k_builtins = {
+static const std::vector<std::string> LuaBuiltIns = {
     "n","b","x","y","i","v","w","h",
     "red","green","blue","linesize","skip","drawmode",
     "getspec","getosc",
@@ -45,17 +45,17 @@ void SuperScope::Init()
     m_uOverlay = bgfx::createUniform("s_overlay", bgfx::UniformType::Sampler);
     m_uParams  = bgfx::createUniform("u_ssParams",bgfx::UniformType::Vec4);
 
-    Colors      = { {255, 255, 255} };
+    Colors.Entries = { {255, 255, 255} };
     InitCode    = k_defaultInit;
     FrameCode   = k_defaultFrame;
     BeatCode    = k_defaultBeat;
     PointCode   = k_defaultPoint;
 
-    m_audioBuf.resize(kAudioBins, 128.0f);
-    m_outBuf.resize(kAudioBins * kOutStride, 0.0f);
+    m_audioBuf.resize(NumAudioBins, 128.0f);
+    m_outBuf.resize(NumAudioBins * kOutStride, 0.0f);
 
     // Seed built-ins and compile all blocks.
-    for (const auto& v : k_builtins) m_lua.SeedVar(v);
+    for (const auto& v : LuaBuiltIns) m_lua.SeedVar(v);
     m_lua.SetEnvNumber("n", 800);
     m_lua.SetEnvNumber("drawmode", (double)DrawMode);
 
@@ -93,21 +93,8 @@ void SuperScope::Destroy()
 
 SuperScope::Rgb SuperScope::AdvanceColor()
 {
-    if (Colors.empty()) return { 1.f, 1.f, 1.f };
-    if (Colors.size() == 1)
-        return { Colors[0][0] / 255.f, Colors[0][1] / 255.f, Colors[0][2] / 255.f };
-
-    const int total = (int)Colors.size() * 64;
-    m_colorPos = (m_colorPos + 1) % total;
-    const int   p    = m_colorPos / 64;
-    const float frac = (float)(m_colorPos % 64);
-    const auto& c1 = Colors[p];
-    const auto& c2 = Colors[(p + 1) % (int)Colors.size()];
-    return {
-        (c1[0] * (63.f - frac) + c2[0] * frac) / (63.f * 255.f),
-        (c1[1] * (63.f - frac) + c2[1] * frac) / (63.f * 255.f),
-        (c1[2] * (63.f - frac) + c2[2] * frac) / (63.f * 255.f),
-    };
+    const auto c = Colors.StepF();
+    return { c[0], c[1], c[2] };
 }
 
 // ── Overlay texture ───────────────────────────────────────────────────────────
@@ -132,7 +119,7 @@ void SuperScope::EnsureOverlay(int w, int h)
 void SuperScope::BuildAudioBuf(const RenderContext& ctx)
 {
     const VisData* vd = ctx.AudioData;
-    for (int i = 0; i < kAudioBins; ++i)
+    for (int i = 0; i < NumAudioBins; ++i)
     {
         float val;
         if (AudioSource == 0) // waveform
@@ -192,7 +179,7 @@ void SuperScope::SeedUserVars()
     // (SeedVar is a no-op for vars already set, so init-code assignments win).
     const std::string allCode =
         InitCode + "\n" + FrameCode + "\n" + BeatCode + "\n" + PointCode;
-    const auto decls = LuaRuntime::ScanVarDecls(allCode, k_builtins);
+    const auto decls = LuaRuntime::ScanVarDecls(allCode, LuaBuiltIns);
     printf("[SuperScope] SeedUserVars: seeding %d vars:", (int)decls.size());
     for (const auto& v : decls) { printf(" %s", v.c_str()); m_lua.SeedVar(v); }
     printf("\n");
@@ -292,9 +279,8 @@ void SuperScope::Render(const RenderContext& ctx)
         bgfx::copy(m_overlayBuf.data(), (uint32_t)m_overlayBuf.size()));
 
     // Composite overlay onto the current frame using SetRenderMode blend.
-    const uint32_t lbm       = ctx.LineBlendMode ? *ctx.LineBlendMode : (1u << 16);
-    const float    blendMode = (float)(lbm & 0xFF);
-    const float    alpha     = (float)((lbm >> 8) & 0xFF);
+    const float    blendMode = ctx.LineMode ? (float)ctx.LineMode->Blend : 0.0f;
+    const float    alpha     = ctx.LineMode ? (float)ctx.LineMode->Alpha : 0.0f;
     const float params[4] = { blendMode, alpha, 0.f, 0.f };
     bgfx::setUniform(m_uParams, params);
     bgfx::setTexture(0, m_uBase,    ctx.InputTexture);

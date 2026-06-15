@@ -5,11 +5,11 @@ $input v_texcoord0
 SAMPLER2D(s_texColor, 0);
 
 // x = 2^levels (precomputed)
-uniform vec4 u_crParams;
+uniform vec4 u_Params;
 
 void main()
 {
-    float levels = u_crParams.x;
+    float levels = u_Params.x;
     vec3 c = texture2D(s_texColor, v_texcoord0.xy).rgb;
     gl_FragColor = vec4(floor(c * levels) / levels, 1.0);
 }

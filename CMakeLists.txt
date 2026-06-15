@@ -112,6 +112,9 @@ bgfx_compile_shaders(
         src/shaders/fs_convolution.sc
         src/shaders/fs_colormap.sc
         src/shaders/fs_ramp.sc
+        src/shaders/fs_normalize_init.sc
+        src/shaders/fs_normalize_reduce.sc
+        src/shaders/fs_normalize_apply.sc
         src/shaders/fs_dynamicshift.sc
         src/shaders/fs_texer2_sprite.sc
         src/shaders/fs_imagegrid.sc

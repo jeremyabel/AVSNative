@@ -7,37 +7,28 @@
 
 struct StarVertex
 {
-    float   X, Y;
+    float X, Y;
     uint8_t R, G, B, A;
 };
 
 struct Star
 {
-    float X, Y;       // center-relative position (sub-pixel)
-    float Z;          // depth: 255=far/new, approaches 0 as star zooms in
-    float SpeedMult;  // per-star speed factor [0.1, 1.0]
+    float X, Y;
+    float Z;
+    float SpeedMult;
 };
 
 class Starfield : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    // Defaults match original AVS
-    std::array<uint8_t, 3> Color = { 255, 255, 255 };
-    int   BlendMode      = 0;    // 0=Replace, 1=Additive, 2=50/50
-    float Speed          = 6.0f;   // 1–500
-    int   StarCount      = 350;    // 100–4095
-    bool  OnBeat         = false;
-    float OnBeatSpeed    = 4.0f;   // 1–500
-    int   OnBeatDuration = 15;     // 1–100
 
-    static constexpr const char* kColor          = "color";
-    static constexpr const char* kBlendMode      = "blendMode";
-    static constexpr const char* kSpeed          = "speed";
-    static constexpr const char* kStarCount      = "starCount";
-    static constexpr const char* kOnBeat         = "onBeat";
-    static constexpr const char* kOnBeatSpeed    = "onBeatSpeed";
-    static constexpr const char* kOnBeatDuration = "onBeatDuration";
+    static constexpr const char* NAME_Color = "color";
+    static constexpr const char* NAME_BlendMode = "blendMode";
+    static constexpr const char* NAME_Speed = "speed";
+    static constexpr const char* NAME_StarCount = "starCount";
+    static constexpr const char* NAME_EnableOnBeatChange = "onBeat";
+    static constexpr const char* NAME_OnBeatSpeed = "onBeatSpeed";
+    static constexpr const char* NAME_OnBeatDuration = "onBeatDuration";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -63,26 +54,37 @@ public:
             InitStars(LastW, LastH);
     }
 
+public:
+
+    std::array<uint8_t, 3> Color = { 255, 255, 255 };
+    int BlendMode = 0; // 0=Replace, 1=Additive, 2=50/50
+    float Speed = 6.0f;
+    int StarCount = 350;
+    bool OnBeat = false;
+    float OnBeatSpeed = 4.0f;
+    int OnBeatDuration = 15;
+
 private:
+
     void InitStars(int W, int H);
     void ResetStar(int Idx, int W, int H, int XOff, int YOff);
-    static void Colorize(uint8_t Bright, uint8_t Cr, uint8_t Cg, uint8_t Cb,
-                         uint8_t& OutR, uint8_t& OutG, uint8_t& OutB);
+    static void Colorize(uint8_t Bright, uint8_t Cr, uint8_t Cg, uint8_t Cb, uint8_t& OutR, uint8_t& OutG, uint8_t& OutB);
 
     // Runtime state
-    float   CurrentSpeed = 6.0f;
-    float   OnBeatDiff   = 0.0f;
-    int32_t Cooldown     = 0;
+    float CurrentSpeed = 6.0f;
+    float OnBeatDiff = 0.0f;
+    int32_t Cooldown = 0;
 
     static constexpr int32_t kMaxStars = 4096;
     std::array<Star, kMaxStars> Stars;
     int32_t AbsStars = 0;
-    int32_t LastW = 0, LastH = 0;
+    int32_t LastW = 0;
+    int32_t LastH = 0;
 
     // GPU resources
-    bgfx::ProgramHandle      BlitProgram    = BGFX_INVALID_HANDLE;
-    bgfx::ProgramHandle      StarProgram    = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle      BlitTexUniform = BGFX_INVALID_HANDLE;
-    bgfx::VertexBufferHandle BlitQuadVB     = BGFX_INVALID_HANDLE;
-    bgfx::VertexLayout       StarLayout;
+    bgfx::ProgramHandle BlitProgram = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle StarProgram = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle BlitTexUniform = BGFX_INVALID_HANDLE;
+    bgfx::VertexBufferHandle BlitQuadVB = BGFX_INVALID_HANDLE;
+    bgfx::VertexLayout StarLayout;
 };

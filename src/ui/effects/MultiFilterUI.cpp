@@ -8,11 +8,11 @@ static void DrawMultiFilterUI(Effect* base)
 {
     auto* fx = static_cast<MultiFilter*>(base);
 
-    static const char* kModes[] = { "Chrome", "Double Chrome", "Triple Chrome",
-                                    "Infroot + Border Convolution" };
-    ImGui::TextUnformatted("Effect");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##effect", &fx->EffectMode, kModes, IM_ARRAYSIZE(kModes));
+    ImGui::Text("Effect");
+    ImGui::RadioButton("Chrome", &fx->EffectMode, 0);
+    ImGui::RadioButton("Double Chrome", &fx->EffectMode, 1);
+    ImGui::RadioButton("Triple Chrome", &fx->EffectMode, 2);
+    ImGui::RadioButton("Infroot + Border Convolution", &fx->EffectMode, 3);
 
     ImGui::Checkbox("Toggle On Beat", &fx->ToggleOnBeat);
 }

@@ -6,6 +6,8 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_colorclip.sc.bin.h"
 
+static constexpr const char* NAME_Color = "color";
+
 void ColorClip::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -14,19 +16,6 @@ void ColorClip::Init()
     
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ColorUniform = bgfx::createUniform("u_clipColor", bgfx::UniformType::Vec4);
-}
-
-void ColorClip::Render(const RenderContext& Context)
-{
-    const float Clip[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
-    
-    bgfx::setUniform(ColorUniform, Clip);
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, Program);
-
-    Context.FboManager->Swap();
 }
 
 void ColorClip::Destroy()
@@ -45,14 +34,28 @@ void ColorClip::Destroy()
     Program = BGFX_INVALID_HANDLE;
 }
 
+void ColorClip::Render(const RenderContext& Context)
+{
+    const float uClipColor[4] = { Color[0] / 255.f, Color[1] / 255.f, Color[2] / 255.f, 0.f };
+    
+    bgfx::setUniform(ColorUniform, uClipColor);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+
+    Context.FboManager->Swap();
+}
+
 nlohmann::json ColorClip::Serialize() const
 {
-    return {
-        { kColor, JsonUtil::ColorToJson(Color) },
+    return 
+    {
+        { NAME_Color, JsonUtil::ColorToJson(Color) },
     };
 }
 
 void ColorClip::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadColor(j, kColor, Color);
+    JsonUtil::ReadColor(j, NAME_Color, Color);
 }

@@ -14,6 +14,7 @@ struct FBOSlot
 class FBOManager
 {
 public:
+
     virtual ~FBOManager() = default;
 
     void Init(uint16_t Width, uint16_t Height);
@@ -30,6 +31,7 @@ public:
     virtual uint16_t GetHeight() const;
 
 protected:
+
     void CreateSlot(FBOSlot& Slot, uint16_t Width, uint16_t Height);
     void DestroySlot(FBOSlot& Slot);
 
@@ -45,21 +47,23 @@ protected:
 class InnerFBOManager : public FBOManager
 {
 public:
+
     void Setup(FBOManager* Outer, uint16_t W, uint16_t H);
     void Release();
 
     FBOSlot& GetCurrent() override;
-    FBOSlot& GetNext()    override;
-    void     Swap()       override;
+    FBOSlot& GetNext() override;
+    void Swap() override;
 
     FBOSlot& GetScratch(int Index) override;
-    uint16_t GetWidth()  const override;
+    uint16_t GetWidth() const override;
     uint16_t GetHeight() const override;
 
 private:
-    FBOSlot      Inner[2];
-    int32_t      InnerCurrent = 0;
-    FBOManager*  Outer        = nullptr;
-    uint16_t     InnerW       = 0;
-    uint16_t     InnerH       = 0;
+
+    FBOSlot Inner[2];
+    int32_t InnerCurrent = 0;
+    FBOManager* Outer = nullptr;
+    uint16_t InnerW = 0;
+    uint16_t InnerH = 0;
 };

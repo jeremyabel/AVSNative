@@ -9,6 +9,12 @@
 
 #include <algorithm>
 
+static constexpr const char* NAME_Colors = "colors";
+static constexpr const char* NAME_Spacing = "spacing";
+static constexpr const char* NAME_SpeedX = "speedX";
+static constexpr const char* NAME_SpeedY = "speedY";
+static constexpr const char* NAME_BlendMode = "blendMode";
+
 void DotGrid::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -19,51 +25,6 @@ void DotGrid::Init()
     ColorUniform = bgfx::createUniform("u_dgColor", bgfx::UniformType::Vec4);
     GridUniform = bgfx::createUniform("u_dgGrid", bgfx::UniformType::Vec4);
     SizeUniform = bgfx::createUniform("u_dgSize", bgfx::UniformType::Vec4);
-}
-
-void DotGrid::Render(const RenderContext& Context)
-{
-    if (Colors.empty())
-    {
-        Context.FboManager->Swap();
-        return;
-    }
-
-    // Advance color cycle and interpolate between adjacent entries (64 steps per pair)
-    ColorPos++;
-    const int cycle = (int)Colors.size() * 64;
-    if (ColorPos >= cycle) ColorPos = 0;
-    const int p  = ColorPos / 64;
-    const int fr = ColorPos & 63;
-    const auto& c1 = Colors[p];
-    const auto& c2 = Colors[(p + 1) % Colors.size()];
-    const int cr = (c1[0] * (63 - fr) + c2[0] * fr) / 64;
-    const int cg = (c1[1] * (63 - fr) + c2[1] * fr) / 64;
-    const int cb = (c1[2] * (63 - fr) + c2[2] * fr) / 64;
-
-    // Compute grid pixel offsets from fixed-point scroll accumulators
-    const int spacing = std::max(2, Spacing);
-    const int sxRaw   = (Xp >> 8) % spacing;
-    const int syRaw   = (Yp >> 8) % spacing;
-    const int sx      = (sxRaw + spacing) % spacing;  // ensure non-negative
-    const int sy      = (syRaw + spacing) % spacing;
-
-    const float Color[4] = { cr / 255.0f, cg / 255.0f, cb / 255.0f, float(BlendMode) };
-    const float Grid[4]  = { float(spacing), float(sx), float(sy), 0.0f };
-    const float Size[4]  = { float(Context.Width), float(Context.Height), 0.0f, 0.0f };
-
-    bgfx::setUniform(ColorUniform, Color);
-    bgfx::setUniform(GridUniform, Grid);
-    bgfx::setUniform(SizeUniform, Size);
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, Program);
-    
-    Context.FboManager->Swap();
-
-    Xp += SpeedX;
-    Yp += SpeedY;
 }
 
 void DotGrid::Destroy()
@@ -90,30 +51,61 @@ void DotGrid::Destroy()
     Program = BGFX_INVALID_HANDLE;
 }
 
+void DotGrid::Render(const RenderContext& Context)
+{
+    if (Colors.empty())
+    {
+        Context.FboManager->Swap();
+        return;
+    }
+
+    // Advance color cycle and interpolate between adjacent entries (64 steps per pair)
+    const auto [cr, cg, cb] = Colors.StepU8();
+
+    // Compute grid pixel offsets from fixed-point scroll accumulators
+    const int spacing = std::max(2, Spacing);
+    const int sxRaw   = (Xp >> 8) % spacing;
+    const int syRaw   = (Yp >> 8) % spacing;
+    const int sx      = (sxRaw + spacing) % spacing;  // ensure non-negative
+    const int sy      = (syRaw + spacing) % spacing;
+
+    const float uColor[4] = { cr / 255.0f, cg / 255.0f, cb / 255.0f, float(BlendMode) };
+    const float uGrid[4] = { float(spacing), float(sx), float(sy), 0.0f };
+    const float uSize[4] = { float(Context.Width), float(Context.Height), 0.0f, 0.0f };
+
+    bgfx::setUniform(ColorUniform, uColor);
+    bgfx::setUniform(GridUniform, uGrid);
+    bgfx::setUniform(SizeUniform, uSize);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+    
+    Context.FboManager->Swap();
+
+    Xp += SpeedX;
+    Yp += SpeedY;
+}
+
 nlohmann::json DotGrid::Serialize() const
 {
-    nlohmann::json j = {
-        { kColors,    JsonUtil::ColorsToJson(Colors) },
-        { kSpacing,   Spacing   },
-        { kSpeedX,    SpeedX    },
-        { kSpeedY,    SpeedY    },
-        { kBlendMode, BlendMode },
+    return
+    {
+        { NAME_Colors, JsonUtil::ColorsToJson(Colors) },
+        { NAME_Spacing, Spacing },
+        { NAME_SpeedX, SpeedX },
+        { NAME_SpeedY, SpeedY },
+        { NAME_BlendMode, BlendMode },
     };
-    // Legacy alias (= Colors[0]) for backward-compatible presets.
-    if (!Colors.empty())
-        j[kColorLegacy] = JsonUtil::ColorToJson(Colors[0]);
-    return j;
 }
 
 void DotGrid::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadColors(j, kColors, Colors);
-    if (!Colors.empty())
-        JsonUtil::ReadColor(j, kColorLegacy, Colors[0]);
-    JsonUtil::ReadInt(j, kSpacing,   Spacing);
-    JsonUtil::ReadInt(j, kSpeedX,    SpeedX);
-    JsonUtil::ReadInt(j, kSpeedY,    SpeedY);
-    JsonUtil::ReadInt(j, kBlendMode, BlendMode);
+    JsonUtil::ReadColors(j, NAME_Colors, Colors);
+    JsonUtil::ReadInt(j, NAME_Spacing, Spacing);
+    JsonUtil::ReadInt(j, NAME_SpeedX, SpeedX);
+    JsonUtil::ReadInt(j, NAME_SpeedY, SpeedY);
+    JsonUtil::ReadInt(j, NAME_BlendMode, BlendMode);
 
     ResetColorCycle();
 }

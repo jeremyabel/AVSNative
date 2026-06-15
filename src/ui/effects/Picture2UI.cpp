@@ -41,7 +41,7 @@ static void DrawPicture2UI(Effect* effect)
     if (imgW > 0 && imgH > 0)
         ImGui::Text("Image: %d x %d", imgW, imgH);
     else
-        ImGui::TextUnformatted("No image loaded");
+        ImGui::Text("No image loaded");
 
     if (ImGui::Button("Load Image..."))
         ConfigUi::PickImageInto(effect, Picture2::kImageData);
@@ -49,12 +49,12 @@ static void DrawPicture2UI(Effect* effect)
     ImGui::Spacing();
     ImGui::SeparatorText("Normal");
 
-    ImGui::TextUnformatted("Blend Mode");
+    ImGui::Text("Blend Mode");
     ImGui::SetNextItemWidth(-1.0f);
     BlendCombo("##blend", pic->BlendMode);
 
     if (pic->BlendMode == 7) {
-        ImGui::TextUnformatted("Blend Amount");
+        ImGui::Text("Blend Amount");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderInt("##adj", &pic->AdjustBlend, 0, 255);
     }
@@ -64,12 +64,12 @@ static void DrawPicture2UI(Effect* effect)
     ImGui::Spacing();
     ImGui::SeparatorText("On Beat");
 
-    ImGui::TextUnformatted("Blend Mode");
+    ImGui::Text("Blend Mode");
     ImGui::SetNextItemWidth(-1.0f);
     BlendCombo("##obblend", pic->OnBeatBlendMode);
 
     if (pic->OnBeatBlendMode == 7) {
-        ImGui::TextUnformatted("Blend Amount");
+        ImGui::Text("Blend Amount");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderInt("##obadj", &pic->OnBeatAdjustBlend, 0, 255);
     }

@@ -9,6 +9,15 @@
 #include <algorithm>
 #include <cmath>
 
+static constexpr const char* NAME_X1 = "x";
+static constexpr const char* NAME_Y1 = "y";
+static constexpr const char* NAME_X2 = "x2";
+static constexpr const char* NAME_Y2 = "y2";
+static constexpr const char* NAME_BeatDuration  = "beatdur";
+static constexpr const char* NAME_Color = "color";
+static constexpr const char* NAME_EnableOnBeat = "onbeat";
+static constexpr const char* NAME_OutBlend = "outBlend";
+
 void Interleave::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -18,36 +27,6 @@ void Interleave::Init()
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ColorUniform = bgfx::createUniform("u_ilColor", bgfx::UniformType::Vec4);
     GridUniform = bgfx::createUniform("u_ilGrid", bgfx::UniformType::Vec4);
-}
-
-void Interleave::Render(const RenderContext& Context)
-{
-    // Exponential decay toward base x/y — sc1 = (beatdur + 448) / 512
-    const float sc1 = float(BeatDur + 448) / 512.0f;
-    CurX = CurX * sc1 + X * (1.0f - sc1);
-    CurY = CurY * sc1 + Y * (1.0f - sc1);
-
-    // Beat snap applied after interpolation (matches original order)
-    if (Context.IsBeat() && OnBeat)
-    {
-        CurX = X2;
-        CurY = Y2;
-    }
-
-    const int Tx = std::max(0, int(std::round(CurX)));
-    const int Ty = std::max(0, int(std::round(CurY)));
-
-    const float FillColor[4] = { Color[0] / 255.0f, Color[1] / 255.0f, Color[2] / 255.0f, float(OutBlend) };
-    const float Grid[4] = { float(Tx), float(Ty), float(Context.Width), float(Context.Height) };
-
-    bgfx::setUniform(ColorUniform, FillColor);
-    bgfx::setUniform(GridUniform, Grid);
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, Program);
-
-    Context.FboManager->Swap();
 }
 
 void Interleave::Destroy()
@@ -70,30 +49,61 @@ void Interleave::Destroy()
     Program = BGFX_INVALID_HANDLE;
 }
 
+void Interleave::Render(const RenderContext& Context)
+{
+    // Exponential decay toward base x/y — sc1 = (beatdur + 448) / 512
+    const float sc1 = float(BeatDuration + 448) / 512.0f;
+    CurX = CurX * sc1 + X * (1.0f - sc1);
+    CurY = CurY * sc1 + Y * (1.0f - sc1);
+
+    // Beat snap applied after interpolation (matches original order)
+    if (EnableOnBeat && Context.IsBeat())
+    {
+        CurX = X2;
+        CurY = Y2;
+    }
+
+    const int Tx = std::max(0, int(std::round(CurX)));
+    const int Ty = std::max(0, int(std::round(CurY)));
+
+    const float uFillColor[4] = { Color[0] / 255.0f, Color[1] / 255.0f, Color[2] / 255.0f, float(OutBlend) };
+    const float uGrid[4] = { float(Tx), float(Ty), float(Context.Width), float(Context.Height) };
+
+    bgfx::setUniform(ColorUniform, uFillColor);
+    bgfx::setUniform(GridUniform, uGrid);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+
+    Context.FboManager->Swap();
+}
+
 nlohmann::json Interleave::Serialize() const
 {
-    return {
-        { kX,        X        },
-        { kY,        Y        },
-        { kX2,       X2       },
-        { kY2,       Y2       },
-        { kBeatDur,  BeatDur  },
-        { kColor,    JsonUtil::ColorToJson(Color) },
-        { kOnBeat,   OnBeat   },
-        { kOutBlend, OutBlend },
+    return 
+    {
+        { NAME_X1, X },
+        { NAME_Y1, Y },
+        { NAME_X2, X2 },
+        { NAME_Y2, Y2 },
+        { NAME_BeatDuration,  BeatDuration },
+        { NAME_Color, JsonUtil::ColorToJson(Color) },
+        { NAME_EnableOnBeat, EnableOnBeat },
+        { NAME_OutBlend, OutBlend },
     };
 }
 
 void Interleave::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadFloat(j, kX,        X);
-    JsonUtil::ReadFloat(j, kY,        Y);
-    JsonUtil::ReadFloat(j, kX2,       X2);
-    JsonUtil::ReadFloat(j, kY2,       Y2);
-    JsonUtil::ReadInt  (j, kBeatDur,  BeatDur);
-    JsonUtil::ReadColor(j, kColor,    Color);
-    JsonUtil::ReadBool (j, kOnBeat,   OnBeat);
-    JsonUtil::ReadInt  (j, kOutBlend, OutBlend);
+    JsonUtil::ReadFloat(j, NAME_X1, X);
+    JsonUtil::ReadFloat(j, NAME_Y1, Y);
+    JsonUtil::ReadFloat(j, NAME_X2, X2);
+    JsonUtil::ReadFloat(j, NAME_Y2, Y2);
+    JsonUtil::ReadInt(j, NAME_BeatDuration, BeatDuration);
+    JsonUtil::ReadColor(j, NAME_Color, Color);
+    JsonUtil::ReadBool(j, NAME_EnableOnBeat, EnableOnBeat);
+    JsonUtil::ReadInt(j, NAME_OutBlend, OutBlend);
 
     ResetAnim();
 }

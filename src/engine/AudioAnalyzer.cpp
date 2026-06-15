@@ -336,8 +336,8 @@ void AudioAnalyzer::RunFFT()
 
     // Resample from kAudioFFTSize/2 bins → kAudioBins (linear interp, matches JS _resample).
     const int   srcLen = kAudioFFTSize / 2;
-    const float scale  = (float)srcLen / kAudioBins;
-    for (int i = 0; i < kAudioBins; i++)
+    const float scale  = (float)srcLen / NumAudioBins;
+    for (int i = 0; i < NumAudioBins; i++)
     {
         float r  = i * scale;
         int   lo = (int)r;
@@ -349,8 +349,8 @@ void AudioAnalyzer::RunFFT()
 
     // Waveform: resample most recent kAudioFFTSize PCM frames → kAudioBins.
     // JS mapping: v = (pcm * 0.5 + 0.5) * 255, clamped; 128 = silence.
-    const float wScale = (float)kAudioFFTSize / kAudioBins;
-    for (int i = 0; i < kAudioBins; i++)
+    const float wScale = (float)kAudioFFTSize / NumAudioBins;
+    for (int i = 0; i < NumAudioBins; i++)
     {
         float r  = i * wScale;
         int   lo = (int)r;
@@ -370,7 +370,7 @@ void AudioAnalyzer::RunFFT()
 void AudioAnalyzer::DetectBeat()
 {
     float ltL = 0.0f, ltR = 0.0f;
-    for (int i = 0; i < kAudioBins; i++)
+    for (int i = 0; i < NumAudioBins; i++)
     {
         ltL += fabsf(m_pcmL[i]);
         ltR += fabsf(m_pcmR[i]);
@@ -381,7 +381,7 @@ void AudioAnalyzer::DetectBeat()
     m_beatCnt++;
 
     // float equivalent of the original 576*16 integer threshold (÷128 for float amp 0..1).
-    constexpr float kMinBeatEnergy = kAudioBins * 16.0f / 128.0f; // 72.0
+    constexpr float kMinBeatEnergy = NumAudioBins * 16.0f / 128.0f; // 72.0
 
     m_isBeat = false;
     if (lt >= (m_beatPeak1 * 34.0f) / 32.0f && lt > kMinBeatEnergy)

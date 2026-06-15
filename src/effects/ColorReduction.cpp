@@ -8,6 +8,8 @@
 
 #include <cmath>
 
+static constexpr const char* NAME_Levels = "levels";
+
 void ColorReduction::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -15,21 +17,7 @@ void ColorReduction::Init()
     Program = bgfx::createProgram(VertShader, FragShader, true);
     
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
-    ParamsUniform = bgfx::createUniform("u_crParams", bgfx::UniformType::Vec4);
-}
-
-void ColorReduction::Render(const RenderContext& Context)
-{
-    const float LevelCount = std::pow(2.f, (float)Levels);
-    const float Params[4] = { LevelCount, 0.f, 0.f, 0.f };
-    
-    bgfx::setUniform(ParamsUniform, Params);
-    bgfx::setTexture(0, TexUniform, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, Program);
-
-    Context.FboManager->Swap();
+    ParamsUniform = bgfx::createUniform("u_Params", bgfx::UniformType::Vec4);
 }
 
 void ColorReduction::Destroy()
@@ -48,14 +36,29 @@ void ColorReduction::Destroy()
     Program = BGFX_INVALID_HANDLE;
 }
 
+void ColorReduction::Render(const RenderContext& Context)
+{
+    const float LevelCount = std::pow(2.f, (float)Levels);
+    const float uParams[4] = { LevelCount, 0.f, 0.f, 0.f };
+    
+    bgfx::setUniform(ParamsUniform, uParams);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+
+    Context.FboManager->Swap();
+}
+
 nlohmann::json ColorReduction::Serialize() const
 {
-    return {
-        { kLevels, Levels },
+    return 
+    {
+        { NAME_Levels, Levels },
     };
 }
 
 void ColorReduction::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt(j, kLevels, Levels);
+    JsonUtil::ReadInt(j, NAME_Levels, Levels);
 }

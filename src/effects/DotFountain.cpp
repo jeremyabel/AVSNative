@@ -2,7 +2,7 @@
 
 #include "engine/JsonUtil.h"
 #include "engine/MathConstants.h"
-
+#include "engine/Matrix3D.h"
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
 
@@ -11,72 +11,49 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
-
-// ── Matrix helpers (exact port of matrix.cpp; column-major-ish flat 4x4 as in JS) ──
-
-static void MatRot(float* m, int axis, float deg)
-{
-    const float r = deg * avs::Pi / 180.0f;
-    std::fill(m, m + 16, 0.0f);
-    m[(axis - 1) * 4 + (axis - 1)] = 1.0f;
-    m[15] = 1.0f;
-    const int m1 = axis % 3;
-    const int m2 = (m1 + 1) % 3;
-    const float c = std::cos(r), s = std::sin(r);
-    m[m1 * 4 + m1] = c;
-    m[m1 * 4 + m2] = s;
-    m[m2 * 4 + m2] = c;
-    m[m2 * 4 + m1] = -s;
-}
-
-static void MatTrans(float* m, float x, float y, float z)
-{
-    std::fill(m, m + 16, 0.0f);
-    m[0] = m[5] = m[10] = m[15] = 1.0f;
-    m[3] = x; m[7] = y; m[11] = z;
-}
-
-// dest = src × dest_old
-static void MatMul(float* dest, const float* src)
-{
-    float t[16];
-    std::memcpy(t, dest, sizeof(t));
-    for (int i = 0; i < 16; i += 4)
-    {
-        dest[i]     = src[i]*t[0] + src[i+1]*t[4] + src[i+2]*t[8]  + src[i+3]*t[12];
-        dest[i + 1] = src[i]*t[1] + src[i+1]*t[5] + src[i+2]*t[9]  + src[i+3]*t[13];
-        dest[i + 2] = src[i]*t[2] + src[i+1]*t[6] + src[i+2]*t[10] + src[i+3]*t[14];
-        dest[i + 3] = src[i]*t[3] + src[i+1]*t[7] + src[i+2]*t[11] + src[i+3]*t[15];
-    }
-}
-
-// ── Init / Destroy ────────────────────────────────────────────────────────────
+static constexpr const char* NAME_RotationSpeed = "rotationSpeed";
+static constexpr const char* NAME_Angle = "angle";
+static constexpr const char* NAME_Color0 = "color0";
+static constexpr const char* NAME_Color1 = "color1";
+static constexpr const char* NAME_Color2 = "color2";
+static constexpr const char* NAME_Color3 = "color3";
+static constexpr const char* NAME_Color4 = "color4";
 
 void DotFountain::Init()
 {
-    const bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    const bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_simple_spv,    sizeof(fs_simple_spv)));
-    m_program  = bgfx::createProgram(VS, FS, true);
-    m_uBase    = bgfx::createUniform("s_input",        bgfx::UniformType::Sampler);
-    m_uOverlay = bgfx::createUniform("s_overlay",      bgfx::UniformType::Sampler);
-    m_uParams  = bgfx::createUniform("u_simpleParams", bgfx::UniformType::Vec4);
+    const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_simple_spv, sizeof(fs_simple_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
+    TexUniform = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    OverlayUniform = bgfx::createUniform("s_overlay", bgfx::UniformType::Sampler);
+    ParamsUniform = bgfx::createUniform("u_simpleParams", bgfx::UniformType::Vec4);
 
     BuildColorMap();
 }
 
 void DotFountain::Destroy()
 {
-    if (bgfx::isValid(m_overlayTex)) bgfx::destroy(m_overlayTex);
-    if (bgfx::isValid(m_uParams))    bgfx::destroy(m_uParams);
-    if (bgfx::isValid(m_uOverlay))   bgfx::destroy(m_uOverlay);
-    if (bgfx::isValid(m_uBase))      bgfx::destroy(m_uBase);
-    if (bgfx::isValid(m_program))    bgfx::destroy(m_program);
+    if (bgfx::isValid(OverlayTexture)) 
+        bgfx::destroy(OverlayTexture);
 
-    m_overlayTex = BGFX_INVALID_HANDLE;
-    m_uParams = m_uOverlay = m_uBase = BGFX_INVALID_HANDLE;
-    m_program = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(ParamsUniform))    
+        bgfx::destroy(ParamsUniform);
+
+    if (bgfx::isValid(OverlayUniform))   
+        bgfx::destroy(OverlayUniform);
+
+    if (bgfx::isValid(TexUniform))      
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program))    
+        bgfx::destroy(Program);
+
+    OverlayTexture = BGFX_INVALID_HANDLE;
+    ParamsUniform = BGFX_INVALID_HANDLE;
+    OverlayUniform = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }
 
 void DotFountain::BuildColorMap()
@@ -103,17 +80,15 @@ void DotFountain::BuildColorMap()
 
 void DotFountain::EnsureOverlay(int w, int h)
 {
-    if (m_overlayW == w && m_overlayH == h) return;
-    if (bgfx::isValid(m_overlayTex)) bgfx::destroy(m_overlayTex);
-    m_overlayW = w;
-    m_overlayH = h;
-    m_buf.assign((size_t)w * h * 4, 0);
-    m_overlayTex = bgfx::createTexture2D(
+    if (OverlayW == w && OverlayH == h) return;
+    if (bgfx::isValid(OverlayTexture)) bgfx::destroy(OverlayTexture);
+    OverlayW = w;
+    OverlayH = h;
+    OverlayBuffer.assign((size_t)w * h * 4, 0);
+    OverlayTexture = bgfx::createTexture2D(
         (uint16_t)w, (uint16_t)h, false, 1, bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_POINT | BGFX_SAMPLER_UVW_CLAMP);
 }
-
-// ── Render ────────────────────────────────────────────────────────────────────
 
 void DotFountain::Render(const RenderContext& Context)
 {
@@ -174,14 +149,14 @@ void DotFountain::Render(const RenderContext& Context)
 
     // ── 3. Build transform: T(0,-20,400) × Rx(angle) × Ry(rotation). ─────────────
     float m[16], m2[16];
-    MatRot(m,  2, m_rotation);
-    MatRot(m2, 1, (float)Angle);
-    MatMul(m, m2);
-    MatTrans(m2, 0.0f, -20.0f, 400.0f);
-    MatMul(m, m2);
+    avs::MatRot(m,  2, CurrentRotation);
+    avs::MatRot(m2, 1, (float)Angle);
+    avs::MatMul(m, m2);
+    avs::MatTrans(m2, 0.0f, -20.0f, 400.0f);
+    avs::MatMul(m, m2);
 
     // ── 4. Project & additively render into the overlay buffer. ──────────────────
-    std::fill(m_buf.begin(), m_buf.end(), (uint8_t)0);
+    std::fill(OverlayBuffer.begin(), OverlayBuffer.end(), (uint8_t)0);
 
     float zoom = w * 440.0f / 640.0f;
     const float zoom2 = h * 440.0f / 480.0f;
@@ -208,56 +183,57 @@ void DotFountain::Render(const RenderContext& Context)
             {
                 // bgfx textures are top-left origin — write row sy directly (no flip).
                 const size_t idx = ((size_t)sy * w + sx) * 4;
-                m_buf[idx]     = (uint8_t)std::min(255, m_buf[idx]     + m_colR[i]);
-                m_buf[idx + 1] = (uint8_t)std::min(255, m_buf[idx + 1] + m_colG[i]);
-                m_buf[idx + 2] = (uint8_t)std::min(255, m_buf[idx + 2] + m_colB[i]);
-                m_buf[idx + 3] = 255;
+                OverlayBuffer[idx]     = (uint8_t)std::min(255, OverlayBuffer[idx]     + m_colR[i]);
+                OverlayBuffer[idx + 1] = (uint8_t)std::min(255, OverlayBuffer[idx + 1] + m_colG[i]);
+                OverlayBuffer[idx + 2] = (uint8_t)std::min(255, OverlayBuffer[idx + 2] + m_colB[i]);
+                OverlayBuffer[idx + 3] = 255;
             }
         }
     }
 
     // ── 5. Upload overlay & composite additively over the input. ─────────────────
-    bgfx::updateTexture2D(m_overlayTex, 0, 0, 0, 0, (uint16_t)w, (uint16_t)h,
-                          bgfx::copy(m_buf.data(), (uint32_t)m_buf.size()));
+    bgfx::updateTexture2D(OverlayTexture, 0, 0, 0, 0, (uint16_t)w, (uint16_t)h,
+                          bgfx::copy(OverlayBuffer.data(), (uint32_t)OverlayBuffer.size()));
 
-    const float params[4] = { 1.0f, 0.0f, 0.0f, 0.0f };   // fs_simple mode 1 = additive
-    bgfx::setUniform(m_uParams, params);
-    bgfx::setTexture(0, m_uBase,    Context.InputTexture);
-    bgfx::setTexture(1, m_uOverlay, m_overlayTex);
+    const float uParams[4] = { 1.0f, 0.0f, 0.0f, 0.0f };   // fs_simple mode 1 = additive
+    bgfx::setUniform(ParamsUniform, uParams);
+    bgfx::setTexture(0, TexUniform, Context.InputTexture);
+    bgfx::setTexture(1, OverlayUniform, OverlayTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, m_program);
+    bgfx::submit(Context.ViewId, Program);
 
     Context.FboManager->Swap();
 
     // ── 6. Advance rotation. ─────────────────────────────────────────────────────
-    m_rotation += RotationSpeed / 5.0f;
-    if (m_rotation >= 360.0f) m_rotation -= 360.0f;
-    if (m_rotation <    0.0f) m_rotation += 360.0f;
+    CurrentRotation += RotationSpeed / 5.0f;
+    if (CurrentRotation >= 360.0f) CurrentRotation -= 360.0f;
+    if (CurrentRotation <    0.0f) CurrentRotation += 360.0f;
 }
 
 nlohmann::json DotFountain::Serialize() const
 {
-    return {
-        { kColor0,        JsonUtil::ColorToJson(Color0) },
-        { kColor1,        JsonUtil::ColorToJson(Color1) },
-        { kColor2,        JsonUtil::ColorToJson(Color2) },
-        { kColor3,        JsonUtil::ColorToJson(Color3) },
-        { kColor4,        JsonUtil::ColorToJson(Color4) },
-        { kRotationSpeed, RotationSpeed },
-        { kAngle,         Angle         },
+    return 
+    {
+        { NAME_RotationSpeed, RotationSpeed },
+        { NAME_Angle, Angle },
+        { NAME_Color0, JsonUtil::ColorToJson(Color0) },
+        { NAME_Color1, JsonUtil::ColorToJson(Color1) },
+        { NAME_Color2, JsonUtil::ColorToJson(Color2) },
+        { NAME_Color3, JsonUtil::ColorToJson(Color3) },
+        { NAME_Color4, JsonUtil::ColorToJson(Color4) },
     };
 }
 
 void DotFountain::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadColor(j, kColor0,        Color0);
-    JsonUtil::ReadColor(j, kColor1,        Color1);
-    JsonUtil::ReadColor(j, kColor2,        Color2);
-    JsonUtil::ReadColor(j, kColor3,        Color3);
-    JsonUtil::ReadColor(j, kColor4,        Color4);
-    JsonUtil::ReadInt  (j, kRotationSpeed, RotationSpeed);
-    JsonUtil::ReadInt  (j, kAngle,         Angle);
+    JsonUtil::ReadInt(j, NAME_RotationSpeed, RotationSpeed);
+    JsonUtil::ReadInt(j, NAME_Angle, Angle);
+    JsonUtil::ReadColor(j, NAME_Color0, Color0);
+    JsonUtil::ReadColor(j, NAME_Color1, Color1);
+    JsonUtil::ReadColor(j, NAME_Color2, Color2);
+    JsonUtil::ReadColor(j, NAME_Color3, Color3);
+    JsonUtil::ReadColor(j, NAME_Color4, Color4);
 
     BuildColorMap();
 }

@@ -1,6 +1,7 @@
 #include "ui/ConfigUi.h"
 #include "ui/FileDialog.h"
 
+#include "engine/ColorList.h"
 #include "engine/Effect.h"
 #include "engine/KeyInput.h"
 #include "engine/KeyedImageList.h"
@@ -78,6 +79,12 @@ bool CodeEditor(const char* id, std::string& text, Lang lang, float height)
     return false;
 }
 
+void ScriptError(Effect* effect, const char* paramName)
+{
+    if (std::string err = effect->GetScriptError(paramName); !err.empty())
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", err.c_str());
+}
+
 void EndFramePrune()
 {
     for (auto it = s_editors.begin(); it != s_editors.end(); )
@@ -110,8 +117,9 @@ bool ColorEdit(const char* label, std::array<uint8_t, 3>& c)
     return false;
 }
 
-bool ColorsEdit(const char* id, std::vector<std::array<uint8_t, 3>>& colors)
+bool ColorsEdit(const char* id, ColorList& list)
 {
+    auto& colors = list.Entries;
     bool changed = false;
     ImGui::PushID(id);
     for (int i = 0; i < (int)colors.size(); ++i)

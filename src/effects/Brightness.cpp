@@ -6,6 +6,14 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_brightness.sc.bin.h"
 
+static constexpr const char* NAME_Blend = "blend";
+static constexpr const char* NAME_Red = "red";
+static constexpr const char* NAME_Green = "green";
+static constexpr const char* NAME_Blue = "blue";
+static constexpr const char* NAME_Exclude = "exclude";
+static constexpr const char* NAME_ExcludeColor = "excludeColor";
+static constexpr const char* NAME_Distance = "distance";
+
 // Channel → per-channel multiplier (matches smp_begin's tab_red/green/blue formula).
 static float ChannelMult(int Channel)
 {
@@ -16,76 +24,76 @@ void Brightness::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
     const bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_brightness_spv, sizeof(fs_brightness_spv)));
-    m_program = bgfx::createProgram(VertShader, FragShader, true);
+    Program = bgfx::createProgram(VertShader, FragShader, true);
     
-    m_uInput = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
-    m_uMult = bgfx::createUniform("u_mult", bgfx::UniformType::Vec4);
-    m_uParams = bgfx::createUniform("u_params", bgfx::UniformType::Vec4);
-    m_uExclude = bgfx::createUniform("u_exclude", bgfx::UniformType::Vec4);
-}
-
-void Brightness::Render(const RenderContext& Context)
-{
-    const float Params[4] = { (float)Blend, Exclude ? 1.f : 0.f, Distance / 255.f, 0.f };
-    const float MultColor[4] = { ChannelMult(Red), ChannelMult(Green), ChannelMult(Blue), 0.f };
-    const float ExcludeColor[4] = { ExcludeColor[0] / 255.f, ExcludeColor[1] / 255.f, ExcludeColor[2] / 255.f, 0.f };
-
-    bgfx::setUniform(m_uMult, MultColor);
-    bgfx::setUniform(m_uParams, Params);
-    bgfx::setUniform(m_uExclude, ExcludeColor);
-    bgfx::setTexture(0, m_uInput, Context.InputTexture);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(Context.ViewId, m_program);
-
-    Context.FboManager->Swap();
+    InputUniform = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    MultColorUniform = bgfx::createUniform("u_mult", bgfx::UniformType::Vec4);
+    ParamsUniform = bgfx::createUniform("u_params", bgfx::UniformType::Vec4);
+    ExcludeColorUniform = bgfx::createUniform("u_exclude", bgfx::UniformType::Vec4);
 }
 
 void Brightness::Destroy()
 {
-    if (bgfx::isValid(m_uExclude))
-        bgfx::destroy(m_uExclude);
+    if (bgfx::isValid(ExcludeColorUniform))
+        bgfx::destroy(ExcludeColorUniform);
     
-    if (bgfx::isValid(m_uParams))
-        bgfx::destroy(m_uParams);
+    if (bgfx::isValid(ParamsUniform))
+        bgfx::destroy(ParamsUniform);
     
-    if (bgfx::isValid(m_uMult))
-        bgfx::destroy(m_uMult);
+    if (bgfx::isValid(MultColorUniform))
+        bgfx::destroy(MultColorUniform);
     
-    if (bgfx::isValid(m_uInput))
-        bgfx::destroy(m_uInput);
+    if (bgfx::isValid(InputUniform))
+        bgfx::destroy(InputUniform);
     
-    if (bgfx::isValid(m_program))
-        bgfx::destroy(m_program);
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
 
-    m_uExclude = BGFX_INVALID_HANDLE;
-    m_uParams = BGFX_INVALID_HANDLE;
-    m_uMult = BGFX_INVALID_HANDLE;
-    m_uInput = BGFX_INVALID_HANDLE;
-    m_program = BGFX_INVALID_HANDLE;
+    ExcludeColorUniform = BGFX_INVALID_HANDLE;
+    ParamsUniform = BGFX_INVALID_HANDLE;
+    MultColorUniform = BGFX_INVALID_HANDLE;
+    InputUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }
+
+void Brightness::Render(const RenderContext& Context)
+{
+    const float uParams[4] = { (float)Blend, EnableExcludeColor ? 1.f : 0.f, Distance / 255.f, 0.f };
+    const float uMultColor[4] = { ChannelMult(Red), ChannelMult(Green), ChannelMult(Blue), 0.f };
+    const float uExcludeColor[4] = { ExcludeColor[0] / 255.f, ExcludeColor[1] / 255.f, ExcludeColor[2] / 255.f, 0.f };
+
+    bgfx::setUniform(MultColorUniform, uMultColor);
+    bgfx::setUniform(ParamsUniform, uParams);
+    bgfx::setUniform(ExcludeColorUniform, uExcludeColor);
+    bgfx::setTexture(0, InputUniform, Context.InputTexture);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx::setVertexBuffer(0, Context.QuadVB);
+    bgfx::submit(Context.ViewId, Program);
+
+    Context.FboManager->Swap();
+}
+
 nlohmann::json Brightness::Serialize() const
 {
-    return {
-        { kBlend,        Blend    },
-        { kRed,          Red      },
-        { kGreen,        Green    },
-        { kBlue,         Blue     },
-        { kSeparate,     Separate },
-        { kExclude,      Exclude  },
-        { kExcludeColor, JsonUtil::ColorToJson(ExcludeColor) },
-        { kDistance,     Distance },
+    return
+    {
+        { NAME_Blend, Blend },
+        { NAME_Red, Red },
+        { NAME_Green, Green },
+        { NAME_Blue, Blue },
+        { NAME_Exclude, EnableExcludeColor },
+        { NAME_ExcludeColor, JsonUtil::ColorToJson(ExcludeColor) },
+        { NAME_Distance, Distance },
     };
 }
 
 void Brightness::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt  (j, kBlend,        Blend);
-    JsonUtil::ReadInt  (j, kRed,          Red);
-    JsonUtil::ReadInt  (j, kGreen,        Green);
-    JsonUtil::ReadInt  (j, kBlue,         Blue);
-    JsonUtil::ReadBool (j, kSeparate,     Separate);
-    JsonUtil::ReadBool (j, kExclude,      Exclude);
-    JsonUtil::ReadColor(j, kExcludeColor, ExcludeColor);
-    JsonUtil::ReadInt  (j, kDistance,     Distance);
+    JsonUtil::ReadInt(j, NAME_Blend, Blend);
+    JsonUtil::ReadInt(j, NAME_Red, Red);
+    JsonUtil::ReadInt(j, NAME_Green, Green);
+    JsonUtil::ReadInt(j, NAME_Blue, Blue);
+    JsonUtil::ReadBool(j, NAME_Exclude, EnableExcludeColor);
+    JsonUtil::ReadColor(j, NAME_ExcludeColor, ExcludeColor);
+    JsonUtil::ReadInt(j, NAME_Distance, Distance);
 }

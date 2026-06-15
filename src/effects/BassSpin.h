@@ -10,18 +10,6 @@ struct NVGLUframebuffer;
 class BassSpin : public Effect
 {
 public:
-    // ── Config (serialized; edited directly by the UI) ─────────────────────────
-    bool                   EnabledLeft  = true;
-    bool                   EnabledRight = true;
-    std::array<uint8_t, 3> ColorLeft    = { 255, 255, 255 };
-    std::array<uint8_t, 3> ColorRight   = { 255, 255, 255 };
-    int                    Mode         = 1;   // 0=Outline, 1=Filled
-
-    static constexpr const char* kEnabledLeft  = "enabledLeft";
-    static constexpr const char* kEnabledRight = "enabledRight";
-    static constexpr const char* kColorLeft    = "colorLeft";
-    static constexpr const char* kColorRight   = "colorRight";
-    static constexpr const char* kMode         = "mode";
 
     void Init() override;
     void Render(const RenderContext& Context) override;
@@ -31,7 +19,16 @@ public:
     nlohmann::json Serialize() const override;
     void Deserialize(const nlohmann::json& j) override;
 
+public:
+
+    bool EnabledLeft  = true;
+    bool EnabledRight = true;
+    std::array<uint8_t, 3> ColorLeft = { 255, 255, 255 };
+    std::array<uint8_t, 3> ColorRight = { 255, 255, 255 };
+    int Mode = 1;   // 0=Outline, 1=Filled
+
 private:
+
     void EnsureOverlay(int W, int H);
     void DestroyOverlay();
 
@@ -44,14 +41,13 @@ private:
     float Ly[2][2] = {};   // previous tip y [point][tri]
 
     // NanoVG
-    NVGcontext*       m_nvg        = nullptr;
-    NVGLUframebuffer* m_overlayFbo = nullptr;
-    int               m_overlayW   = 0;
-    int               m_overlayH   = 0;
+    NVGcontext*       NvgContext        = nullptr;
+    NVGLUframebuffer* OverlayFBO = nullptr;
+    int               OverlayW   = 0;
+    int               OverlayH   = 0;
 
-    // bgfx composite pass (reuses fs_simple.sc / u_simpleParams names)
-    bgfx::ProgramHandle m_program        = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_inputSampler   = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_overlaySampler = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_paramsUniform  = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle Program = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle TexUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle OverlayUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle ParamsUniform = BGFX_INVALID_HANDLE;
 };

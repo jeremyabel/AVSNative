@@ -8,14 +8,14 @@ static void DrawBufferSaveUI(Effect* base)
 {
     auto* fx = static_cast<BufferSave*>(base);
 
-    static const char* kModes[] = { "Save", "Restore",
-                                    "Alternate Save/Restore", "Alternate Restore/Save" };
-    ImGui::TextUnformatted("Mode");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##mode", &fx->Mode, kModes, IM_ARRAYSIZE(kModes));
+    ImGui::Text("Mode");
+    ImGui::RadioButton("Save", &fx->Mode, 0);
+    ImGui::RadioButton("Restore", &fx->Mode, 1);
+    ImGui::RadioButton("Alternate Save/Restore", &fx->Mode, 2);
+    ImGui::RadioButton("Alternate Restore/Save", &fx->Mode, 3);
 
-    static const char* kSlots[] = { "0", "1", "2", "3", "4", "5", "6", "7" };
-    ImGui::TextUnformatted("Buffer Slot");
+    static const char* kSlots[] = { "1", "2", "3", "4", "5", "6", "7", "8" };
+    ImGui::Text("Buffer Slot");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::Combo("##slot", &fx->Slot, kSlots, IM_ARRAYSIZE(kSlots));
 
@@ -23,13 +23,16 @@ static void DrawBufferSaveUI(Effect* base)
                                      "Subtractive 1", "Adjustable", "Minimum",
                                      "Every Other Pixel", "Every Other Line",
                                      "Subtractive 2", "XOR" };
-    ImGui::TextUnformatted("Blend");
+    ImGui::Text("Blend");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::Combo("##blendMode", &fx->BlendMode, kBlends, IM_ARRAYSIZE(kBlends));
 
-    ImGui::TextUnformatted("Blend Amount");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::SliderFloat("##blendAmt", &fx->BlendAmt, 0.0f, 1.0f);
+    if (fx->BlendMode == 6)
+    {
+        ImGui::Text("Blend Amount");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderFloat("##blendAmt", &fx->BlendAmt, 0.0f, 1.0f);
+    }
 }
 
 void RegisterBufferSaveUI(ConfigUiRegistry& reg)

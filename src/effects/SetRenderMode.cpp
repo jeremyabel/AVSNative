@@ -2,21 +2,24 @@
 
 #include "engine/JsonUtil.h"
 
+static constexpr const char* NAME_BlendMode = "blend_mode";
+static constexpr const char* NAME_LineWidth = "line_width";
+static constexpr const char* NAME_Alpha = "alpha";
+
 void SetRenderMode::Init()
 {
 }
 
 void SetRenderMode::Render(const RenderContext& Context)
 {
-    // Write the packed line blend mode into the shared frame-level state.
-    // Downstream effects in the same chain read Context.LineBlendMode each frame.
+    // Write the line render mode into the shared frame-level state.
+    // Downstream effects in the same chain read Context.LineMode each frame.
     // No image output and no view: EffectChain runs this in place (see ExpectedViewCount).
-    if (Context.LineBlendMode)
+    if (Context.LineMode)
     {
-        *Context.LineBlendMode =
-            ((uint32_t)(LineWidth & 0xFF) << 16) |
-            ((uint32_t)(Alpha & 0xFF) <<  8) |
-             (uint32_t)(BlendMode & 0xFF);
+        Context.LineMode->Width = (uint8_t)LineWidth;
+        Context.LineMode->Alpha = (uint8_t)Alpha;
+        Context.LineMode->Blend = (uint8_t)BlendMode;
     }
 }
 
@@ -26,16 +29,17 @@ void SetRenderMode::Destroy()
 
 nlohmann::json SetRenderMode::Serialize() const
 {
-    return {
-        { kBlendMode, BlendMode },
-        { kLineWidth, LineWidth },
-        { kAlpha,     Alpha     },
+    return 
+    {
+        { NAME_BlendMode, BlendMode },
+        { NAME_LineWidth, LineWidth },
+        { NAME_Alpha, Alpha },
     };
 }
 
 void SetRenderMode::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt(j, kBlendMode, BlendMode);
-    JsonUtil::ReadInt(j, kLineWidth, LineWidth);
-    JsonUtil::ReadInt(j, kAlpha,     Alpha);
+    JsonUtil::ReadInt(j, NAME_BlendMode, BlendMode);
+    JsonUtil::ReadInt(j, NAME_LineWidth, LineWidth);
+    JsonUtil::ReadInt(j, NAME_Alpha, Alpha);
 }

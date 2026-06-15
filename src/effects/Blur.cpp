@@ -6,6 +6,8 @@
 #include "generated/spirv/vs_fullscreen.sc.bin.h"
 #include "generated/spirv/fs_blur.sc.bin.h"
 
+static constexpr const char* NAME_Intensity = "intensity";
+
 void Blur::Init()
 {
     const bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
@@ -14,6 +16,24 @@ void Blur::Init()
     
     TexUniform = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     ParamsUniform = bgfx::createUniform("u_blurParams", bgfx::UniformType::Vec4);
+}
+
+void Blur::Destroy()
+{
+    DestroyScratch();
+
+    if (bgfx::isValid(ParamsUniform))
+        bgfx::destroy(ParamsUniform);
+    
+    if (bgfx::isValid(TexUniform))
+        bgfx::destroy(TexUniform);
+    
+    if (bgfx::isValid(Program))
+        bgfx::destroy(Program);
+
+    ParamsUniform = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }
 
 void Blur::EnsureScratch(uint16_t Width, uint16_t Height)
@@ -48,15 +68,15 @@ void Blur::Render(const RenderContext& Context)
     EnsureScratch(Width, Height);
 
     const float Radius = (Intensity == 3) ? 4.f : (Intensity == 2) ? 2.f : 1.f;
-    const float HorizParams[4] = { 1.f / (float)Width, 0.f, Radius, 0.f };
-    const float VertParams[4] = { 0.f, 1.f / (float)Height, Radius, 0.f };
+    const float uHorizParams[4] = { 1.f / (float)Width, 0.f, Radius, 0.f };
+    const float uVertParams[4] = { 0.f, 1.f / (float)Height, Radius, 0.f };
 
     // Horizontal pass: InputTexture to ScratchFBO
     const uint8_t HorizViewId = Context.ViewId;
     bgfx::setViewFrameBuffer(HorizViewId, ScratchFBO);
     bgfx::setViewRect(HorizViewId, 0, 0, Width, Height);
     bgfx::setViewClear(HorizViewId, BGFX_CLEAR_NONE);
-    bgfx::setUniform(ParamsUniform, HorizParams);
+    bgfx::setUniform(ParamsUniform, uHorizParams);
     bgfx::setTexture(0, TexUniform, Context.InputTexture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -67,7 +87,7 @@ void Blur::Render(const RenderContext& Context)
     bgfx::setViewFrameBuffer(VertViewId, Context.OutputFBO);
     bgfx::setViewRect(VertViewId, 0, 0, Width, Height);
     bgfx::setViewClear(VertViewId, BGFX_CLEAR_NONE);
-    bgfx::setUniform(ParamsUniform, VertParams);
+    bgfx::setUniform(ParamsUniform, uVertParams);
     bgfx::setTexture(0, TexUniform, bgfx::getTexture(ScratchFBO));
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
@@ -76,32 +96,15 @@ void Blur::Render(const RenderContext& Context)
     Context.FboManager->Swap();
 }
 
-void Blur::Destroy()
-{
-    DestroyScratch();
-
-    if (bgfx::isValid(ParamsUniform))
-        bgfx::destroy(ParamsUniform);
-    
-    if (bgfx::isValid(TexUniform))
-        bgfx::destroy(TexUniform);
-    
-    if (bgfx::isValid(Program))
-        bgfx::destroy(Program);
-
-    ParamsUniform = BGFX_INVALID_HANDLE;
-    TexUniform = BGFX_INVALID_HANDLE;
-    Program = BGFX_INVALID_HANDLE;
-}
-
 nlohmann::json Blur::Serialize() const
 {
-    return {
-        { kIntensity, Intensity },
+    return
+    {
+        { NAME_Intensity, Intensity },
     };
 }
 
 void Blur::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadInt(j, kIntensity, Intensity);
+    JsonUtil::ReadInt(j, NAME_Intensity, Intensity);
 }

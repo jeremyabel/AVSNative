@@ -1,6 +1,5 @@
 #include "BassSpin.h"
 #include "engine/MathConstants.h"
-
 #include "engine/AudioAnalyzer.h"
 #include "engine/FBOManager.h"
 #include "engine/JsonUtil.h"
@@ -14,38 +13,44 @@
 #include <algorithm>
 #include <cmath>
 
+static constexpr const char* NAME_EnabledLeft  = "enabledLeft";
+static constexpr const char* NAME_EnabledRight = "enabledRight";
+static constexpr const char* NAME_ColorLeft = "colorLeft";
+static constexpr const char* NAME_ColorRight = "colorRight";
+static constexpr const char* NAME_Mode = "mode";
 
 void BassSpin::Init()
 {
-    bgfx::ShaderHandle VS = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
-    bgfx::ShaderHandle FS = bgfx::createShader(bgfx::copy(fs_simple_spv,     sizeof(fs_simple_spv)));
-    m_program = bgfx::createProgram(VS, FS, true);
+    bgfx::ShaderHandle VertShader = bgfx::createShader(bgfx::copy(vs_fullscreen_spv, sizeof(vs_fullscreen_spv)));
+    bgfx::ShaderHandle FragShader = bgfx::createShader(bgfx::copy(fs_simple_spv, sizeof(fs_simple_spv)));
+    Program = bgfx::createProgram(VertShader, FragShader, true);
 
-    m_inputSampler   = bgfx::createUniform("s_input",        bgfx::UniformType::Sampler);
-    m_overlaySampler = bgfx::createUniform("s_overlay",      bgfx::UniformType::Sampler);
-    m_paramsUniform  = bgfx::createUniform("u_simpleParams",  bgfx::UniformType::Vec4);
+    TexUniform = bgfx::createUniform("s_input", bgfx::UniformType::Sampler);
+    OverlayUniform = bgfx::createUniform("s_overlay", bgfx::UniformType::Sampler);
+    ParamsUniform = bgfx::createUniform("u_simpleParams",  bgfx::UniformType::Vec4);
 
-    m_nvg = nvgCreate(0, 0);  // no edge AA — hard-edged fills match original
+    NvgContext = nvgCreate(0, 0);  // no edge AA — hard-edged fills match original
 }
 
 void BassSpin::EnsureOverlay(int W, int H)
 {
-    if (m_overlayW == W && m_overlayH == H)
+    if (OverlayW == W && OverlayH == H)
         return;
+
     DestroyOverlay();
-    m_overlayFbo = nvgluCreateFramebuffer(m_nvg, W, H, 0);
-    m_overlayW   = W;
-    m_overlayH   = H;
+    OverlayFBO = nvgluCreateFramebuffer(NvgContext, W, H, 0);
+    OverlayW = W;
+    OverlayH = H;
 }
 
 void BassSpin::DestroyOverlay()
 {
-    if (m_overlayFbo)
+    if (OverlayFBO)
     {
-        nvgluDeleteFramebuffer(m_overlayFbo);
-        m_overlayFbo = nullptr;
+        nvgluDeleteFramebuffer(OverlayFBO);
+        OverlayFBO = nullptr;
     }
-    m_overlayW = m_overlayH = 0;
+    OverlayW = OverlayH = 0;
 }
 
 void BassSpin::Render(const RenderContext& Context)
@@ -54,24 +59,24 @@ void BassSpin::Render(const RenderContext& Context)
     const int H = Context.Height;
 
     EnsureOverlay(W, H);
-    if (!m_overlayFbo)
+    if (!OverlayFBO)
         return;
 
     // Screen-space geometry (integer truncation matches JS Math.trunc)
     const int screenSize = std::min(H / 2, (W * 3) / 8);
-    const int cy         = H / 2;
+    const int cy = H / 2;
 
-    // ── NanoVG overlay pass (ViewId) ─────────────────────────────────────────
-    nvgluSetViewFramebuffer(Context.ViewId, m_overlayFbo);
+    // NanoVG overlay pass (ViewId)
+    nvgluSetViewFramebuffer(Context.ViewId, OverlayFBO);
     bgfx::setViewClear(Context.ViewId, BGFX_CLEAR_COLOR, 0x00000000);
     bgfx::setViewRect(Context.ViewId, 0, 0, (uint16_t)W, (uint16_t)H);
 
-    nvgluBindFramebuffer(m_overlayFbo);
-    nvgBeginFrame(m_nvg, (float)W, (float)H, 1.0f);
+    nvgluBindFramebuffer(OverlayFBO);
+    nvgBeginFrame(NvgContext, (float)W, (float)H, 1.0f);
 
     if (Context.AudioData)
     {
-        const VisData& vis = *Context.AudioData;
+        const VisData& AudioData = *Context.AudioData;
 
         for (int tri = 0; tri < 2; tri++)
         {
@@ -81,10 +86,9 @@ void BassSpin::Render(const RenderContext& Context)
             if (!enabled)
                 continue;
 
-            const float* specData = vis.spec[tri];
+            const float* specData = AudioData.spec[tri];
             const std::array<uint8_t, 3>& col = (tri == 0) ? ColorLeft : ColorRight;
-            const float cx        = float((tri == 0) ? (W / 2 - screenSize / 2)
-                                                      : (W / 2 + screenSize / 2));
+            const float cx = float((tri == 0) ? (W / 2 - screenSize / 2) : (W / 2 + screenSize / 2));
 
             // Sum first 44 spectrum bins for bass energy
             float d = 0.0f;
@@ -102,8 +106,8 @@ void BassSpin::Render(const RenderContext& Context)
 
             // Arm endpoint (truncated to integer pixels, matching Math.trunc)
             const float sizeF = float(screenSize) * float(a) / 256.0f;
-            const float xp    = std::trunc(std::cos(Rv[tri]) * sizeF);
-            const float yp    = std::trunc(std::sin(Rv[tri]) * sizeF);
+            const float xp = std::trunc(std::cos(Rv[tri]) * sizeF);
+            const float yp = std::trunc(std::sin(Rv[tri]) * sizeF);
 
             const float px0 = cx + xp, py0 = float(cy) + yp;
             const float px1 = cx - xp, py1 = float(cy) - yp;
@@ -113,81 +117,81 @@ void BassSpin::Render(const RenderContext& Context)
             if (Mode == 0)
             {
                 // Outline: two spokes from center + trailing arc between frames
-                nvgStrokeColor(m_nvg, nvgCol);
-                nvgStrokeWidth(m_nvg, 1.0f);
+                nvgStrokeColor(NvgContext, nvgCol);
+                nvgStrokeWidth(NvgContext, 1.0f);
 
                 if (Lx[0][tri] != 0.0f || Ly[0][tri] != 0.0f)
                 {
-                    nvgBeginPath(m_nvg);
-                    nvgMoveTo(m_nvg, Lx[0][tri], Ly[0][tri]);
-                    nvgLineTo(m_nvg, px0, py0);
-                    nvgStroke(m_nvg);
+                    nvgBeginPath(NvgContext);
+                    nvgMoveTo(NvgContext, Lx[0][tri], Ly[0][tri]);
+                    nvgLineTo(NvgContext, px0, py0);
+                    nvgStroke(NvgContext);
                 }
                 Lx[0][tri] = px0; Ly[0][tri] = py0;
-                nvgBeginPath(m_nvg);
-                nvgMoveTo(m_nvg, cx, float(cy));
-                nvgLineTo(m_nvg, px0, py0);
-                nvgStroke(m_nvg);
+                nvgBeginPath(NvgContext);
+                nvgMoveTo(NvgContext, cx, float(cy));
+                nvgLineTo(NvgContext, px0, py0);
+                nvgStroke(NvgContext);
 
                 if (Lx[1][tri] != 0.0f || Ly[1][tri] != 0.0f)
                 {
-                    nvgBeginPath(m_nvg);
-                    nvgMoveTo(m_nvg, Lx[1][tri], Ly[1][tri]);
-                    nvgLineTo(m_nvg, px1, py1);
-                    nvgStroke(m_nvg);
+                    nvgBeginPath(NvgContext);
+                    nvgMoveTo(NvgContext, Lx[1][tri], Ly[1][tri]);
+                    nvgLineTo(NvgContext, px1, py1);
+                    nvgStroke(NvgContext);
                 }
                 Lx[1][tri] = px1; Ly[1][tri] = py1;
-                nvgBeginPath(m_nvg);
-                nvgMoveTo(m_nvg, cx, float(cy));
-                nvgLineTo(m_nvg, px1, py1);
-                nvgStroke(m_nvg);
+                nvgBeginPath(NvgContext);
+                nvgMoveTo(NvgContext, cx, float(cy));
+                nvgLineTo(NvgContext, px1, py1);
+                nvgStroke(NvgContext);
             }
             else
             {
                 // Filled: sweep triangle (center, prevTip, currentTip) each frame
-                nvgFillColor(m_nvg, nvgCol);
+                nvgFillColor(NvgContext, nvgCol);
 
                 if (Lx[0][tri] != 0.0f || Ly[0][tri] != 0.0f)
                 {
-                    nvgBeginPath(m_nvg);
-                    nvgMoveTo(m_nvg, cx, float(cy));
-                    nvgLineTo(m_nvg, Lx[0][tri], Ly[0][tri]);
-                    nvgLineTo(m_nvg, px0, py0);
-                    nvgClosePath(m_nvg);
-                    nvgFill(m_nvg);
+                    nvgBeginPath(NvgContext);
+                    nvgMoveTo(NvgContext, cx, float(cy));
+                    nvgLineTo(NvgContext, Lx[0][tri], Ly[0][tri]);
+                    nvgLineTo(NvgContext, px0, py0);
+                    nvgClosePath(NvgContext);
+                    nvgFill(NvgContext);
                 }
                 Lx[0][tri] = px0; Ly[0][tri] = py0;
 
                 if (Lx[1][tri] != 0.0f || Ly[1][tri] != 0.0f)
                 {
-                    nvgBeginPath(m_nvg);
-                    nvgMoveTo(m_nvg, cx, float(cy));
-                    nvgLineTo(m_nvg, Lx[1][tri], Ly[1][tri]);
-                    nvgLineTo(m_nvg, px1, py1);
-                    nvgClosePath(m_nvg);
-                    nvgFill(m_nvg);
+                    nvgBeginPath(NvgContext);
+                    nvgMoveTo(NvgContext, cx, float(cy));
+                    nvgLineTo(NvgContext, Lx[1][tri], Ly[1][tri]);
+                    nvgLineTo(NvgContext, px1, py1);
+                    nvgClosePath(NvgContext);
+                    nvgFill(NvgContext);
                 }
                 Lx[1][tri] = px1; Ly[1][tri] = py1;
             }
         }
     }
 
-    nvgEndFrame(m_nvg);
+    nvgEndFrame(NvgContext);
     nvgluBindFramebuffer(nullptr);
 
-    // ── Composite pass (ViewId+1): overlay onto InputTexture in Replace mode ──
-    const uint8_t compView = Context.ViewId + 1;
-    bgfx::setViewFrameBuffer(compView, Context.OutputFBO);
-    bgfx::setViewRect(compView, 0, 0, (uint16_t)W, (uint16_t)H);
-    bgfx::setViewClear(compView, BGFX_CLEAR_NONE);
+    // Composite pass (ViewId+1): overlay onto InputTexture in Replace mode
+    const uint8_t CompViewId = Context.ViewId + 1;
+    bgfx::setViewFrameBuffer(CompViewId, Context.OutputFBO);
+    bgfx::setViewRect(CompViewId, 0, 0, (uint16_t)W, (uint16_t)H);
+    bgfx::setViewClear(CompViewId, BGFX_CLEAR_NONE);
 
-    const float params[4] = { 0.0f, 0.0f, 0.0f, 0.0f };  // mode=0 Replace, alpha=0
-    bgfx::setUniform(m_paramsUniform, params);
-    bgfx::setTexture(0, m_inputSampler,   Context.InputTexture);
-    bgfx::setTexture(1, m_overlaySampler, bgfx::getTexture(m_overlayFbo->handle));
+    const float uParams[4] = { 0.0f, 0.0f, 0.0f, 0.0f };  // mode=0 Replace, alpha=0
+    bgfx::setUniform(ParamsUniform, uParams);
+    bgfx::setTexture(0, TexUniform,   Context.InputTexture);
+    bgfx::setTexture(1, OverlayUniform, bgfx::getTexture(OverlayFBO->handle));
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::setVertexBuffer(0, Context.QuadVB);
-    bgfx::submit(compView, m_program);
+    bgfx::submit(CompViewId, Program);
 
     Context.FboManager->Swap();
 }
@@ -196,39 +200,47 @@ void BassSpin::Destroy()
 {
     DestroyOverlay();
 
-    if (m_nvg)
+    if (NvgContext)
     {
-        nvgDelete(m_nvg);
-        m_nvg = nullptr;
+        nvgDelete(NvgContext);
+        NvgContext = nullptr;
     }
 
-    if (bgfx::isValid(m_paramsUniform))  bgfx::destroy(m_paramsUniform);
-    if (bgfx::isValid(m_overlaySampler)) bgfx::destroy(m_overlaySampler);
-    if (bgfx::isValid(m_inputSampler))   bgfx::destroy(m_inputSampler);
-    if (bgfx::isValid(m_program))        bgfx::destroy(m_program);
+    if (bgfx::isValid(ParamsUniform))  
+        bgfx::destroy(ParamsUniform);
 
-    m_paramsUniform  = BGFX_INVALID_HANDLE;
-    m_overlaySampler = BGFX_INVALID_HANDLE;
-    m_inputSampler   = BGFX_INVALID_HANDLE;
-    m_program        = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(OverlayUniform)) 
+        bgfx::destroy(OverlayUniform);
+
+    if (bgfx::isValid(TexUniform))   
+        bgfx::destroy(TexUniform);
+
+    if (bgfx::isValid(Program))        
+        bgfx::destroy(Program);
+
+    ParamsUniform = BGFX_INVALID_HANDLE;
+    OverlayUniform = BGFX_INVALID_HANDLE;
+    TexUniform = BGFX_INVALID_HANDLE;
+    Program = BGFX_INVALID_HANDLE;
 }
 
 nlohmann::json BassSpin::Serialize() const
 {
-    return {
-        { kEnabledLeft,  EnabledLeft  },
-        { kEnabledRight, EnabledRight },
-        { kColorLeft,    JsonUtil::ColorToJson(ColorLeft)  },
-        { kColorRight,   JsonUtil::ColorToJson(ColorRight) },
-        { kMode,         Mode },
+    return 
+    {
+        { NAME_EnabledLeft, EnabledLeft },
+        { NAME_EnabledRight, EnabledRight },
+        { NAME_ColorLeft, JsonUtil::ColorToJson(ColorLeft) },
+        { NAME_ColorRight, JsonUtil::ColorToJson(ColorRight) },
+        { NAME_Mode, Mode },
     };
 }
 
 void BassSpin::Deserialize(const nlohmann::json& j)
 {
-    JsonUtil::ReadBool (j, kEnabledLeft,  EnabledLeft);
-    JsonUtil::ReadBool (j, kEnabledRight, EnabledRight);
-    JsonUtil::ReadColor(j, kColorLeft,    ColorLeft);
-    JsonUtil::ReadColor(j, kColorRight,   ColorRight);
-    JsonUtil::ReadInt  (j, kMode,         Mode);
+    JsonUtil::ReadBool(j, NAME_EnabledLeft, EnabledLeft);
+    JsonUtil::ReadBool(j, NAME_EnabledRight, EnabledRight);
+    JsonUtil::ReadColor(j, NAME_ColorLeft, ColorLeft);
+    JsonUtil::ReadColor(j, NAME_ColorRight, ColorRight);
+    JsonUtil::ReadInt(j, NAME_Mode, Mode);
 }

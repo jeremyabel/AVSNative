@@ -9,22 +9,23 @@ static void DrawSimpleUI(Effect* base)
 {
     auto* fx = static_cast<Simple*>(base);
 
-    static const char* kModes[] = { "Solid Analyzer", "Line Analyzer", "Line Scope", "Solid Scope" };
-    ImGui::TextUnformatted("Mode");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##mode", &fx->Mode, kModes, IM_ARRAYSIZE(kModes));
+    ImGui::Text("Mode");
+    ImGui::RadioButton("Solid Analyzer", &fx->Mode, 0); ImGui::SameLine();
+    ImGui::RadioButton("Line Analyzer", &fx->Mode, 1);
+    ImGui::RadioButton("Line Scope", &fx->Mode, 2); ImGui::SameLine();
+    ImGui::RadioButton("Solid Scope", &fx->Mode, 3);
 
-    static const char* kChannels[] = { "Left", "Right", "Mono Mix" };
-    ImGui::TextUnformatted("Channel");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##channel", &fx->Channel, kChannels, IM_ARRAYSIZE(kChannels));
+    ImGui::Text("Channel");
+    ImGui::RadioButton("Left##AudioChannel", &fx->Channel, 0); ImGui::SameLine();
+    ImGui::RadioButton("Right##AudioChannel", &fx->Channel, 1); ImGui::SameLine();
+    ImGui::RadioButton("Center##AudioChannel", &fx->Channel, 2);
 
-    static const char* kPositions[] = { "Top", "Center", "Bottom" };
-    ImGui::TextUnformatted("Position");
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##position", &fx->Position, kPositions, IM_ARRAYSIZE(kPositions));
+    ImGui::Text("Position");
+    ImGui::RadioButton("Top##Position", &fx->Position, 0); ImGui::SameLine();
+    ImGui::RadioButton("Center##Position", &fx->Position, 1); ImGui::SameLine();
+    ImGui::RadioButton("Bottom##Position", &fx->Position, 2);
 
-    ImGui::TextUnformatted("Color");
+    ImGui::Text("Color");
     ConfigUi::ColorsEdit("##colors", fx->Colors);
 
     ImGui::Checkbox("Antialiasing", &fx->AntialiasingEnabled);

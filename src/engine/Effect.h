@@ -10,6 +10,18 @@
 class FBOManager;
 struct VisData;
 
+// Line/overlay render state set by SetRenderMode and read by line-drawing effects
+// (Simple, SuperScope, Texer2). Replaces the original win32 g_line_blend_mode
+// bit-packing (a single uint32) with named fields. Shared by pointer through the
+// RenderContext so downstream effects in the same frame see an upstream
+// SetRenderMode's writes.
+struct LineRenderMode
+{
+    uint8_t Width = 1;   // line width, 1-255
+    uint8_t Alpha = 0;   // overlay alpha, 0-255
+    uint8_t Blend = 0;   // blend mode, 0-9 (0 = Replace)
+};
+
 // Passed to every Effect::Render call.
 // EffectChain sets InputTexture, OutputFBO, ViewId, and NextViewId before each call.
 // Each effect reads from InputTexture, draws to ViewId (bound to OutputFBO), then
@@ -20,7 +32,7 @@ struct RenderContext
     bgfx::TextureHandle     InputTexture = BGFX_INVALID_HANDLE;
     bgfx::FrameBufferHandle OutputFBO    = BGFX_INVALID_HANDLE;
     FBOManager*             FboManager   = nullptr;
-    // Per-frame beat. Stored as a pointer (like LineBlendMode / NextViewId) so a
+    // Per-frame beat. Stored as a pointer (like LineMode / NextViewId) so a
     // Custom BPM effect can rewrite it mid-chain and downstream effects in the same
     // frame see the change — and so it survives EffectList's context copy. Access it
     // through IsBeat() / SetBeat() rather than touching the pointer directly; those
@@ -42,11 +54,9 @@ struct RenderContext
     bgfx::TextureHandle AudioTex = BGFX_INVALID_HANDLE;
     // CPU-side audio data (same frame as AudioTex). Null if no audio source is connected.
     const VisData* AudioData = nullptr;
-    // Packed line-render state set by SetRenderMode, read by line-drawing effects (Simple, etc.).
-    // Matches g_line_blend_mode packing: bits 16-23 = lineWidth (1-255), bits 8-15 = alpha,
-    // bits 0-7 = blendMode (0-9). Pointer so downstream effects in the same frame share it.
-    // Default (1u << 16) = lineWidth 1, alpha 0, Replace blend.
-    uint32_t* LineBlendMode = nullptr;
+    // Line-render state set by SetRenderMode, read by line-drawing effects (Simple, etc.).
+    // Pointer so downstream effects in the same frame share it. Null → defaults.
+    LineRenderMode* LineMode = nullptr;
 
     // Beat accessors. Both are const: they read/write the pointee, not the context,
     // so effects taking `const RenderContext&` can call SetBeat (Custom BPM does).
